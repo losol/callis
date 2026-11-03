@@ -9,9 +9,9 @@
 | `docs/architecture.md` | This overview: goals, scope, pipeline, key decisions, layout. |
 | [`docs/adr/`](adr/README.md) | One file per architecture decision (context, decision, consequences). |
 | [`docs/roadmap.md`](roadmap.md) | Task index, dependency graph and suggested waves. |
-| `docs/tasks/` | One file per task (`T00-scaffold.md` …): goal, scope, design notes, acceptance criteria. A worker only needs its own task file plus the ADRs it links. |
+| `docs/tasks/` | One file per task (`T0000-scaffold.md` …): goal, scope, design notes, acceptance criteria. A worker only needs its own task file plus the ADRs it links. |
 | `docs/spec-notes.md` | Spec interpretations and suite-label exceptions (created by the first task that needs it). |
-| `docs/conformance/` | Generated conformance reports (from T22). |
+| `docs/conformance/` | Generated conformance reports (from T0022). |
 
 **Rule:** design details belong in the task that implements them. Changing a decision means updating its ADR in the same PR.
 
@@ -66,12 +66,12 @@ FHIRPath 3.0.0 (July 2026) is now the version served at <https://hl7.org/fhirpat
 | `$total`, `aggregate()` [N1 §7](https://hl7.org/fhirpath/N1/#aggregates) | parse only | ✓ | STU |
 | Reflection `type()` [N1 §10.2](https://hl7.org/fhirpath/N1/#reflection) | | ✓ | STU |
 | `Long` type, `1L` literal, `toLong()` | | ✓ | 3.0.0 STU |
-| Other [3.0.0](https://hl7.org/fhirpath/STU3/) additions (`sort`, `coalesce`, `defineVariable`, boundaries, date/time components, string additions, …) | | ✓ | see T26–T31 |
+| Other [3.0.0](https://hl7.org/fhirpath/STU3/) additions (`sort`, `coalesce`, `defineVariable`, boundaries, date/time components, string additions, …) | | ✓ | see T0026–T0031 |
 | FHIR variables: `%resource`, `%rootResource`, `%context`, `%ucum`, `%sct`, `%loinc`, `` %`vs-*` ``, `` %`ext-*` `` | ✓ | | [R5 §2.1.9.1.4](https://hl7.org/fhir/R5/fhirpath.html#variables), [§2.1.9.1.7](https://hl7.org/fhir/R5/fhirpath.html#vars) |
 | FHIR functions: `extension()`, `hasValue()`, `getValue()`, `resolve()`, `ofType()`/`is`/`as` on FHIR types | ✓ | | [R5 §2.1.9.1.5](https://hl7.org/fhir/R5/fhirpath.html#functions) |
 | FHIR functions backed by host hooks: `memberOf()`, `subsumes()`, `subsumedBy()`, `conformsTo()`, `htmlChecks()` | ✓ | | empty without a hook |
 | FHIR equivalence changes (`Coding`, `CodeableConcept`, `id` ignored) | ✓ | | [R5 §2.1.9.1.6](https://hl7.org/fhir/R5/fhirpath.html#changes) |
-| `elementDefinition()`, `slice()`, `checkModifiers()`; R5 draft APIs `%terminologies`, `%server`, `%factory` | | ✓ | T32 |
+| `elementDefinition()`, `slice()`, `checkModifiers()`; R5 draft APIs `%terminologies`, `%server`, `%factory` | | ✓ | T0032 |
 | CDA logical model, "document functions" (HL7 Java extensions) | | | out of scope |
 
 ## Pipeline
@@ -97,12 +97,12 @@ flowchart LR
 
 | Stage | Responsibility | Details |
 | --- | --- | --- |
-| Lexer | Characters to tokens with exact spans. No semantics. | [T1](tasks/T01-lexer.md) |
-| Parser | Tokens to AST. Syntax only; every node has a source span. | [T2](tasks/T02-parser.md) |
-| Analyzer (optional) | Semantic checks and type inference, given a model and input type. Never changes the AST. | [T24](tasks/T24-static-analysis.md) |
-| Compiler | AST to a tree of closures. Functions, type specifiers and literals are resolved once. | [T8](tasks/T08-compiler-evaluator.md) |
-| Runtime | Evaluates the closure tree. Reentrant and safe for concurrent async evaluations. | [T8](tasks/T08-compiler-evaluator.md), [T21](tasks/T21-hooks-async.md) |
-| Output adapter | Converts internal values to plain JSON-friendly values or typed values. | [T25](tasks/T25-public-api-release.md) |
+| Lexer | Characters to tokens with exact spans. No semantics. | [T0001](tasks/T0001-lexer.md) |
+| Parser | Tokens to AST. Syntax only; every node has a source span. | [T0002](tasks/T0002-parser.md) |
+| Analyzer (optional) | Semantic checks and type inference, given a model and input type. Never changes the AST. | [T0024](tasks/T0024-static-analysis.md) |
+| Compiler | AST to a tree of closures. Functions, type specifiers and literals are resolved once. | [T0008](tasks/T0008-compiler-evaluator.md) |
+| Runtime | Evaluates the closure tree. Reentrant and safe for concurrent async evaluations. | [T0008](tasks/T0008-compiler-evaluator.md), [T0021](tasks/T0021-hooks-async.md) |
+| Output adapter | Converts internal values to plain JSON-friendly values or typed values. | [T0025](tasks/T0025-public-api-release.md) |
 
 Everything up to and including the compiler is pure and deterministic. The AST is plain, JSON-serializable data, so tools such as formatters and editor integrations can use it directly.
 
@@ -128,15 +128,15 @@ Every expression evaluates to a **collection**: a read-only JavaScript array of 
 
 | FHIRPath type | JavaScript representation | Details |
 | --- | --- | --- |
-| `System.Boolean`, `System.String` | `boolean`, `string` | [T3](tasks/T03-types-and-collections.md) |
-| `System.Integer` | `number` (32-bit range) | [T3](tasks/T03-types-and-collections.md) |
-| `System.Long` (phase 2) | `bigint` | [T28](tasks/T28-stu-long.md) |
-| `System.Decimal` | `Decimal` (class) | [T4](tasks/T04-decimal.md) |
-| `System.Date`, `System.DateTime`, `System.Time` | `DateValue`, `DateTimeValue`, `TimeValue` (classes) | [T5](tasks/T05-date-time.md) |
-| `System.Quantity` | `Quantity` (class) | [T6](tasks/T06-quantity.md) |
-| Model data: resources, complex types, FHIR primitives | `ModelNode` | [T18](tasks/T18-model-aware-evaluation.md) |
+| `System.Boolean`, `System.String` | `boolean`, `string` | [T0003](tasks/T0003-types-and-collections.md) |
+| `System.Integer` | `number` (32-bit range) | [T0003](tasks/T0003-types-and-collections.md) |
+| `System.Long` (phase 2) | `bigint` | [T0028](tasks/T0028-stu-long.md) |
+| `System.Decimal` | `Decimal` (class) | [T0004](tasks/T0004-decimal.md) |
+| `System.Date`, `System.DateTime`, `System.Time` | `DateValue`, `DateTimeValue`, `TimeValue` (classes) | [T0005](tasks/T0005-date-time.md) |
+| `System.Quantity` | `Quantity` (class) | [T0006](tasks/T0006-quantity.md) |
+| Model data: resources, complex types, FHIR primitives | `ModelNode` | [T0018](tasks/T0018-model-aware-evaluation.md) |
 
-JavaScript primitives cover the most common types without wrappers, and dispatching on `typeof` and `instanceof` is cheap. Empty propagation, singleton evaluation and three-valued logic are described in [T3](tasks/T03-types-and-collections.md). Equality and equivalence for each type are in [T9](tasks/T09-equality-kernels.md).
+JavaScript primitives cover the most common types without wrappers, and dispatching on `typeof` and `instanceof` is cheap. Empty propagation, singleton evaluation and three-valued logic are described in [T0003](tasks/T0003-types-and-collections.md). Equality and equivalence for each type are in [T0009](tasks/T0009-equality-kernels.md).
 
 ## Public API at a glance
 
@@ -158,7 +158,7 @@ const names = await evaluateAsync(bundle, 'Bundle.entry.resource.subject.resolve
 const ast = parse("name.where(use = 'official').given");                   // AST for tooling
 ```
 
-The full sketch, including options, output modes and limits, is in [T25](tasks/T25-public-api-release.md#public-api-sketch). Errors are described in [T0](tasks/T00-scaffold.md#errors-and-diagnostics).
+The full sketch, including options, output modes and limits, is in [T0025](tasks/T0025-public-api-release.md#public-api-sketch). Errors are described in [T0000](tasks/T0000-scaffold.md#errors-and-diagnostics).
 
 ## Repository layout
 
@@ -230,10 +230,10 @@ Tests live next to their sources (`*.test.ts`). Cross-module integration tests g
    - `Decimal` against `decimal.js` as an oracle
    - date comparison laws
    - lexer and parser fuzzing: never crash, only throw `FhirPathSyntaxError`
-3. **Conformance:** the official HL7 suite runs in CI with a ratcheting baseline and a published report ([ADR-0011](adr/0011-conformance-suite.md), [T22](tasks/T22-conformance-runner.md), [T23](tasks/T23-xml-fixture-conversion.md)).
+3. **Conformance:** the official HL7 suite runs in CI with a ratcheting baseline and a published report ([ADR-0011](adr/0011-conformance-suite.md), [T0022](tasks/T0022-conformance-runner.md), [T0023](tasks/T0023-xml-fixture-conversion.md)).
 4. **Type tests** (`expectTypeOf`) for the public API.
-5. **Package checks:** publint, attw, the zero-dependency check and a size budget ([T0](tasks/T00-scaffold.md)).
-6. **Later:** differential tests against `fhirpath.js` and benchmarks ([T33](tasks/T33-performance.md)).
+5. **Package checks:** publint, attw, the zero-dependency check and a size budget ([T0000](tasks/T0000-scaffold.md)).
+6. **Later:** differential tests against `fhirpath.js` and benchmarks ([T0033](tasks/T0033-performance.md)).
 
 Line coverage for the core (excluding generated code) is reported in CI with a target of 90% or more. It is not enforced at first.
 
@@ -241,12 +241,12 @@ Line coverage for the core (excluding generated code) is reported in CI with a t
 
 - **Prototype safety:** navigation uses own-property checks (`Object.hasOwn`) and never reaches `__proto__`, `constructor` and similar. Internal maps use `Object.create(null)`.
 - **No `eval` or `new Function`**, so Callis works under a strict CSP.
-- **Regular expressions:** `matches()` and `replaceMatches()` run user-supplied patterns on JavaScript's backtracking engine, so ReDoS is possible. This is documented, and a `regex` hook lets hosts plug in a safe engine ([T21](tasks/T21-hooks-async.md)).
+- **Regular expressions:** `matches()` and `replaceMatches()` run user-supplied patterns on JavaScript's backtracking engine, so ReDoS is possible. This is documented, and a `regex` hook lets hosts plug in a safe engine ([T0021](tasks/T0021-hooks-async.md)).
 - **Bounded work:**
   - parsing has a maximum nesting depth
   - `repeat()` deduplicates per the spec, which only guarantees termination for projections that navigate a finite input tree. A value-generating projection such as `'x'.repeat($this & 'x')` never runs out of new items.
-  - every evaluation therefore has finite default limits (`limits.maxRepeatItems`, `limits.maxCollectionSize`), and exceeding them raises `eval/limit-exceeded` in both sync and async mode ([T12](tasks/T12-fn-filtering.md), [T25](tasks/T25-public-api-release.md#public-api-sketch))
-  - async evaluations can be cancelled with a signal ([T21](tasks/T21-hooks-async.md#sync-and-async))
+  - every evaluation therefore has finite default limits (`limits.maxRepeatItems`, `limits.maxCollectionSize`), and exceeding them raises `eval/limit-exceeded` in both sync and async mode ([T0012](tasks/T0012-fn-filtering.md), [T0025](tasks/T0025-public-api-release.md#public-api-sketch))
+  - async evaluations can be cancelled with a signal ([T0021](tasks/T0021-hooks-async.md#sync-and-async))
 - **Errors** never include input data beyond the expression text, so diagnostics are safe to log.
 
 ## Open questions

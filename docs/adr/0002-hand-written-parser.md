@@ -13,4 +13,4 @@ Hand-written lexer, Pratt parser for operators, recursive descent for the rest. 
 
 ## Consequences
 
-No dependency, precise error messages and spans, and an easy place to add phase 2 syntax (`L` suffix, instance selector). Grammar conformance must be shown by tests: the precedence table, every spec example, and the in-scope `syntax`-invalid cases in the suite (out-of-scope groups and mislabelled cases are listed in `spec-notes.md`; see [T2](../tasks/T02-parser.md)).
+No dependency, precise error messages and spans, and an easy place to add phase 2 syntax (`L` suffix, instance selector). Grammar conformance must be shown by tests: the precedence table, every spec example, and the in-scope `syntax`-invalid cases in the suite (out-of-scope groups and mislabelled cases are listed in `spec-notes.md`; see [T0002](../tasks/T0002-parser.md)).
