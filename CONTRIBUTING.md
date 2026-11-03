@@ -118,6 +118,7 @@ Versions and changelogs are managed with [Changesets](https://github.com/changes
 - Headings in sentence case. Tables and lists for reference material.
 - Link spec sections with anchors (`https://hl7.org/fhirpath/N1/#…`) instead of paraphrasing them at length.
 - Keep examples correct; code examples in user documentation are run in CI from T0025.
+- Markdown is not auto-formatted; Biome formats code and JSON only. Write tables in the compact form (`| --- |`), so a change to one row does not re-pad the whole table.
 
 ## Dependencies and licenses
 
@@ -136,4 +137,22 @@ For maintainers. These settings make the rules above hold:
 
 ## Commands
 
-The scaffold task ([T0000](docs/tasks/T0000-scaffold.md)) adds the commands here once the tooling exists: install, `pnpm check` and its parts, running a single test file, the conformance runner, and adding a changeset.
+You need Node.js 22.18 or newer (`.node-version` pins 24 for development) and [pnpm](https://pnpm.io/installation). Any recent pnpm switches to the version pinned in `package.json` (`packageManager`) by itself.
+
+| Command | What it does |
+| --- | --- |
+| `pnpm install` | Install dependencies. |
+| `pnpm check` | Everything CI runs: lint, typecheck, tests, build and package checks. Run it before you push. |
+| `pnpm lint` | Check linting and formatting with Biome, without changing files. |
+| `pnpm format` | Fix formatting and safe lint issues with Biome. |
+| `pnpm typecheck` | Type-check all packages and the repository scripts. |
+| `pnpm test` | Run all tests once. |
+| `pnpm test packages/core/src/errors/fhirpath-error.test.ts` | Run one test file. |
+| `pnpm test -t "formats a syntax error"` | Run the tests whose name matches. |
+| `pnpm test:watch` | Run tests in watch mode. |
+| `pnpm coverage` | Run tests with a coverage report in `coverage/`. |
+| `pnpm build` | Build all packages with tsdown. |
+| `pnpm check:packages` | Run publint, attw, the zero-dependency check and the size report. Needs a build first. |
+| `pnpm changeset` | Add a changeset. |
+
+The conformance runner gets its own command when [T0022](docs/tasks/T0022-conformance-runner.md) adds it.

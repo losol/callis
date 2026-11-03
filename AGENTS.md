@@ -56,7 +56,17 @@ Instructions for AI coding agents working on Callis. This file follows the [AGEN
 
 ## Commands
 
-The scaffold task ([T0000](docs/tasks/T0000-scaffold.md)) adds the commands here once the tooling exists.
+| Command | Use |
+| --- | --- |
+| `pnpm install` | Install dependencies. |
+| `pnpm check` | Run everything CI runs. Must pass before you push. |
+| `pnpm format` | Fix formatting and safe lint issues. |
+| `pnpm test <file>` | Run one test file, for example `pnpm test packages/core/src/errors/fhirpath-error.test.ts`. |
+| `pnpm test -t "<name>"` | Run the tests whose name matches. |
+| `pnpm typecheck` | Type-check everything. |
+| `pnpm changeset` | Add a changeset. |
+
+The full list is in [CONTRIBUTING.md](CONTRIBUTING.md#commands).
 
 ## Nested instructions
 

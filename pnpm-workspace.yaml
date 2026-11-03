@@ -1,0 +1,6 @@
+packages:
+  - packages/*
+  - tools/*
+
+# Record exact versions when adding dependencies.
+saveExact: true

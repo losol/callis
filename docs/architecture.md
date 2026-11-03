@@ -176,6 +176,7 @@ callis/
 │   ├── fhir-r4/                @callis/fhir-r4 generated R4 ModelProvider
 │   ├── fhir-r5/                @callis/fhir-r5 generated R5 ModelProvider
 │   └── cli/                    @callis/cli     later
+├── scripts/                    repository scripts: zero-dependency check, size report
 ├── tools/                      private, never published
 │   ├── model-gen/              StructureDefinition → model data
 │   └── conformance/            HL7 test-suite runner, vendored fixtures, baseline
