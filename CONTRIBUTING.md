@@ -71,7 +71,7 @@ PR titles follow [Conventional Commits 1.0.0](https://www.conventionalcommits.or
 | `feat(core): add lexer` | `T0001 lexer` |
 | `fix(core): return empty for division by zero` | `fix: fixed bug` |
 | `feat(core)!: rename evaluate option output to format` | `feat(core): Breaking change in options.` |
-| `docs(adr): record UTC as default timezone` | `docs: update docs` |
+| `docs: record UTC as default timezone` | `docs: update docs` |
 | `build: pin tsdown 0.23` | `chore(deps): Bump stuff` |
 
 **Commits on your branch** are not kept individually on `main`. Write them so a reviewer can follow the work; the same format is encouraged but not required. Do not rewrite branch history once review has started, so review comments stay attached to their lines.
