@@ -64,6 +64,7 @@ Instructions for AI coding agents working on Callis. This file follows the [AGEN
 | `pnpm test <file>` | Run one test file, for example `pnpm test packages/core/src/errors/fhirpath-error.test.ts`. |
 | `pnpm test -t "<name>"` | Run the tests whose name matches. |
 | `pnpm typecheck` | Type-check everything. |
+| `pnpm check:title "<title>"` | Check a PR title before you open the PR. |
 | `pnpm changeset` | Add a changeset. |
 
 The full list is in [CONTRIBUTING.md](CONTRIBUTING.md#commands).

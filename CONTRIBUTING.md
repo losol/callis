@@ -153,6 +153,7 @@ You need Node.js 22.18+, 24.11+ or 26+ (the `engines` range in `package.json`, s
 | `pnpm coverage` | Run tests with a coverage report in `coverage/`. |
 | `pnpm build` | Build all packages with tsdown. |
 | `pnpm check:packages` | Run publint, attw, the zero-dependency check and the size report. Needs a build first. |
+| `pnpm check:title "feat(core): add lexer"` | Check a PR title against the rules above, as CI does. |
 | `pnpm changeset` | Add a changeset. |
 
 The conformance runner gets its own command when [T0022](docs/tasks/T0022-conformance-runner.md) adds it.
