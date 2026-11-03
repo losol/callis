@@ -4,6 +4,11 @@
 
 Callis is about finding data
 
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Roadmap](docs/roadmap.md)
+
 ## Packages
 
 | Package                                                      | Description  |
