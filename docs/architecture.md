@@ -383,7 +383,11 @@ class DateTimeValue {
 
 **Arithmetic** ([N1 §6.7](https://hl7.org/fhirpath/N1/#datetime-arithmetic)):
 
-- `+` and `-` take time-valued quantities. Calendar arithmetic applies at seconds and above; definite durations apply at seconds and below. A definite UCUM duration above seconds (`'a'`, `'mo'`, `'wk'`, `'d'`, `'h'`, `'min'`) raises an error.
+- `+` and `-` take time-valued quantities and use calendar semantics.
+  - The fixed-length UCUM units `'wk'`, `'d'`, `'h'`, `'min'`, `'s'` and `'ms'` are accepted and behave like `week`, `day`, `hour`, `minute`, `second` and `millisecond`.
+  - Only the variable-length UCUM units `'a'` and `'mo'` raise an error; authors must write `year` or `month` instead. N1 forbade every definite duration above seconds, but 3.0.0's date/time arithmetic table narrows the error to `'a'` and `'mo'`, and the suite agrees (`testPlusDate13`/`15`/`21`/`22` succeed, `testPlusDate14`/`16` fail).
+  - Units that are not time units (`'cm'`) raise an error (`testMinus6`).
+  - The suite also accepts a calendar keyword written as a quoted unit (`@1974-12-25 - 1 'month'`, `testMinus5`, marked "contested"). Callis follows it and records this in `spec-notes.md`.
 - When adding months or years lands on an invalid day, it is clamped to the last day of the month (`@2020-01-31 + 1 month = @2020-02-29`).
 - For partial values, the quantity is converted to the value's precision and truncated: `@2014 + 23 months = @2015`.
 - The allowed units depend on the value type: Date takes year to day; Time takes hour to millisecond.

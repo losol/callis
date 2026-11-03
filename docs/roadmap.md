@@ -321,7 +321,7 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
   - month-end clamping
   - truncation of partial values
   - allowed units per type
-  - an error for definite durations above seconds; the caller passes the unit kind
+  - the fixed-length UCUM units `'wk'`, `'d'`, `'h'`, `'min'`, `'s'` and `'ms'` are accepted as their calendar equivalents; only `'a'` and `'mo'` raise an error (3.0.0, tests `testPlusDate13`–`22`)
 - Helpers for taking the `now` snapshot.
 
 **Acceptance criteria**
