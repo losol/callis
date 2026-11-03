@@ -6,14 +6,7 @@
 ## How to use this roadmap
 
 - **One task = one PR.** A worker reads its task file and the ADRs it links. If a task turns out too big, split it in the PR that starts it (for example `T0008a`/`T0008b`) and update the task file and this index.
-- **A PR is done when** all of these hold:
-  - the acceptance criteria are met
-  - `pnpm check` is green
-  - new behaviour has tests that cite the spec section they cover
-  - publishable packages have a changeset
-- **Spec interpretations** that are not obvious from the text go into `docs/spec-notes.md` (spec link + test names), in the same PR.
-- **Design details** live in the task file. If implementation changes them, update the task file in the same PR.
-- **Changing an architectural decision** means updating (or superseding) its ADR in `docs/adr/` in the same PR.
+- **Workflow, PR titles and the definition of done** are in [CONTRIBUTING.md](../CONTRIBUTING.md); agents also follow [AGENTS.md](../AGENTS.md).
 - **Conformance groups** listed for a task are the groups from the HL7 test suite (`tests-fhir-r5.xml`) that the task should turn green. Until the conformance runner and converted fixtures exist (T0022, T0023), they are informational. After that, the PR shows the conformance delta, and the baseline may only go up.
 - **Sizes** are rough, for one worker: **S** ≈ 1 day, **M** ≈ 2–4 days, **L** ≈ 1–2 weeks.
 
