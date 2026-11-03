@@ -221,7 +221,7 @@ Analysis runs at three levels:
    - a root type that does not match the input (`Encounter.name` on a Patient)
    - unknown types in `is`/`as`/`ofType`
    - obvious operator type errors (`1 + 'a'`)
-3. **Strict mode** (`strict: true`, [N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation)). Warnings become errors for operations that are unsafe on singletons, such as `=` on a path that can repeat. The basic version comes in phase 1; the full version later.
+3. **Strict mode** (`strict: true`, [N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation)). Warnings become errors for the unsafe uses listed in N1 §11. The main example is a singleton-only operator or function given an operand that may repeat, such as `Patient.name.given < 'X'` or `Patient.name.given.substring(1)`. Equality is only flagged in the narrower case §11 describes: one operand may repeat and the other is a single item (`Patient.name.given = 'Wouter'`). Comparing two collections, as in `Patient.name = Patient.name`, is well-defined ([§8.6](#86-equality-and-equivalence)) and stays valid. The basic version comes in phase 1; the full version later.
 
 The result is a list of `Diagnostic { severity: 'error' | 'warning'; code; message; span }`. `compile()` throws on errors; `analyze()` returns the diagnostics without throwing, for tooling. The test suite's `invalid="semantic"` cases and `mode="strict"` tests are covered by levels 2 and 3.
 
@@ -349,7 +349,10 @@ class Decimal {                  // immutable
 - `+` and `-` are exact, with scale `max(a.scale, b.scale)`. `*` is exact, with scale `a.scale + b.scale`.
 - `/` always returns a Decimal ([N1 §6.6.2](https://hl7.org/fhirpath/N1/#division)). The quotient is computed to 28 significant digits (at least 8 fractional digits) and trailing zeros are removed. Division by zero returns empty.
 - `div`, `mod`, `round`, `truncate`, `floor`, `ceiling` and `abs` are exact. `round()` rounds half away from zero (`0.5 → 1`, `-0.5 → -1`), as clarified in [3.0.0](https://hl7.org/fhirpath/STU3/).
-- `sqrt`, `exp`, `ln`, `log`, and `power` with a non-integer exponent go through `number` and `Math.*`, and the result is rounded to 15 significant digits. This precision loss is documented. Integer powers are exact.
+- `sqrt`, `exp`, `ln`, `log`, and `power` with a non-integer exponent go through `number` and `Math.*`, and the result is rounded to 15 significant digits. This precision loss is documented.
+- `power` with an integer exponent:
+  - With a **non-negative** exponent the result is exact (repeated multiplication on `BigInt`).
+  - With a **negative** exponent the result cannot always be exact (`3.power(-1)` is 1/3). It is computed as the reciprocal `1 / x^|n|` using Decimal division: 28 significant digits, trailing zeros removed, and an empty result when `x` is zero (`0.power(-1)` is empty, like division by zero).
 - Comparison aligns scales. Literals and parsed values keep their scale.
 - A `number` from `JSON.parse` is converted through its shortest round-trip string. The original precision is already lost at that point, which is why [§12.7](#127-lossless-decimals-in-json-input) offers a lossless JSON parser.
 - The tests include property-based checks against `decimal.js`, used only as a dev-time oracle.
@@ -589,7 +592,8 @@ Without a matching hook, the hook-backed functions return empty and never throw.
 
 - **Promises are detected structurally.** An `isThenable(value)` helper checks for an object or function with a callable `then` property. `instanceof Promise` is not used, because it misses promises from another realm (iframes, `node:vm`) and custom thenables from older promise libraries.
 - `evaluate()` is **synchronous**. Every hook must return synchronously. If a hook returns a thenable during a sync evaluation, `eval/async-in-sync` is raised. Promises therefore never appear in sync mode, and the compiler's `then()` helper costs one cheap property check per node.
-- `evaluateAsync()` returns a `Promise` and lets hooks return any thenable. A hook result is adopted with `Promise.resolve()` at the hook boundary. Only the parts of an expression that actually reach an async hook pay for it.
+- `evaluateAsync()` returns a `Promise` and lets hooks return any thenable. Only the parts of an expression that actually reach an async hook pay for it.
+- **Two boundaries apply this rule:** host hooks, and user-defined functions added with `registry.extend()`. A thenable result is rejected with `eval/async-in-sync` in sync mode, and adopted with `Promise.resolve()` in async mode, so internal code only ever sees native promises.
 - **Tests** cover a cross-realm promise and a custom thenable, in both sync mode (rejected) and async mode (chained correctly).
 - **How function implementations handle this:**
   - *Value functions* (most of them) are plain sync functions. The compiler evaluates their arguments and awaits them if needed.
@@ -911,7 +915,7 @@ Line coverage for the core (excluding generated code) is reported in CI with a t
   - two separate evaluators
   - suspend-and-replay: throw on a cache miss, await, then re-run
 - **Decision:** One closure tree that returns `MaybePromise<Collection>`. `evaluate()` is synchronous and rejects async hooks; `evaluateAsync()` allows them. Value functions are plain sync code; lambda and host functions use small helpers.
-- **Consequences:** A single code path and function library. Promises are detected structurally (a callable `then`, not `instanceof Promise`), so cross-realm promises and custom thenables are handled. Sync mode costs one cheap property check per node. Authors of lambda functions must use the helpers, and tests must run each lambda function in both modes, including cross-realm and custom-thenable hook results. Specializing sync-only closures is a later performance option.
+- **Consequences:** A single code path and function library. Promises are detected structurally (a callable `then`, not `instanceof Promise`) at the hook and user-defined-function boundaries: rejected in sync mode, normalized in async mode. Cross-realm promises and custom thenables are therefore handled. Sync mode costs one cheap property check per node. Authors of lambda functions must use the helpers, and tests must run each lambda function in both modes, including cross-realm and custom-thenable hook results. Specializing sync-only closures is a later performance option.
 
 ### ADR-005: Own BigInt-based Decimal
 

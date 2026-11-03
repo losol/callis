@@ -297,12 +297,16 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
   - `div`, `mod`, `negate`, `abs`, `round(precision)` (half away from zero), `truncate`, `floor`, `ceiling`
   - `compare`, `equals` (trailing zeros ignored), `equivalent` (rounded to the less precise operand)
   - conversion to and from Integer
-  - `sqrt`, `exp`, `ln`, `log`, `power` (integer exponents exact; others through `number`, rounded to 15 significant digits)
+  - `sqrt`, `exp`, `ln`, `log` and `power`:
+    - non-negative integer exponents are exact
+    - negative integer exponents use reciprocal Decimal division (28 significant digits; a zero base gives empty)
+    - other exponents go through `number`, rounded to 15 significant digits
 - Property-based tests (`fast-check`) against `decimal.js`, which is a dev dependency only.
 
 **Acceptance criteria**
 
-- [ ] `1.0.toString() = '1.0'`, `0.1 + 0.2 = 0.3`, `1.2 * 1.8 = 2.16`, `(1.2 / 1.8).round(2) = 0.67`, `1 / 2 = 0.5`, and `-0.5.round() = -1` (3.0.0).
+- [ ] `1.0.toString() = '1.0'`, `0.1 + 0.2 = 0.3`, `1.2 * 1.8 = 2.16`, `(1.2 / 1.8).round(2) = 0.67`, `1 / 2 = 0.5`, and `(-0.5).round() = -1` (3.0.0).
+- [ ] `2.power(3) = 8` and `2.5.power(2) = 6.25` are exact, `2.power(-1) = 0.5`, `3.power(-1)` gives 28 significant digits, and `0.power(-1)` is empty.
 - [ ] Property tests pass for add, subtract, multiply, divide and compare against the oracle (at least 1,000 runs each).
 - [ ] No runtime dependency. Line coverage of `decimal/` is at least 95%.
 
@@ -674,7 +678,7 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 
 **Acceptance criteria**
 
-- [ ] A hook that returns a cross-realm promise (created in a `node:vm` context) or a custom thenable is rejected with `eval/async-in-sync` in `evaluate()`, and is chained correctly in `evaluateAsync()`.
+- [ ] A hook or a user-defined function (added with `registry.extend()`) that returns a cross-realm promise (created in a `node:vm` context) or a custom thenable is rejected with `eval/async-in-sync` in `evaluate()`, and is chained correctly in `evaluateAsync()`.
 - [ ] With an async `resolve` hook, `Bundle.entry.resource.subject.resolve().name` returns results in input order and respects `concurrency`.
 - [ ] The same expression with a sync hook works through `evaluate()`. An async hook in `evaluate()` raises `eval/async-in-sync`.
 - [ ] An aborted signal stops evaluation with `eval/aborted`.
