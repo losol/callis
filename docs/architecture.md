@@ -12,6 +12,8 @@
 | `docs/tasks/` | One file per task (`T0000-scaffold.md` …): goal, scope, design notes, acceptance criteria. A worker only needs its own task file plus the ADRs it links. |
 | `docs/spec-notes.md` | Spec interpretations and suite-label exceptions (created by the first task that needs it). |
 | `docs/conformance/` | Generated conformance reports (from T0022). |
+| [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`AGENTS.md`](../AGENTS.md) | How to work in the repository: workflow, PR titles, definition of done; agent rules. |
+| [`docs/guides/`](guides/) | Code style and testing guides. |
 
 **Rule:** design details belong in the task that implements them. Changing a decision means updating its ADR in the same PR.
 

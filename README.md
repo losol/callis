@@ -8,6 +8,7 @@ Callis is about finding data
 
 - [Architecture](docs/architecture.md)
 - [Roadmap](docs/roadmap.md)
+- [Contributing](CONTRIBUTING.md) (and [AGENTS.md](AGENTS.md) for AI agents)
 
 ## Packages
 

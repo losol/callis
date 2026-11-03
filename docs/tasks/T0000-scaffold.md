@@ -41,7 +41,9 @@ A working pnpm monorepo where every later task can add code and tests without to
   - `package.json` with `version: 0.0.0`, `type: module`, an `exports` map, `files`, `sideEffects: false`, `engines`, `license`, `repository` and `keywords`
   - `src/index.ts` with an **empty public API**
   - an internal `src/errors/` skeleton: the `FhirPathError` hierarchy, `SourceSpan`, the `ErrorCode` union and `format()` from [errors and diagnostics](#errors-and-diagnostics). Every wave-1 task needs this module, so it is created here to avoid merge conflicts.
-- **`CONTRIBUTING.md`:** commands, branch and PR conventions (task IDs, Conventional Commits), how to add a changeset, and links to the docs.
+- **Contributor docs:** [CONTRIBUTING.md](../../CONTRIBUTING.md) and [AGENTS.md](../../AGENTS.md) already describe the workflow and conventions. Fill in their **Commands** sections: install, `pnpm check` and its parts, running a single test file, and adding a changeset.
+- **PR-title check:** a CI job that checks PR titles against Conventional Commits with the allowed types and scopes from CONTRIBUTING.md (for example [`amannn/action-semantic-pull-request`](https://github.com/amannn/action-semantic-pull-request)).
+- **Biome rules** that enforce the [code style guide](../guides/code-style.md) where Biome supports it (for example no default exports).
 
 ## Out of scope
 
@@ -104,7 +106,8 @@ When the spec says evaluation "will end and signal an error to the calling envir
 - [ ] `pnpm --filter @callis/core build` emits ESM + `.d.ts`. publint and attw report no problems.
 - [ ] Adding a dependency to `@callis/core` makes the no-dependency check fail (checked once, by hand).
 - [ ] `pnpm changeset` works.
-- [ ] The README links to `docs/` and `CONTRIBUTING.md`.
+- [ ] The Commands sections in CONTRIBUTING.md and AGENTS.md list working commands.
+- [ ] A PR with a non-conforming title fails the PR-title check (checked once, by hand).
 
 
 
