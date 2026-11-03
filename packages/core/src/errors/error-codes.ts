@@ -32,3 +32,5 @@ export type EvaluationErrorCode =
 
 /** Every stable error code. */
 export type ErrorCode = SyntaxErrorCode | SemanticErrorCode | EvaluationErrorCode;
+
+export default 1;
