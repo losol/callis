@@ -137,7 +137,7 @@ For maintainers. These settings make the rules above hold:
 
 ## Commands
 
-You need Node.js 22.18 or newer (`.node-version` pins 24 for development) and [pnpm](https://pnpm.io/installation). Any recent pnpm switches to the version pinned in `package.json` (`packageManager`) by itself.
+You need Node.js 22.18+, 24.11+ or 26+ (the `engines` range in `package.json`, set by what the build tools support; `.node-version` pins 24 for development) and [pnpm](https://pnpm.io/installation). The published packages have their own, wider runtime range. Any recent pnpm switches to the version pinned in `package.json` (`packageManager`) by itself.
 
 | Command | What it does |
 | --- | --- |
