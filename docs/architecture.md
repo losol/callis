@@ -1,6 +1,6 @@
 # Callis architecture
 
-> Status: **draft for review**. This is the big picture of Callis, a FHIRPath engine for TypeScript written from scratch and published as `@callis/core`. It is deliberately short: the reasons behind decisions live in [ADRs](adr/README.md), and the detailed design lives with the [task](roadmap.md) that implements it.
+> Status: **accepted** (owner review, 2026-11-03). This is the big picture of Callis, a FHIRPath engine for TypeScript written from scratch and published as `@callis/core`. It is deliberately short: the reasons behind decisions live in [ADRs](adr/README.md), and the detailed design lives with the [task](roadmap.md) that implements it.
 
 ## How the documentation is organized
 
@@ -60,7 +60,7 @@ FHIRPath 3.0.0 (July 2026) is now the version served at <https://hl7.org/fhirpat
 | --- | :---: | :---: | --- |
 | Full N1 grammar: literals, operators, invocations, `$this`, `$index`, `%vars`, comments | ✓ | | [N1 §4](https://hl7.org/fhirpath/N1/#expressions), [§8](https://hl7.org/fhirpath/N1/#lexical-elements) |
 | Functions [N1 §5.1–5.6](https://hl7.org/fhirpath/N1/#existence), [§5.8](https://hl7.org/fhirpath/N1/#tree-navigation), [§5.9](https://hl7.org/fhirpath/N1/#utility-functions) | ✓ | | existence, filtering/projection, subsetting, combining, conversion, string, tree, utility |
-| Math functions [N1 §5.7](https://hl7.org/fhirpath/N1/#math) | ✓ | | **STU in N1**, but explicitly in the owner's scope |
+| Math functions [N1 §5.7](https://hl7.org/fhirpath/N1/#math) | ✓ | | **STU in N1**, included by owner decision |
 | Operations [N1 §6](https://hl7.org/fhirpath/N1/#operations), including date/time arithmetic | ✓ | | |
 | Environment variables [N1 §9](https://hl7.org/fhirpath/N1/#environment-variables) | ✓ | | |
 | `$total`, `aggregate()` [N1 §7](https://hl7.org/fhirpath/N1/#aggregates) | parse only | ✓ | STU |
@@ -121,6 +121,7 @@ Everything up to and including the compiler is pure and deterministic. The AST i
 | Packaging | ESM only, ES2022, zero runtime dependencies, Node 22/24/26 and browsers. | [0009](adr/0009-esm-only-zero-deps.md) |
 | Tooling | pnpm, TypeScript 7, tsdown, Biome, Vitest, Changesets. | [0010](adr/0010-tooling.md) |
 | Conformance | Vendored HL7 test suite, run in CI with a baseline that may only ratchet upwards. | [0011](adr/0011-conformance-suite.md) |
+| Defaults | UTC for date/time values without an offset; Decimal as `number` in plain output; strict choice types. | [0012](adr/0012-evaluation-defaults.md) |
 
 ## Values at a glance
 
@@ -249,15 +250,19 @@ Line coverage for the core (excluding generated code) is reported in CI with a t
   - async evaluations can be cancelled with a signal ([T0021](tasks/T0021-hooks-async.md#sync-and-async))
 - **Errors** never include input data beyond the expression text, so diagnostics are safe to log.
 
-## Open questions
+## Owner decisions
 
-These need a decision from the owner. Each one lists the current recommendation.
+The open questions from the first draft were answered by the owner on 2026-11-03:
 
-1. **Spec baseline.** Is following FHIRPath 3.0.0's clarifications for normative behaviour acceptable, as opposed to the literal N1 text? *Recommended: yes ([ADR-0001](adr/0001-spec-baseline.md)).*
-2. **Math functions** are STU in N1. Should they be phase 1? *Recommended: yes, since they are in the owner's list.*
-3. **ESM only, or also CommonJS?** *Recommended: ESM only for now.*
-4. **UCUM:** separate opt-in `@callis/ucum`, or full UCUM bundled in the core? Is shipping tables derived from `ucum-essence.xml` (under the UCUM license, with its notice) acceptable alongside MIT code? *Recommended: a separate package, after a license check.*
-5. **Decimal in plain output:** `number` (convenient, lossy, compatible with `fhirpath.js`) or `string` by default? *Recommended: `number` by default, with `decimalOutput: 'string'` and `output: 'typed'` for exact results.*
-6. **Default timezone** for date/time values without an offset: the host's local offset (the spec's suggestion) or UTC (deterministic across machines)? *Recommended: local, configurable, and fixed in tests.*
-7. **Choice-suffix leniency** (`Observation.valueQuantity` with a model): off by default as the spec requires, or on for compatibility with other engines? *Recommended: off by default, with a `lenient` option.*
-8. **Package names:** `@callis/fhir-r4` and `@callis/fhir-r5` (recommended), or something else? Is the `@callis` npm scope secured?
+| Question | Decision | Recorded in |
+| --- | --- | --- |
+| Spec baseline | Follow FHIRPath 3.0.0's clarifications of normative behaviour. | [ADR-0001](adr/0001-spec-baseline.md) |
+| Math functions (STU in N1) | Included in phase 1. | [ADR-0001](adr/0001-spec-baseline.md) |
+| Module format | ESM only; no CommonJS build for now. | [ADR-0009](adr/0009-esm-only-zero-deps.md) |
+| UCUM | Separate opt-in `@callis/ucum`, published only after a check of the UCUM data license. | [ADR-0007](adr/0007-ucum-split.md), [T0007](tasks/T0007-ucum.md) |
+| Decimal in plain output | `number` by default; `decimalOutput: 'string'` and `output: 'typed'` for exact results. | [ADR-0012](adr/0012-evaluation-defaults.md) |
+| Default timezone | **UTC** for values without an offset; `timezoneOffset` overrides it, and `'local'` uses the host's offset. | [ADR-0012](adr/0012-evaluation-defaults.md) |
+| Choice-type suffixes (`Observation.valueQuantity`) | Rejected by default as the spec requires; `lenient: { choiceSuffix: true }` accepts them. | [ADR-0012](adr/0012-evaluation-defaults.md) |
+| Package names and npm scope | `@callis/fhir-r4` and `@callis/fhir-r5`; the `@callis` scope is secured. | [ADR-0008](adr/0008-model-provider.md) |
+
+New questions go into the relevant task file or a new ADR.

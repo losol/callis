@@ -1,6 +1,6 @@
 # ADR-0011: HL7 test suite as the conformance arbiter
 
-- **Status:** Accepted (pending owner review in the architecture PR)
+- **Status:** Accepted (owner review, 2026-11-03)
 - **Date:** 2026-11-03
 
 ## Context

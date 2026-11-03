@@ -1,6 +1,6 @@
 # ADR-0004: Synchronous core with a MaybePromise async path
 
-- **Status:** Accepted (pending owner review in the architecture PR)
+- **Status:** Accepted (owner review, 2026-11-03)
 - **Date:** 2026-11-03
 
 ## Context

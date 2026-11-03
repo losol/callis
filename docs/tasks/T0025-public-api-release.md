@@ -4,7 +4,7 @@ Part of the [roadmap](../roadmap.md). Phase 1 · wave 7 · size M.
 
 - **Depends on:** phase 1
 - **Parallel with:** –
-- **Background:** [ADR-0009](../adr/0009-esm-only-zero-deps.md)
+- **Background:** [ADR-0009](../adr/0009-esm-only-zero-deps.md), [ADR-0012](../adr/0012-evaluation-defaults.md) (option and output defaults)
 
 ## Goal
 
@@ -79,9 +79,9 @@ interface EvaluateOptions {
   rootResource?: unknown;                // overrides %rootResource
   hooks?: EvaluationHooks;
   now?: Date | (() => Date);
-  timezoneOffset?: number | 'local';     // minutes, used for values without an offset
+  timezoneOffset?: number | 'local';     // minutes, for values without an offset; default 0 (UTC), 'local' = host offset
   output?: 'plain' | 'typed';
-  decimalOutput?: 'number' | 'string';   // plain output only
+  decimalOutput?: 'number' | 'string';   // plain output only; default 'number'
   limits?: EvaluationLimits;             // bounded work; see architecture "Security and robustness"
   signal?: CancellationSignal;           // async only; any AbortSignal fits (T0021)
   concurrency?: number;                  // async only
@@ -119,7 +119,7 @@ interface CompiledExpression {
 - [ ] Every phase-1 conformance test passes, or is listed with a reason in `spec-notes.md`.
 - [ ] publint, attw, the zero-dependency check and the size budget all pass.
 - [ ] The README and guide examples are executed in CI.
-- [ ] The packages are published to npm with provenance, and installing them in a fresh Node and Vite project works.
+- [ ] The packages are published to npm with provenance, and installing them in a fresh Node and Vite project works. `@callis/ucum` is only published once T0007's UCUM license check has passed ([ADR-0007](../adr/0007-ucum-split.md)).
 
 
 

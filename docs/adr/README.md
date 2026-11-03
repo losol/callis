@@ -15,8 +15,9 @@ Each file records one architecture decision: its context, the decision and its c
 | [0009](0009-esm-only-zero-deps.md) | ESM-only packages without runtime dependencies | Accepted |
 | [0010](0010-tooling.md) | Tooling: pnpm, TypeScript 7, tsdown, Biome, Vitest, Changesets | Accepted |
 | [0011](0011-conformance-suite.md) | HL7 test suite as the conformance arbiter | Accepted |
+| [0012](0012-evaluation-defaults.md) | Evaluation and output defaults (UTC, Decimal as `number`, strict choice types) | Accepted |
 
-"Accepted" means accepted for the first implementation, pending the owner's review of the architecture PR.
+All ADRs were accepted by the owner on 2026-11-03, when the architecture PR was reviewed.
 
 ## Adding or changing a decision
 

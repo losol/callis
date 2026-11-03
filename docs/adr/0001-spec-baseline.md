@@ -1,6 +1,6 @@
 # ADR-0001: Specification baseline
 
-- **Status:** Accepted (pending owner review in the architecture PR)
+- **Status:** Accepted (owner review, 2026-11-03)
 - **Date:** 2026-11-03
 
 ## Context
@@ -9,7 +9,7 @@ The owner chose N1 normative plus FHIR additions for phase 1. FHIRPath 3.0.0 (Ju
 
 ## Decision
 
-Implement the N1 normative content and the FHIR additions in phase 1, plus N1's Math functions (STU in N1, but in the owner's list). Where 3.0.0 clarifies a normative rule, follow 3.0.0 and the test suite. Implement STU features in phase 2. Record interpretations in `docs/spec-notes.md`.
+Implement the N1 normative content and the FHIR additions in phase 1, plus N1's Math functions (STU in N1, but in the owner's list). Where 3.0.0 clarifies a normative rule, follow 3.0.0 and the test suite. The owner confirmed both points (following 3.0.0's clarifications, and Math in phase 1) on 2026-11-03. Implement STU features in phase 2. Record interpretations in `docs/spec-notes.md`.
 
 ## Consequences
 

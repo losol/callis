@@ -1,6 +1,6 @@
 # ADR-0002: Hand-written lexer and Pratt parser
 
-- **Status:** Accepted (pending owner review in the architecture PR)
+- **Status:** Accepted (owner review, 2026-11-03)
 - **Date:** 2026-11-03
 
 ## Context

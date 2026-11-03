@@ -53,7 +53,7 @@ interface UnitSystem {
 }
 ```
 
-The UCUM tables are derived from data under the [UCUM license](https://github.com/ucum-org/ucum/blob/main/LICENSE.md) (Regenstrief Institute), which is not MIT. See the open questions.
+The UCUM tables are derived from data under the [UCUM license](https://github.com/ucum-org/ucum/blob/main/LICENSE.md) (Regenstrief Institute), which is not MIT. The owner made a license check a condition for `@callis/ucum`; [T0007](T0007-ucum.md) does it.
 
 ## Acceptance criteria
 

@@ -85,7 +85,7 @@ When the spec says evaluation "will end and signal an error to the calling envir
 
 | Topic | Decision |
 | --- | --- |
-| Module format | **ESM only** (`"type": "module"`, an `exports` map with `types` + `default`, `"sideEffects": false`). Node ≥ 20.19 / 22.12 can `require()` ESM. See [ADR-0009](../adr/0009-esm-only-zero-deps.md) and the open questions. |
+| Module format | **ESM only** (`"type": "module"`, an `exports` map with `types` + `default`, `"sideEffects": false`). Node ≥ 20.19 / 22.12 can `require()` ESM. See [ADR-0009](../adr/0009-esm-only-zero-deps.md) (owner decision: no CommonJS build for now). |
 | Language target | ES2022 output. `BigInt` is the only feature newer than ES2017 that is essential. |
 | Platform independence | The core imports no `node:` modules and uses no `Buffer`, `process` or DOM types. `lib` is `ES2022` only. Host APIs that appear in the public API are typed with small structural interfaces defined and exported by the core, for example `CancellationSignal` instead of `AbortSignal` ([T0021: sync and async](T0021-hooks-async.md#sync-and-async)), so consumers need no extra ambient typings. |
 | Runtimes | Node.js 22, 24 and 26 (current LTS lines); evergreen browsers; Deno, Bun and edge workers on a best-effort basis. `engines.node: ">=22"`. |

@@ -4,7 +4,7 @@ Part of the [roadmap](../roadmap.md). Phase 1 · wave 4 · size L.
 
 - **Depends on:** [T0008](T0008-compiler-evaluator.md)
 - **Parallel with:** [T0010](T0010-operators.md)–[T0017](T0017-fn-tree-utility.md)
-- **Background:** [ADR-0008](../adr/0008-model-provider.md)
+- **Background:** [ADR-0008](../adr/0008-model-provider.md), [ADR-0012](../adr/0012-evaluation-defaults.md) (strict choice types by default)
 
 ## Goal
 

@@ -5,7 +5,7 @@ Part of the [roadmap](../roadmap.md). Phase 1 · wave 1 · size L.
 - **Depends on:** [T0000](T0000-scaffold.md)
 - **Parallel with:** [T0001](T0001-lexer.md), [T0003](T0003-types-and-collections.md), [T0004](T0004-decimal.md), [T0022](T0022-conformance-runner.md)
 - **Conformance groups:** `period` (with T0018)
-- **Background:** [ADR-0006](../adr/0006-own-date-time-types.md)
+- **Background:** [ADR-0006](../adr/0006-own-date-time-types.md), [ADR-0012](../adr/0012-evaluation-defaults.md) (UTC as default offset)
 
 ## Goal
 
@@ -51,7 +51,7 @@ class DateTimeValue {
 **Comparison and equality** ([N1 §6.1.1, Date/Time equality](https://hl7.org/fhirpath/N1/#datetime-equality)):
 
 1. If both values have a timezone offset, both are normalized to UTC.
-2. If only one has an offset, the evaluation's **default offset** is applied to the other. The `timezoneOffset` option controls this; the default is the host's local offset at the evaluation's `now`. N1 leaves this to the implementation and suggests the server's local offset.
+2. If only one has an offset, the evaluation's **default offset** is applied to the other. The `timezoneOffset` option controls this. The default is **UTC** (offset 0), so results are the same on every machine ([ADR-0012](../adr/0012-evaluation-defaults.md)); `timezoneOffset: 'local'` uses the host's offset at the evaluation's `now`. N1 leaves this to the implementation and suggests the server's local offset.
 3. Components are compared from the year down. If one side lacks a component the other has, the result is undetermined (empty). Seconds and milliseconds are compared as one decimal value.
 4. For equivalence (`~`), different precision gives `false`.
 

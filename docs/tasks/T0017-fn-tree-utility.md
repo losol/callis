@@ -13,7 +13,7 @@ Part of the [roadmap](../roadmap.md). Phase 1 · wave 4 · size S.
 
 - `children` and `descendants` work model-less here; model-aware ordering arrives with T0018.
 - `trace` sends events to the `trace` hook (a no-op by default).
-- `now`, `today` and `timeOfDay` read the per-evaluation snapshot and honour the `now` and `timezoneOffset` options.
+- `now`, `today` and `timeOfDay` read the per-evaluation snapshot and honour the `now` and `timezoneOffset` options. By default they are computed in UTC ([ADR-0012](../adr/0012-evaluation-defaults.md)); `timezoneOffset: 'local'` uses the host's offset.
 
 ## Acceptance criteria
 

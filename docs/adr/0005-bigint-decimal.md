@@ -1,6 +1,6 @@
 # ADR-0005: Own BigInt-based Decimal
 
-- **Status:** Accepted (pending owner review in the architecture PR)
+- **Status:** Accepted (owner review, 2026-11-03)
 - **Date:** 2026-11-03
 
 ## Context

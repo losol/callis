@@ -1,6 +1,6 @@
 # ADR-0008: ModelProvider with generated FHIR models in separate packages
 
-- **Status:** Accepted (pending owner review in the architecture PR)
+- **Status:** Accepted (owner review, 2026-11-03)
 - **Date:** 2026-11-03
 
 ## Context
@@ -9,7 +9,7 @@ The core must work without a model, while FHIR use needs choice types, primitive
 
 ## Decision
 
-A small synchronous `ModelProvider` interface in the core. `@callis/fhir-r4` and `@callis/fhir-r5` are generated from the official StructureDefinitions by `tools/model-gen`, and the generated output is committed.
+A small synchronous `ModelProvider` interface in the core. `@callis/fhir-r4` and `@callis/fhir-r5` are generated from the official StructureDefinitions by `tools/model-gen`, and the generated output is committed. The owner confirmed these package names, and that the `@callis` npm scope is secured (2026-11-03).
 
 ## Consequences
 
