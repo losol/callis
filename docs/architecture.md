@@ -142,7 +142,7 @@ The lexer is hand-written ([ADR-002](#adr-002-hand-written-lexer-and-pratt-parse
 - **Keywords** are lexed as identifiers, and the parser decides what they mean. This is because `as`, `contains`, `in` and `is` are also legal identifiers, while `div`, `mod`, `and` and the others are reserved ([N1 §8.5](https://hl7.org/fhirpath/N1/#keywords)). Calendar unit keywords (`year`, `months`, …) work the same way.
 - **Strings:** single quotes, with escapes `\'`, `\"`, `` \` ``, `\\`, `\/`, `\f`, `\n`, `\r`, `\t` and `\uXXXX` ([N1 §4.1.2](https://hl7.org/fhirpath/N1/#string)).
 - **Numbers:** `[0-9]+('.'[0-9]+)?`. Leading zeros are allowed. A `.` that is not followed by a digit ends the number, so `1.toString()` lexes as `1`, `.`, `toString`. The `L` suffix for `Long` (phase 2) is anticipated.
-- **Date/time literals:** the `@` forms from the grammar (`DATE`, `DATETIME` including `@2015T`, `TIME` as `@T…`). The lexer checks only the shape; range checks (month 13, Feb 30) happen when the compiler builds the literal value.
+- **Date/time literals:** the `@` forms from the grammar (`DATE`, `DATETIME` including `@2015T`, `TIME` as `@T…`). The lexer checks only the shape. It also tolerates a timezone on a `TIME` literal (`@T14:34:28Z`), which the grammar does not allow, so that the literal can fail at evaluation as the suite expects (see [§5.2](#52-ast)). Range checks (month 13, Feb 30) happen when the compiler builds the literal value.
 - **Symbols:** `( ) [ ] { } . , = != ~ !~ < <= > >= + - * / | &`, `$this`, `$index`, `$total` and `%`.
 - **Environment variable names:** after `%` come an identifier, a delimited identifier, or a string (`%'us-zip'`, allowed for backwards compatibility per [N1 §9](https://hl7.org/fhirpath/N1/#environment-variables)). The double-quoted form `%"vs-name"` that appears on the FHIR pages is accepted as a documented compatibility extension.
 - **Errors:** unterminated string, identifier or comment; invalid escape; unexpected character; malformed date literal. Each raises `FhirPathSyntaxError` with a span.
@@ -204,6 +204,8 @@ type ExpressionNode =
 
 Literal nodes keep the **raw source text**. The compiler converts it with the value modules. This keeps the parser independent of the `Decimal` and date/time implementations, so they can be built in parallel, and it preserves decimal precision (`1.0` vs `1`).
 
+**Invalid literal values** are well-formed tokens whose value is not allowed: an out-of-range date component (`@2015-02-30`), or a timezone on a Time literal (`@T14:34:28Z`). These do not fail at compile time. The compiler emits a closure that raises `FhirPathEvaluationError` (`eval/invalid-literal`) when it is evaluated. The suite classifies these as execution errors (`testLiteralTimeUTC` and `testLiteralTimeTimezoneOffset` are `invalid="execution"`), and the error-class checks in [§19](#19-testing-strategy) depend on that.
+
 The AST is part of the public API (`parse()`), but its shape is not frozen before 1.0.
 
 ---
@@ -212,7 +214,7 @@ The AST is part of the public API (`parse()`), but its shape is not frozen befor
 
 Analysis runs at three levels:
 
-1. **Always, as part of `compile()`.** Is the function known? Is its arity right? Are lambda and type-specifier arguments where they should be? Are literal values valid? Is `$total` used outside `aggregate()`? Failures throw `FhirPathSemanticError`.
+1. **Always, as part of `compile()`.** Is the function known? Is its arity right? Are lambda and type-specifier arguments where they should be? Is `$total` used outside `aggregate()`? Failures throw `FhirPathSemanticError`. Invalid literal *values* are deliberately not on this list ([§5.2](#52-ast)).
 2. **Model-aware**, opt-in with `model` + `inputType`. Type inference over the AST: every node gets a set of possible types and a cardinality (`0..1` or `0..*`). This catches:
    - unknown elements (`name.given1`)
    - choice elements used with a type suffix (`Observation.valueQuantity`), with the hint "use `value.ofType(Quantity)`"
@@ -250,7 +252,7 @@ function compileNode(node: ExpressionNode, cc: CompileContext): Evaluator {
 ```
 
 - **Done once, at compile time:** function lookup and arity check; choosing the operator implementation; building literal values (`Decimal`, dates, quantities); resolving type specifiers against the model; folding side-effect-free constant subtrees (for example `-1` or `'a' & 'b'`).
-- **`EvalContext`** is created per evaluation. It holds the input (`%context`), `%resource`, `%rootResource`, variables, model, unit system, hooks, a snapshot of `now`, the timezone policy, the output mode, and an `AbortSignal`.
+- **`EvalContext`** is created per evaluation. It holds the input (`%context`), `%resource`, `%rootResource`, variables, model, unit system, hooks, a snapshot of `now`, the timezone policy, the output mode, the evaluation limits, and a cancellation signal ([§13.3](#133-sync-and-async)).
 - **`Frame`** holds the iteration variables `$this`, `$index` and `$total`. Frames are passed as parameters and chained for nested lambdas, never stored globally. That keeps a compiled expression reentrant and safe for concurrent async evaluations.
 - **Higher-order functions** (`where`, `select`, `all`, `exists(criteria)`, `repeat`, `iif`, and later `aggregate`, `sort`, `defineVariable`) receive their lambda arguments as compiled closures, not as evaluated values. The function definition declares which parameters are lambdas.
 - **Errors** carry the span of the node that failed. Spans are attached at operator and function-call boundaries, not on every node, to keep the hot path cheap.
@@ -317,7 +319,7 @@ The equality kernel returns `true | false | undefined` (undefined means "cannot 
 | Integer / Decimal | numeric value; trailing zeros ignored; Integer is converted to Decimal | compared after rounding to the precision of the less precise operand |
 | Boolean | value | value |
 | Date / DateTime / Time | compare precision by precision; a precision present on one side only gives empty; seconds and milliseconds count as one decimal precision; timezone offsets are respected ([§10](#10-date-datetime-and-time)) | different precision gives `false` |
-| Quantity | same dimension, converted via the unit system; calendar and definite durations above seconds are unequal ([N1 quantity equality](https://hl7.org/fhirpath/N1/#quantity-equality)) | calendar ↔ definite allowed per the table in [N1 §4.1.8](https://hl7.org/fhirpath/N1/#time-valued-quantities) (`1 year ~ 1 'a'`) |
+| Quantity | same dimension, converted via the unit system. Time units follow the [3.0.0 time-valued quantity table](https://hl7.org/fhirpath/STU3/): `week`, `day`, `hour`, `minute`, `second` and `millisecond` equal `'wk'`, `'d'`, `'h'`, `'min'`, `'s'` and `'ms'` (`7 days = 1 'wk'` is `true`, `testQuantity6`). `year`/`month` against `'a'`/`'mo'` cannot be compared and give empty (`1 year = 1 'a'`, `testEquality36`). N1's blanket "unequal above seconds" rule is superseded. | the same, except `year ~ 'a'` and `month ~ 'mo'` are `true` (`1 year ~ 1 'a'`) |
 | Complex model data | all child properties equal, recursively | FHIR: `id` ignored; `Coding` compared on `system` + `code`; `CodeableConcept` equivalent if any of their codings are ([R5 §2.1.9.1.6](https://hl7.org/fhir/R5/fhirpath.html#changes)) |
 | Collections with several items | same length, pairwise equal in order | same length, matched regardless of order |
 
@@ -410,7 +412,7 @@ These operations need unit knowledge:
 
 **Decision ([ADR-007](#adr-007-ucum-minimal-unit-system-in-core-full-ucum-in-callisucum)):**
 
-- **`@callis/core`** defines a `UnitSystem` interface and ships a **minimal built-in unit system**. It covers identical units, the calendar keywords, the UCUM time units `ms`, `s`, `min`, `h`, `d`, `wk`, `mo` and `a`, and the calendar ↔ definite duration table. This meets the spec's minimum: implementations "must at least respect units, recognizing when units differ" ([N1 quantity equality](https://hl7.org/fhirpath/N1/#quantity-equality)). Units the minimal system cannot relate compare as empty.
+- **`@callis/core`** defines a `UnitSystem` interface and ships a **minimal built-in unit system**. It covers identical units, the calendar keywords, the UCUM time units `ms`, `s`, `min`, `h`, `d`, `wk`, `mo` and `a`, and the calendar ↔ definite duration table as refined in 3.0.0 (see [§8.6](#86-equality-and-equivalence)). This meets the spec's minimum: implementations "must at least respect units, recognizing when units differ" ([N1 quantity equality](https://hl7.org/fhirpath/N1/#quantity-equality)). Units the minimal system cannot relate compare as empty.
 - **`@callis/ucum`** is a separate package, also without runtime dependencies. It provides full UCUM conversion: a parser for UCUM unit expressions (prefixes, atoms, exponents, `.` and `/`, `{annotations}`, `10*n` factors) plus tables generated from [`ucum-essence.xml`](https://github.com/ucum-org/ucum), with exact `Decimal` factors and dimension vectors. A small, explicit set of special (non-ratio) units such as `Cel` and `[degF]` is supported; other special units report "not convertible". Users opt in with `compile(expr, { units: ucum })`. The conformance runner always uses it.
 
 ```ts
@@ -550,7 +552,7 @@ Nodes are created lazily during navigation. Conversion to a System value (for ex
 | `` %`ext-[name]` `` | `'http://hl7.org/fhir/StructureDefinition/[name]'` | R5 §2.1.9.1.7 |
 | user variables | from the `variables` option: JSON values, `ModelNode`s or arrays | N1 §9 |
 
-An undefined variable raises `eval/undefined-variable`. A defined variable whose value is `undefined`, `null` or `[]` is empty, as N1 §9 requires. If the variables are declared at compile time, the analyzer can check names early.
+An undefined variable raises `eval/undefined-variable`. A defined variable whose value is `undefined`, `null` or `[]` is empty, as N1 §9 requires. If the names are declared at compile time (the `knownVariables` option, [§16](#16-public-api-sketch)), the analyzer can check them early. The values are always supplied at evaluation time.
 
 ### 13.2 Host hooks
 
@@ -585,14 +587,26 @@ Without a matching hook, the hook-backed functions return empty and never throw.
 
 **Decision ([ADR-004](#adr-004-synchronous-core-with-a-maybepromise-async-path)):** there is one closure tree, and each closure returns `MaybePromise<Collection>`.
 
-- `evaluate()` is **synchronous**. Every hook must return synchronously; a hook that returns a thenable during a sync evaluation raises `eval/async-in-sync`. Promises therefore never appear in sync mode, and the compiler's `then()` helper costs only an `instanceof Promise` check per node.
-- `evaluateAsync()` returns a `Promise` and lets hooks return promises. Only the parts of an expression that actually reach an async hook pay for it.
+- **Promises are detected structurally.** An `isThenable(value)` helper checks for an object or function with a callable `then` property. `instanceof Promise` is not used, because it misses promises from another realm (iframes, `node:vm`) and custom thenables from older promise libraries.
+- `evaluate()` is **synchronous**. Every hook must return synchronously. If a hook returns a thenable during a sync evaluation, `eval/async-in-sync` is raised. Promises therefore never appear in sync mode, and the compiler's `then()` helper costs one cheap property check per node.
+- `evaluateAsync()` returns a `Promise` and lets hooks return any thenable. A hook result is adopted with `Promise.resolve()` at the hook boundary. Only the parts of an expression that actually reach an async hook pay for it.
+- **Tests** cover a cross-realm promise and a custom thenable, in both sync mode (rejected) and async mode (chained correctly).
 - **How function implementations handle this:**
   - *Value functions* (most of them) are plain sync functions. The compiler evaluates their arguments and awaits them if needed.
   - *Lambda functions* (`where`, `select`, …) use helpers that stay synchronous until a promise appears.
   - *Host functions* (`resolve`, `memberOf`, …) may return `MaybePromise`.
 - Independent async calls for the items of one collection, such as `entry.resource.subject.resolve()`, are started concurrently (with a `concurrency` option) and the output order is kept.
-- In async mode, an `AbortSignal` is checked before each hook call and inside loops (`repeat`, `descendants`, lambda iteration).
+- **Cancellation:** in async mode, the `signal` option is checked before each hook call and inside loops (`repeat`, `descendants`, lambda iteration). It is typed as a minimal structural interface, `CancellationSignal`, which `@callis/core` exports. That keeps the core free of host typings, and any `AbortSignal` satisfies it:
+
+  ```ts
+  /** Structural subset of AbortSignal; any AbortSignal satisfies it. */
+  export interface CancellationSignal {
+    readonly aborted: boolean;
+    readonly reason?: unknown;
+  }
+  ```
+
+  Hooks receive the same object in their context, so hosts can pass their own `AbortSignal` on to `fetch()`.
 
 ---
 
@@ -636,7 +650,7 @@ Error codes are stable strings grouped by stage, for example:
 
 - **syntax:** `syntax/unexpected-token`, `syntax/unterminated-string`, `syntax/invalid-escape`, `syntax/invalid-date-literal`
 - **semantic:** `semantic/unknown-function`, `semantic/wrong-arity`, `semantic/unknown-element`, `semantic/unknown-type`
-- **evaluation:** `eval/singleton-expected`, `eval/type-mismatch`, `eval/undefined-variable`, `eval/async-in-sync`, `eval/aborted`
+- **evaluation:** `eval/singleton-expected`, `eval/type-mismatch`, `eval/undefined-variable`, `eval/invalid-literal`, `eval/async-in-sync`, `eval/aborted`, `eval/limit-exceeded`
 
 A formatted error looks like this:
 
@@ -688,7 +702,7 @@ interface CompileOptions {
   units?: UnitSystem;                    // default: minimal built-in unit system
   functions?: FunctionRegistry;          // default: standard + FHIR
   inputType?: string;                    // enables model-aware analysis, e.g. 'Patient'
-  variables?: readonly string[];         // declare variable names for compile-time checking
+  knownVariables?: readonly string[];    // names of %variables, for compile-time checking (values come via EvaluateOptions.variables)
   strict?: boolean;                      // N1 §11 strict evaluation
   lenient?: { choiceSuffix?: boolean };
 }
@@ -702,8 +716,14 @@ interface EvaluateOptions {
   timezoneOffset?: number | 'local';     // minutes, used for values without an offset
   output?: 'plain' | 'typed';
   decimalOutput?: 'number' | 'string';   // plain output only
-  signal?: AbortSignal;                  // async only
+  limits?: EvaluationLimits;             // bounded work; see §20
+  signal?: CancellationSignal;           // async only; any AbortSignal fits (§13.3)
   concurrency?: number;                  // async only
+}
+
+interface EvaluationLimits {
+  maxRepeatItems?: number;               // items one repeat() call may produce; finite default chosen in T12
+  maxCollectionSize?: number;            // items in any intermediate collection; finite default
 }
 
 interface CompiledExpression {
@@ -736,7 +756,7 @@ interface CompiledExpression {
 | --- | --- |
 | Module format | **ESM only** (`"type": "module"`, an `exports` map with `types` + `default`, `"sideEffects": false`). Node ≥ 20.19 / 22.12 can `require()` ESM. See [ADR-009](#adr-009-esm-only-packages-without-runtime-dependencies) and the open questions. |
 | Language target | ES2022 output. `BigInt` is the only feature newer than ES2017 that is essential. |
-| Platform independence | The core imports no `node:` modules and uses no `Buffer`, `process` or DOM types. `lib` is `ES2022` only. |
+| Platform independence | The core imports no `node:` modules and uses no `Buffer`, `process` or DOM types. `lib` is `ES2022` only. Host APIs that appear in the public API are typed with small structural interfaces defined and exported by the core, for example `CancellationSignal` instead of `AbortSignal` ([§13.3](#133-sync-and-async)), so consumers need no extra ambient typings. |
 | Runtimes | Node.js 22, 24 and 26 (current LTS lines); evergreen browsers; Deno, Bun and edge workers on a best-effort basis. `engines.node: ">=22"`. |
 | TypeScript | TypeScript 7 (native compiler) with `strict`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax` and `isolatedDeclarations`. The last one forces explicit types on the public API and enables fast `.d.ts` generation. |
 | Build | [tsdown](https://tsdown.dev) (Rolldown-based; tsup is no longer maintained and points users to tsdown). Outputs ESM plus `.d.ts`. |
@@ -806,7 +826,8 @@ Tests live next to their sources (`*.test.ts`). Cross-module integration tests g
 - `errors` → nothing
 - `lexer` → `errors`
 - `parser` → `lexer`, `errors`
-- `values/*` → `errors` only; pure and testable on their own
+- `values/decimal`, `values/datetime`, `values/string` → `errors` only; pure and testable on their own
+- `values/quantity` → `values/decimal`, `errors`. This one-way dependency is the only one allowed between value modules: `Quantity` and `UnitSystem` use `Decimal`. No value module depends on `types`, `model` or `runtime`.
 - `types` → `values`
 - `model` → `types`, `values`
 - `runtime` → `values`, `types`, `model`
@@ -829,7 +850,8 @@ Tests live next to their sources (`*.test.ts`). Cross-module integration tests g
    - **Fixtures** are vendored into `tools/conformance/fixtures/{r4,r5}/` at a pinned commit, with a `SOURCE.md` recording the commit SHA and license, and an `update-fixtures` script.
    - **Input conversion:** most inputs are FHIR XML (`patient-example.xml` is used by roughly 1,000 tests). A model-driven XML → JSON converter (dev only; it uses the generated models and keeps decimal text) converts them once, and the JSON is committed.
    - **Test semantics:**
-     - `invalid="syntax|semantic|execution"` expects an error of that class.
+     - `invalid="syntax"` expects `FhirPathSyntaxError`, and `invalid="execution"` expects `FhirPathEvaluationError`. `invalid="semantic"` expects `FhirPathSemanticError`; an evaluation error also counts, but the report marks it "detected late", because [N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation) leaves compile-time versus run-time checking to the implementation. `invalid="true"` accepts any error.
+     - Labels the suite gets wrong for our scope are listed in `spec-notes.md` as exceptions. For example, the out-of-scope `documentFunctions` group marks arity errors as `syntax`.
      - `<output type="…">` values are compared using typed output; a test with no outputs expects an empty result.
      - `predicate="true"` converts the result to a Boolean.
      - `context` and `contextType` evaluate against a sub-node.
@@ -855,9 +877,9 @@ Line coverage for the core (excluding generated code) is reported in CI with a t
 - **Regular expressions:** `matches()` and `replaceMatches()` run user-supplied patterns on JavaScript's backtracking engine (with the `u` flag), so ReDoS is possible. This is documented, and a `regex` hook lets hosts plug in a safe engine. Dialect differences from the spec's regex flavour are recorded in `spec-notes.md`.
 - **Resource limits:**
   - maximum parse depth
-  - `repeat()` deduplicates per the spec, so it terminates on JSON trees
-  - `AbortSignal` in async mode
-  - an optional cap on collection size (later)
+  - `repeat()` deduplicates per the spec. That guarantees termination only for projections that navigate a finite input tree (`Questionnaire.repeat(item)`). A projection that generates new values, such as `'x'.repeat($this & 'x')`, produces distinct items forever, so deduplication alone is not enough.
+  - **Bounded work:** every evaluation has finite default limits (`limits.maxRepeatItems`, `limits.maxCollectionSize`, [§16](#16-public-api-sketch)). Exceeding them raises `eval/limit-exceeded` in both sync and async mode. Hosts can raise or lower the limits.
+  - the cancellation signal in async mode ([§13.3](#133-sync-and-async))
 - **Errors** never include input data beyond the expression text, so diagnostics are safe to log.
 
 ---
@@ -889,7 +911,7 @@ Line coverage for the core (excluding generated code) is reported in CI with a t
   - two separate evaluators
   - suspend-and-replay: throw on a cache miss, await, then re-run
 - **Decision:** One closure tree that returns `MaybePromise<Collection>`. `evaluate()` is synchronous and rejects async hooks; `evaluateAsync()` allows them. Value functions are plain sync code; lambda and host functions use small helpers.
-- **Consequences:** A single code path and function library. Sync mode costs only cheap `instanceof Promise` checks. Authors of lambda functions must use the helpers, and tests must run each lambda function in both modes. Specializing sync-only closures is a later performance option.
+- **Consequences:** A single code path and function library. Promises are detected structurally (a callable `then`, not `instanceof Promise`), so cross-realm promises and custom thenables are handled. Sync mode costs one cheap property check per node. Authors of lambda functions must use the helpers, and tests must run each lambda function in both modes, including cross-realm and custom-thenable hook results. Specializing sync-only closures is a later performance option.
 
 ### ADR-005: Own BigInt-based Decimal
 

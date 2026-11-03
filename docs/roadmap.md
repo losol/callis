@@ -210,7 +210,7 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 - `src/lexer/`: token kinds, the lexer, character-code constants, and a line table for line/column lookup.
 - Identifiers, delimited identifiers, strings with all escapes, numbers (including the `1.toString()` rule), date/time literals (`@2015`, `@2015-02-04T14:34:28+09:00`, `@2015T`, `@T14:30:14.559`), symbols and operators, `$this`/`$index`/`$total`, and `%` followed by an identifier, a delimited identifier or a string. The double-quoted `%"…"` form is accepted for compatibility.
 - Comments and whitespace, plus an `includeTrivia` option.
-- Error codes `syntax/unterminated-string`, `syntax/invalid-escape`, `syntax/unexpected-character` and `syntax/invalid-date-literal` (shape only).
+- Error codes `syntax/unterminated-string`, `syntax/invalid-escape`, `syntax/unexpected-character` and `syntax/invalid-date-literal` (shape only). A timezone on a `TIME` literal (`@T14:34:28Z`) is accepted as part of the token; the compiler rejects it at evaluation (T8).
 
 **Acceptance criteria**
 
@@ -245,7 +245,12 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 **Acceptance criteria**
 
 - [ ] Each adjacent pair of precedence levels has a test, as does left-associativity and the N1 §6.8 example `-7.combine(3)`. `x as Quantity.unit` parses as a type specifier.
-- [ ] Every `<expression>` in `tests-fhir-r4.xml` and `tests-fhir-r5.xml` without `invalid="syntax"` parses, and every `invalid="syntax"` one throws `FhirPathSyntaxError`. Exception: expressions that use phase-2 syntax (`L` literals, instance selectors), which are listed in the PR. The XML files come from T22's vendored fixtures; if T22 has not landed yet, copy the two files into the test folder temporarily.
+- [ ] Every in-scope `<expression>` in `tests-fhir-r4.xml` and `tests-fhir-r5.xml` without `invalid="syntax"` parses, and every in-scope `invalid="syntax"` one throws `FhirPathSyntaxError`. Exceptions, each listed in the PR:
+  - out-of-scope groups (`documentFunctions`, `cdaTests`)
+  - expressions that use phase-2 syntax (`L` literals, instance selectors)
+  - suite labels that do not describe a grammar error. For example, `testSection13` marks the well-formed call `Bundle.section('http://loinc.org', '11450-4', 1)` as `syntax`, although the problem is the arity of an extension function. These go into `spec-notes.md`. The parser stays purely syntactic and does not check functions.
+
+  The XML files come from T22's vendored fixtures; if T22 has not landed yet, copy the two files into the test folder temporarily.
 - [ ] No imports from `values/`; literal conversion is the compiler's job (T8).
 - [ ] Line coverage of `parser/` is at least 95%.
 
@@ -346,13 +351,19 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 - The minimal implementation:
   - identical units
   - the UCUM time units `ms`, `s`, `min`, `h`, `d`, `wk`, `mo`, `a`
-  - the calendar ↔ definite duration table ([N1 §4.1.8](https://hl7.org/fhirpath/N1/#time-valued-quantities))
+  - the calendar ↔ definite duration table as refined in [3.0.0](https://hl7.org/fhirpath/STU3/): `week`…`millisecond` are equal to `'wk'`…`'ms'`, while `year`/`month` are only equivalent to `'a'`/`'mo'` ([N1 §4.1.8](https://hl7.org/fhirpath/N1/#time-valued-quantities) is the original)
 - Quantity equality, equivalence and comparison kernels, and `+ - * /` kernels, all through the `UnitSystem`.
 - A helper that maps FHIR `Quantity` JSON to `System.Quantity` ([R5 §2.1.9.1.3](https://hl7.org/fhir/R5/fhirpath.html#quantity)).
 
 **Acceptance criteria**
 
-- [ ] `1 year = 1 'a'` is `false`, `1 year ~ 1 'a'` is `true`, `1 second = 1 's'` is `true`, `10 seconds > 1 's'` is `true`, and `1 year > 1 'a'` is empty.
+- [ ] The 3.0.0 time-valued quantity table holds:
+  - `1 year = 1 'a'` is empty (`testEquality36`)
+  - `1 year ~ 1 'a'` is `true`
+  - `7 days = 1 'wk'` is `true` (`testQuantity6`)
+  - `1 second = 1 's'` is `true`
+  - `10 seconds > 1 's'` is `true`
+  - `1 year > 1 'a'` is empty
 - [ ] With the minimal unit system, units it does not know compare as empty, and no error is thrown.
 - [ ] The `UnitSystem` interface is documented and has a test double for other tasks to use.
 
@@ -387,9 +398,9 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 
 - `src/compiler/`:
   - `compileNode()` for every AST kind
-  - literal construction through the T4/T5/T6 value modules, with range validation of date literals
+  - literal construction through the T4/T5/T6 value modules. Invalid literal values (out-of-range dates, a timezone on a Time literal) compile to a closure that raises `eval/invalid-literal` when evaluated, not a compile-time error ([architecture §5.2](architecture.md#52-ast); tests `testLiteralTimeUTC` and `testLiteralTimeTimezoneOffset`)
   - constant folding of `-<number>`
-  - `MaybePromise` helpers (`then`, `all`, the sync guard)
+  - `MaybePromise` helpers (`then`, `all`, the sync guard), built on a structural `isThenable()` (a callable `then` property, never `instanceof Promise`; [architecture §13.3](architecture.md#133-sync-and-async))
   - lambda compilation for higher-order parameters
 - `src/runtime/`:
   - `EvalContext` and `Frame` (`$this`, `$index`)
@@ -403,16 +414,20 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
   - helpers for value, lambda and host functions
   - a handful of test-only functions to exercise the machinery
 - `src/api/`: internal `compile()` and `evaluate()`, plus basic `plain`/`typed` output adapters (finished in T25).
+- The conformance runner's evaluator adapter (T22) is wired to this internal API, replacing the runner's stub.
 
 **Out of scope:** equality-based operators (T10), model-aware navigation (T18), real library functions (T11–T17).
 
 **Acceptance criteria**
 
 - [ ] End to end: `compile(expr).evaluate(json)` works for navigation, literals of every type, the indexer, `$this`, `$index`, variables, Boolean logic, and `is`/`as` with System types.
-- [ ] Each lambda helper is tested in sync mode, and in async mode using a test-only async function. A thenable in sync mode raises `eval/async-in-sync`.
+- [ ] Each lambda helper is tested in sync mode, and in async mode using a test-only async function. A thenable in sync mode raises `eval/async-in-sync`, including a cross-realm promise and a custom thenable.
 - [ ] Navigating to `__proto__`, `constructor` or `toString` returns empty.
 - [ ] A compiled expression can be evaluated concurrently (two overlapping async evaluations) without interference.
-- [ ] Conformance groups `testDollar`, `testIndexer`, `testCollectionBoolean` and the literal parts of `testLiterals` pass once fixtures exist (T23).
+- [ ] Once fixtures exist (T23), the individual suite tests that use only T8 features (navigation, literals, the indexer, `$this`, variables, Boolean logic, `is`/`as` on System types) pass, for example `Patient.name[-1]` and the literal parts of `testLiterals`; the PR lists them. No whole group is expected to pass with T8 alone, because the groups also use operators and functions:
+  - `testIndexer` needs `=` and `|` (completed by T10)
+  - `testCollectionBoolean` needs `iif()` (completed by T14)
+  - `testDollar` needs `where`, `skip`, `substring`, `length`, `children` and a semantic check (completed by T13, with T12, T15, T17 and T24)
 
 **Depends on:** T2, T3, T4, T5, T6 · **Parallel with:** T7, T9, T23 · **Size:** L
 
@@ -456,7 +471,7 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 
 - [ ] Every example in N1 §6.1–6.7 has a table-driven test.
 - [ ] Empty propagation is tested for every operator, including `&` (empty = `''`) and `{} ~ {}` (`true`).
-- [ ] Conformance groups: `testEquality`, `testNEquality`, `testEquivalent`, `testNotEquivalent`, `testLessThan`, `testLessOrEqual`, `testGreatorOrEqual`, `testGreaterThan`, `testIn`, `testContainsCollection`, `testBooleanLogicAnd`, `testBooleanLogicOr`, `testBooleanLogicXOr`, `testBooleanImplies`, `testPlus`, `testConcatenate`, `testMinus`, `testMultiply`, `testDivide`, `testDiv`, `testMod`, `testPrecedence` and `testQuantity`. Any failures that remain are explained in the PR.
+- [ ] Conformance groups: `testEquality`, `testNEquality`, `testEquivalent`, `testNotEquivalent`, `testLessThan`, `testLessOrEqual`, `testGreatorOrEqual`, `testGreaterThan`, `testIn`, `testContainsCollection`, `testBooleanLogicAnd`, `testBooleanLogicOr`, `testBooleanLogicXOr`, `testBooleanImplies`, `testPlus`, `testConcatenate`, `testMinus`, `testMultiply`, `testDivide`, `testDiv`, `testMod`, `testPrecedence`, `testQuantity` and `testIndexer`. Any failures that remain are explained in the PR.
 
 **Depends on:** T8, T9 · **Parallel with:** T11–T18 · **Size:** L
 
@@ -476,12 +491,17 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 
 **Goal:** [N1 §5.2](https://hl7.org/fhirpath/N1/#filtering-and-projection): `where`, `select`, `repeat`, `ofType`.
 
-**Scope:** lambda functions built on the T8 helpers. `repeat` deduplicates and is guaranteed to terminate. `ofType` works with System types now and with model types through the type-test API once T18 is merged.
+**Scope:**
+
+- Lambda functions built on the T8 helpers.
+- `repeat` deduplicates per the spec. That only guarantees termination for projections that navigate a finite input; a projection that generates values, such as `'x'.repeat($this & 'x')`, never runs out of new items. `repeat` therefore enforces `limits.maxRepeatItems` (with a finite default chosen and documented in this task) and raises `eval/limit-exceeded` ([architecture §20](architecture.md#20-security-and-robustness)).
+- `ofType` works with System types now, and with model types through the type-test API once T18 is merged.
 
 **Acceptance criteria**
 
 - [ ] Each function is tested in sync and async mode, and `$this`/`$index` are correct in nested lambdas.
-- [ ] `repeat` terminates on self-referencing structures (for example `Questionnaire.repeat(item)`).
+- [ ] `repeat` terminates on nested input structures (for example `Questionnaire.repeat(item)`).
+- [ ] A value-generating projection (`'x'.repeat($this & 'x')`) stops with `eval/limit-exceeded` in both sync and async mode, within the default limit and within a custom `limits.maxRepeatItems`.
 - [ ] Conformance groups: `testWhere`, `testSelect`, `testRepeat`.
 
 **Depends on:** T8, T9 · **Parallel with:** T10, T11, T13–T18 · **Size:** M
@@ -493,7 +513,7 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 **Acceptance criteria**
 
 - [ ] The spec examples are tests. `single()` on more than one item raises `eval/singleton-expected`.
-- [ ] Conformance groups: `testSingle`, `testFirstLast`, `testTail`, `testSkip`, `testTake`, `testIntersect`, `testExclude`, `testUnion`, `testCombine()` (except the STU `preserveOrder` cases).
+- [ ] Conformance groups: `testSingle`, `testFirstLast`, `testTail`, `testSkip`, `testTake`, `testIntersect`, `testExclude`, `testUnion`, `testCombine()` (except the STU `preserveOrder` cases), and `testDollar` once T12, T15 and T17 are merged (its `invalid="semantic"` case needs T24 for a compile-time error; until then it counts as "detected late").
 
 **Depends on:** T8, T9 · **Parallel with:** T10–T12, T14–T18 · **Size:** S
 
@@ -515,7 +535,7 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 
 - [ ] Each conversion table in N1 §5.5 is fully covered, including the string formats it accepts and rejects.
 - [ ] `toString()` formats are tested: `1.0 → '1.0'`, `1 'wk'`, `1 week`, dates without `@`.
-- [ ] Conformance groups: `testIif`, `testToInteger`, `testToDecimal`, `testToString`, and the conversion parts of `testLiterals` and `testTypes`.
+- [ ] Conformance groups: `testIif`, `testCollectionBoolean` (with T10 for `|` and `/`), `testToInteger`, `testToDecimal`, `testToString`, and the conversion parts of `testLiterals` and `testTypes`.
 
 **Depends on:** T8 · **Parallel with:** T10–T13, T15–T18 · **Size:** M
 
@@ -650,10 +670,11 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 - `resolve` falls back to the hook.
 - `memberOf`, `subsumes`, `subsumedBy`, `conformsTo` and `htmlChecks` are wired to their hooks.
 - A `regex` hook for a safe regex engine.
-- `evaluateAsync()` end to end: concurrent hook calls for the items of a collection, with a `concurrency` limit and output order preserved; `AbortSignal` with `eval/aborted`.
+- `evaluateAsync()` end to end: concurrent hook calls for the items of a collection, with a `concurrency` limit and output order preserved; the `signal` option, typed as the exported structural `CancellationSignal` (any `AbortSignal` fits), stops evaluation with `eval/aborted`.
 
 **Acceptance criteria**
 
+- [ ] A hook that returns a cross-realm promise (created in a `node:vm` context) or a custom thenable is rejected with `eval/async-in-sync` in `evaluate()`, and is chained correctly in `evaluateAsync()`.
 - [ ] With an async `resolve` hook, `Bundle.entry.resource.subject.resolve().name` returns results in input order and respects `concurrency`.
 - [ ] The same expression with a sync hook works through `evaluate()`. An async hook in `evaluate()` raises `eval/async-in-sync`.
 - [ ] An aborted signal stops evaluation with `eval/aborted`.
@@ -675,13 +696,17 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 - Typed comparison of expected outputs (`boolean`, `integer`, `decimal`, `string`, `date`, `dateTime`, `time`, `code`, `id`, `Quantity`).
 - Support for `invalid`, `predicate`, `ordered`, `context`/`contextType`, `mode` and `version`.
 - Classification of each test as *phase 1*, *STU* or *unsupported*.
+- An **injectable evaluator**: the runner calls a small adapter interface, such as `{ evaluate(input, expression, options): unknown[] }` plus an error-class mapping, rather than importing `@callis/core` directly. A stub adapter in the runner is used until an engine exists. It answers "not implemented", so every test is reported as failing or skipped, not crashed.
+  - T8 wires the adapter to the engine's internal `compile()`/`evaluate()`.
+  - T25 switches it to the public API.
 - A runner CLI and a Vitest project (`pnpm test:conformance`).
 - Reports: Markdown to `docs/conformance/{r4,r5}.md`, a JSON summary, and a CI job summary. The CI job is non-blocking until T23.
 - A baseline ratchet (`baseline.json`) and a CI check against it.
 
 **Acceptance criteria**
 
-- [ ] The runner works against the public `evaluate` API even when it is still a stub. Every test is either run or skipped with a reason; nothing crashes the runner.
+- [ ] The runner runs end to end with its runner-local stub adapter. T0's public API is still empty, so it does not depend on it. Every test is either run or skipped with a reason; nothing crashes the runner.
+- [ ] The adapter interface is documented, so T8 and T25 can plug in the engine without changing the runner.
 - [ ] Tests with JSON inputs run. Tests with XML inputs are skipped with the reason "fixture not converted" until T23.
 - [ ] The report shows pass/fail/skip per group and per phase, with links to the failing expressions.
 
@@ -747,6 +772,7 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
   - an LRU compile cache
   - complete `plain` and `typed` output adapters
 - `src/index.ts`: exports only the public API and public types.
+- The conformance runner's evaluator adapter switches from the internal API (T8) to the public API, so the published surface is what gets measured.
 - Type tests (`expectTypeOf`) for the public API.
 - **Documentation:**
   - README quick start
