@@ -18,9 +18,14 @@ Task: TXXXX
 
 <!-- What you added and ran. Once the conformance runner exists: passing tests before → after. -->
 
+## Follow-ups
+
+<!-- Follow-up issues you opened for findings outside this task, for example "#12: toString drops trailing zeros". Write "None" if there are none. See CONTRIBUTING.md#findings-during-a-task. -->
+
 ## Checklist
 
 - [ ] The acceptance criteria in the task file are met
 - [ ] Tests cite the spec sections they cover
 - [ ] Changeset added, or not needed (no user-visible change to a published package)
 - [ ] Task file, `docs/spec-notes.md` or ADRs updated where the change affects them
+- [ ] Findings outside this task have follow-up issues, listed above
