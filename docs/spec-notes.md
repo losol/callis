@@ -195,11 +195,11 @@ How the conformance runner ([T0022](tasks/T0022-conformance-runner.md), [`tools/
 - **Tests:** every `invalid="semantic"` test, for example `testDollarOrderNotAllowed`, `isEffectOnLogic3Base` and the `isSemanticChecks` group.
 - **Decision:** a `FhirPathSemanticError` passes. A `FhirPathEvaluationError` also passes, and the report counts it as "detected late", so the gap to static analysis ([T0024](tasks/T0024-static-analysis.md)) stays visible.
 
-### `ordered="true"` asks for ordered-function checks
+### `ordered` and `checkOrderedFunctions`
 
-- **Spec:** [N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation) (strict evaluation) and the `ordered` attribute in `testSchema.xsd`, which documents it as "check the order of results".
-- **Tests:** `testDollarOrderNotAllowed`. R4 marks it `checkOrderedFunctions="true"`, R5 marks the same test `ordered="true"`, and both expect a semantic error for `Patient.children().skip(1)` in strict mode.
-- **Decision:** `ordered="true"` and `checkOrderedFunctions="true"` both ask the engine to report ordered functions on unordered input (`checkOrderedFunctions` in the adapter options). Results are compared in order unless `ordered="false"`, which is the schema's default reading anyway.
+- **Spec:** [N1 §3.1](https://hl7.org/fhirpath/N1/#collections) says the order of `children()` and `descendants()` is undefined, and that implementations *may* report an error for an order-dependent operation on such a collection. `testSchema.xsd` documents `ordered` as "check order of results".
+- **Tests:** `testDollarOrderNotAllowed` expects a semantic error for `Patient.children().skip(1)`. R4 marks it `checkOrderedFunctions="true"` and R5 `ordered="true"`; both copies are `mode="strict"`.
+- **Decision:** `ordered` only controls how outputs are compared: in order, or as a multiset when `ordered="false"`. `checkOrderedFunctions` is not passed to the engine. The test is in strict mode, so `strict` is the signal, as in the HL7 Java runner, which ignores the attribute. Whether strict mode reports order-dependent operations on unordered collections is up to [T0024](tasks/T0024-static-analysis.md).
 
 ### `predicate="true"`
 

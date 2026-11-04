@@ -2,7 +2,7 @@
  * Renders the conformance reports: the Markdown reports in `docs/conformance/`, the JSON summary
  * and the CI job summary. Output is deterministic (no dates), so committed reports can be checked.
  */
-import type { RatchetResult } from './baseline.ts';
+import type { RatchetMode, RatchetResult } from './baseline.ts';
 import { formatRefs } from './baseline.ts';
 import { PHASE_LABELS, PHASES } from './classify.ts';
 import type { FixtureSource } from './fixtures.ts';
@@ -150,12 +150,23 @@ export function renderJobSummary(
       lines.push(`| ${label} ${countsRow(PHASE_LABELS[phase], summary.phases[phase])}`);
     }
   }
-  lines.push('', ...ratchetMessages(ratchet, staleReports).map((message) => `- ${message}`), '');
+  lines.push(
+    '',
+    ...ratchetMessages(ratchet, staleReports, 'check').map((message) => `- ${message}`),
+    '',
+  );
   return lines.join('\n');
 }
 
-/** Human-readable lines about the ratchet and stale reports. */
-export function ratchetMessages(ratchet: RatchetResult, staleReports: readonly string[]): string[] {
+/**
+ * Human-readable lines about the ratchet and stale reports. Things the run has not recorded yet
+ * fail only in `check` mode, so they are marked ❌ there and ℹ️ otherwise.
+ */
+export function ratchetMessages(
+  ratchet: RatchetResult,
+  staleReports: readonly string[],
+  mode: RatchetMode,
+): string[] {
   const messages: string[] = [];
   if (ratchet.regressions.length > 0) {
     messages.push(
@@ -164,19 +175,26 @@ export function ratchetMessages(ratchet: RatchetResult, staleReports: readonly s
   } else {
     messages.push('✅ No regressions: every test in the baseline still passes.');
   }
+  const mark = mode === 'check' ? '❌' : 'ℹ️';
+  const update = 'Run `pnpm conformance --update-baseline` and commit the result.';
   if (ratchet.vanished.length > 0) {
     messages.push(
-      `❌ ${ratchet.vanished.length} baseline test(s) are no longer in the suite: ${formatRefs(ratchet.vanished)}. Run \`pnpm conformance --update-baseline\`.`,
+      `${mark} ${ratchet.vanished.length} baseline test(s) are no longer in the suite: ${formatRefs(ratchet.vanished)}. ${update}`,
+    );
+  }
+  if (ratchet.excluded.length > 0) {
+    messages.push(
+      `${mark} ${ratchet.excluded.length} baseline test(s) are now skipped as exceptions or unsupported: ${formatRefs(ratchet.excluded)}. ${update}`,
     );
   }
   if (ratchet.newPasses.length > 0) {
     messages.push(
-      `❌ ${ratchet.newPasses.length} test(s) pass but are not in the baseline yet: ${formatRefs(ratchet.newPasses)}. Run \`pnpm conformance --update-baseline\` and commit the result.`,
+      `${mark} ${ratchet.newPasses.length} test(s) pass but are not in the baseline yet: ${formatRefs(ratchet.newPasses)}. ${update}`,
     );
   }
   for (const report of staleReports) {
     messages.push(
-      `❌ \`${report}\` is out of date. Run \`pnpm conformance\` and commit the result.`,
+      `${mark} \`${report}\` is out of date. Run \`pnpm conformance\` and commit the result.`,
     );
   }
   return messages;
@@ -189,7 +207,7 @@ function failureRow(result: TestResult, suiteLink: string): string {
     classification.task === undefined
       ? PHASE_LABELS[classification.phase]
       : `${PHASE_LABELS[classification.phase]} (${classification.task})`;
-  const problem = result.failure === undefined ? '' : truncate(result.failure.message, MAX_PROBLEM);
+  const problem = result.failure === undefined ? '' : truncate(result.failure.summary, MAX_PROBLEM);
   return `| ${name} | ${phase} | ${code(truncate(test.expression, MAX_EXPRESSION))} | ${cell(problem)} |`;
 }
 

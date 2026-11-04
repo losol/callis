@@ -67,13 +67,11 @@ export interface SuiteTest {
   readonly mode: string | undefined;
   /** `predicate="true"`: the result is converted to a Boolean before it is compared. */
   readonly predicate: boolean;
-  /** The `ordered` attribute. `false` compares outputs as a multiset; otherwise order matters. */
-  readonly ordered: boolean | undefined;
   /**
-   * Whether ordered functions on unordered input must be reported (`checkOrderedFunctions` in R4,
-   * `ordered="true"` in R5; see `docs/spec-notes.md`).
+   * The `ordered` attribute. `false` compares outputs as a multiset; otherwise order matters. (The
+   * R4 file's `checkOrderedFunctions` attribute is not read; see `docs/spec-notes.md`.)
    */
-  readonly checkOrderedFunctions: boolean;
+  readonly ordered: boolean | undefined;
   /** An expression that selects the focus inside the input (`context`). */
   readonly context: string | undefined;
   /** The declared type(s) of the context (`contextType`, `|`-separated in the file). */

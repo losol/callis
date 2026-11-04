@@ -59,19 +59,20 @@ interface EvaluatorAdapter {
 }
 ```
 
-`EvaluationOptions` carries what the test asks for: the FHIR version, `context` and `contextType`, the raw `mode`, and `strict`, `lenientChoiceSuffix`, `checkOrderedFunctions` and `skipStaticCheck` derived from it. `describeValue` keeps the typed comparison independent of the engine's value classes.
+`EvaluationOptions` carries what the test asks for: the FHIR version, `context` and `contextType`, the raw `mode`, and `strict`, `lenientChoiceSuffix` and `skipStaticCheck` derived from it. `describeValue` keeps the typed comparison independent of the engine's value classes.
 
 ### Decisions made while building the runner
 
 - **Converted inputs:** an XML input `name.xml` is read from `name.json` in the same fixture folder. T0023 writes those files; until then the tests are skipped as "fixture not converted".
 - **Classification** is per test, not per group: a test that calls an STU function is STU even in a phase-1 group (for example `testPeriodInvariantNew` in `period`, and the `type()` tests in `testType`).
 - **Comparison** follows the HL7 Java test runner (exact types, decimals with their precision, type-only checks for empty outputs); the details and the few differences are in [spec notes](../spec-notes.md#comparing-expected-outputs).
-- **The ratchet** also fails CI when tests pass that are not in the baseline yet, and when the committed reports are out of date (`pnpm conformance --check`), so the baseline and the reports always match the code.
+- **The ratchet** also fails CI when tests pass that are not in the baseline yet, and when the committed reports are out of date (`pnpm conformance --check`), so the baseline and the reports always match the code. A baseline test that becomes an exception or unsupported is not a regression: `--update-baseline` drops it, as it drops tests that left the suite.
 - **Exceptions** are listed in `tools/conformance/src/exceptions.ts`, each with its `spec-notes.md` entry, and are skipped.
+- **Report stability:** the committed reports show failure kinds and error codes, not engine messages or file paths, so a reworded error message does not make every open PR's reports stale.
 
 ## Acceptance criteria
 
-- [ ] The runner runs end to end with its runner-local stub adapter. T0000's public API is still empty, so it does not depend on it. Every test is either run or skipped with a reason; nothing crashes the runner.
-- [ ] The adapter interface is documented, so T0008 and T0025 can plug in the engine without changing the runner.
-- [ ] Tests with JSON inputs run. Tests with XML inputs are skipped with the reason "fixture not converted" until T0023.
-- [ ] The report shows pass/fail/skip per group and per phase, with links to the failing expressions.
+- [x] The runner runs end to end with its runner-local stub adapter. T0000's public API is still empty, so it does not depend on it. Every test is either run or skipped with a reason; nothing crashes the runner.
+- [x] The adapter interface is documented, so T0008 and T0025 can plug in the engine without changing the runner.
+- [x] Tests with JSON inputs run. Tests with XML inputs are skipped with the reason "fixture not converted" until T0023.
+- [x] The report shows pass/fail/skip per group and per phase, with links to the failing expressions.

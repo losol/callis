@@ -54,6 +54,6 @@ FHIR/fhir-test-cases is licensed under the Apache License, Version 2.0. A copy o
 | `r5/patient-example.xml` | [`r5/patient-example.xml`](https://github.com/FHIR/fhir-test-cases/blob/cb4eac4cc37626d4d79a3f206b2d5db212cc6d32/r5/patient-example.xml) |
 | `r5/patient-name-extensions.json` | [`r5/patient-name-extensions.json`](https://github.com/FHIR/fhir-test-cases/blob/cb4eac4cc37626d4d79a3f206b2d5db212cc6d32/r5/patient-name-extensions.json) |
 | `r5/questionnaire-example.xml` | [`r5/questionnaire-example.xml`](https://github.com/FHIR/fhir-test-cases/blob/cb4eac4cc37626d4d79a3f206b2d5db212cc6d32/r5/questionnaire-example.xml) |
-| `r5/tests-fhir-r5.xml` | [`r5/fhirpath/tests-fhir-r5.xml`](https://github.com/FHIR/fhir-test-cases/blob/cb4eac4cc37626d4d79a3f206b2d5db212cc6d32/r5/fhirpath/tests-fhir-r5.xml) |
 | `r5/testSchema.xsd` | [`r5/fhirpath/testSchema.xsd`](https://github.com/FHIR/fhir-test-cases/blob/cb4eac4cc37626d4d79a3f206b2d5db212cc6d32/r5/fhirpath/testSchema.xsd) |
+| `r5/tests-fhir-r5.xml` | [`r5/fhirpath/tests-fhir-r5.xml`](https://github.com/FHIR/fhir-test-cases/blob/cb4eac4cc37626d4d79a3f206b2d5db212cc6d32/r5/fhirpath/tests-fhir-r5.xml) |
 | `r5/valueset-example-expansion.xml` | [`r5/valueset-example-expansion.xml`](https://github.com/FHIR/fhir-test-cases/blob/cb4eac4cc37626d4d79a3f206b2d5db212cc6d32/r5/valueset-example-expansion.xml) |

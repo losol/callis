@@ -20,7 +20,6 @@ export function makeTest(overrides: Partial<SuiteTest> = {}): SuiteTest {
     mode: undefined,
     predicate: false,
     ordered: undefined,
-    checkOrderedFunctions: false,
     context: undefined,
     contextTypes: [],
     version: undefined,
@@ -43,8 +42,11 @@ export function makeRun(
       classification: classifyTest(test),
       status,
       skipReason: status === 'skip' ? 'skipped for a reason' : undefined,
+      skipCause: status === 'skip' ? 'input' : undefined,
       failure:
-        status === 'fail' ? { kind: 'not-implemented', message: 'not implemented' } : undefined,
+        status === 'fail'
+          ? { kind: 'not-implemented', message: 'not implemented', summary: 'not implemented' }
+          : undefined,
       detectedLate: false,
       ...overrides,
     };

@@ -75,6 +75,7 @@ describe('runTest outputs', () => {
     expect((await run(test)).failure).toEqual({
       kind: 'wrong-output',
       message: 'expected [integer 1], got [integer 2]',
+      summary: 'expected [integer 1], got [integer 2]',
       expected: ['integer 1'],
       actual: ['integer 2'],
     });
@@ -134,6 +135,7 @@ describe('runTest errors', () => {
     expect((await run(makeTest({ invalid: 'syntax', expression: '1' }))).failure).toEqual({
       kind: 'missing-error',
       message: 'expected a syntax error, got a result with 1 item(s)',
+      summary: 'expected a syntax error, got a result with 1 item(s)',
     });
   });
 
@@ -141,6 +143,16 @@ describe('runTest errors', () => {
     expect((await run(makeTest({ expression: 'throw:execution' }))).failure).toEqual({
       kind: 'unexpected-error',
       message: 'unexpected execution error [execution/code]: execution problem',
+      summary: 'unexpected execution error [execution/code]',
+    });
+  });
+
+  it('keeps engine messages out of the summary of a wrong error', async () => {
+    const result = await run(makeTest({ invalid: 'syntax', expression: 'throw:semantic' }));
+    expect(result.failure).toMatchObject({
+      kind: 'wrong-error',
+      message: 'expected a syntax error, got semantic error [semantic/code]: semantic problem',
+      summary: 'expected a syntax error, got semantic error [semantic/code]',
     });
   });
 
@@ -163,6 +175,7 @@ describe('runTest errors', () => {
     expect((await run(makeTest(), badDescribe)).failure).toEqual({
       kind: 'runner-error',
       message: 'describeValue failed: nope',
+      summary: 'describeValue failed',
     });
     const badClassify = fakeAdapter({
       classifyError: () => {
@@ -212,7 +225,12 @@ describe('runTest inputs and skips', () => {
   it('fails tests whose input is not valid JSON', async () => {
     const broken: InputReader = () => ({ kind: 'json', path: '/x.json', text: '{' });
     const result = await run(makeTest({ inputFile: 'x.json' }), fakeAdapter(), broken);
-    expect(result.failure?.kind).toBe('runner-error');
+    expect(result.failure).toMatchObject({
+      kind: 'runner-error',
+      summary: 'could not parse input x.json',
+    });
+    // The message has the parser's own text; the summary leaves it out.
+    expect(result.failure?.message).toMatch(/^could not parse input \/x\.json: /);
   });
 
   it('skips XML inputs that are not converted yet', async () => {
@@ -253,7 +271,6 @@ describe('evaluationOptions', () => {
       context: 'Observation.effective',
       contextTypes: ['Period', 'Timing'],
       mode: 'strict',
-      checkOrderedFunctions: true,
       skipStaticCheck: true,
     });
     expect(evaluationOptions('r4', test)).toEqual<EvaluationOptions>({
@@ -265,7 +282,6 @@ describe('evaluationOptions', () => {
       mode: 'strict',
       strict: true,
       lenientChoiceSuffix: false,
-      checkOrderedFunctions: true,
       skipStaticCheck: true,
     });
     // ADR-0012: lenient/polymorphics tests accept choice-type suffixes.

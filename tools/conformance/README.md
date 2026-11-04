@@ -58,7 +58,6 @@ interface EvaluatorAdapter {
   | `mode` | `mode` of the test, its expression or its group | The raw mode, for example `element` or `html`. |
   | `strict` | `mode="strict"` | [N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation) strict evaluation. |
   | `lenientChoiceSuffix` | `mode="lenient"` or `lenient/polymorphics` | Accept `Observation.valueQuantity` ([ADR-0012](../../docs/adr/0012-evaluation-defaults.md)). |
-  | `checkOrderedFunctions` | `checkOrderedFunctions` (R4), `ordered="true"` (R5) | Report ordered functions on unordered input. |
   | `skipStaticCheck` | `skipStaticCheck` | Evaluate without static analysis. |
 
   It may return a promise. Inputs are parsed once per file and shared, so evaluation must not mutate them.
@@ -92,6 +91,10 @@ A test that runs passes when:
 
 **Exceptions.** A test whose expectation is wrong for Callis is listed in [`src/exceptions.ts`](src/exceptions.ts) with a link to its entry in [`docs/spec-notes.md`](../../docs/spec-notes.md), and skipped.
 
+**Reports** name each failing test with its expression and a one-line problem: the failure kind and the engine's error code, never the engine's message text or a file path. A report therefore only changes when an outcome changes. The full message is in `pnpm test:conformance` and in the CI results artifact.
+
 ## Baseline and CI
 
-`baseline.json` lists every passing test. CI runs `pnpm conformance --check`: it fails when a baseline test stops passing, when tests pass that are not in the baseline yet, or when the committed reports are out of date, and it adds a job summary. The job is non-blocking until T0023 converts the XML inputs.
+`baseline.json` lists every passing test. A baseline test that stops passing is a regression, which always fails. A baseline test can leave the baseline in only two ways: it is no longer in the suite (after a fixture update), or it is skipped on purpose because it became an exception or unsupported. `pnpm conformance --update-baseline` drops those tests and records new passes, and refuses to run when there is a regression.
+
+CI runs `pnpm conformance --check`. It fails on a regression, on a baseline that is out of date (tests to drop or new passes to record), or on committed reports that are out of date, and it adds a job summary. Locally, `pnpm conformance` fails only on a regression and lists the rest as hints. The decision is `ratchetFails()` in [`src/baseline.ts`](src/baseline.ts). The job is non-blocking until T0023 converts the XML inputs.

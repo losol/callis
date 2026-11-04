@@ -6,14 +6,23 @@
  * - default: run both suites, write `docs/conformance/{r4,r5}.md` and `summary.json`, and compare
  *   with `baseline.json`. Fails if a baseline test regressed.
  * - `--update-baseline`: also record the passing tests in `baseline.json` (refused on regressions).
- * - `--check` (CI): write nothing; fail on regressions, unrecorded passes or out-of-date reports.
- *   Appends a job summary to `$GITHUB_STEP_SUMMARY` when it is set.
+ * - `--check` (CI): write nothing; fail on regressions, on a baseline that is out of date, or on
+ *   out-of-date reports. Appends a job summary to `$GITHUB_STEP_SUMMARY` when it is set.
+ *
+ * The exit code comes from `ratchetFails()` in `baseline.ts`.
  * - `--results <file>`: also write every test result as JSON (a CI artifact).
  */
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { parseArgs } from 'node:util';
-import { checkRatchet, parseBaseline, serializeBaseline, updateBaseline } from './baseline.ts';
+import {
+  checkRatchet,
+  parseBaseline,
+  type RatchetMode,
+  ratchetFails,
+  serializeBaseline,
+  updateBaseline,
+} from './baseline.ts';
 import { PHASE_LABELS, PHASES } from './classify.ts';
 import { engineAdapter } from './engine-adapter.ts';
 import { CONFORMANCE_DIR, loadSuite, REPOSITORY_ROOT, readFixtureSource } from './fixtures.ts';
@@ -79,45 +88,35 @@ if (values.results !== undefined) {
   writeFileSync(values.results, renderResults(runs));
 }
 
-let failed = false;
-if (values.check) {
-  const stale = [...reports]
-    .filter(([path, content]) => !existsSync(path) || readFileSync(path, 'utf8') !== content)
-    .map(([path]) => relative(REPOSITORY_ROOT, path));
-  const messages = ratchetMessages(ratchet, stale);
-  for (const message of messages) {
-    console.log(message);
-  }
-  const summaryFile = process.env.GITHUB_STEP_SUMMARY;
-  if (summaryFile !== undefined && summaryFile !== '') {
-    appendFileSync(summaryFile, renderJobSummary(summaries, ratchet, stale, context));
-  }
-  failed =
-    ratchet.regressions.length > 0 ||
-    ratchet.vanished.length > 0 ||
-    ratchet.newPasses.length > 0 ||
-    stale.length > 0;
-} else {
+const mode: RatchetMode = values.check ? 'check' : values['update-baseline'] ? 'update' : 'report';
+const stale =
+  mode === 'check'
+    ? [...reports]
+        .filter(([path, content]) => !existsSync(path) || readFileSync(path, 'utf8') !== content)
+        .map(([path]) => relative(REPOSITORY_ROOT, path))
+    : [];
+
+if (mode !== 'check') {
   for (const [path, content] of reports) {
     writeFileSync(path, content);
   }
   console.log(`Reports written to ${relative(REPOSITORY_ROOT, reportsDir)}/.`);
-  if (values['update-baseline']) {
-    try {
-      writeFileSync(baselinePath, serializeBaseline(updateBaseline(baseline, runs)));
-      console.log(`Baseline updated: ${relative(REPOSITORY_ROOT, baselinePath)}.`);
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      failed = true;
-    }
-  } else {
-    for (const message of ratchetMessages(ratchet, [])) {
-      console.log(message);
-    }
-    failed = ratchet.regressions.length > 0;
+}
+if (mode === 'update' && ratchet.regressions.length === 0) {
+  writeFileSync(baselinePath, serializeBaseline(updateBaseline(baseline, runs)));
+  console.log(`Baseline updated: ${relative(REPOSITORY_ROOT, baselinePath)}.`);
+} else {
+  for (const message of ratchetMessages(ratchet, stale, mode)) {
+    console.log(message);
   }
 }
-process.exitCode = failed ? 1 : 0;
+if (mode === 'check') {
+  const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+  if (summaryFile !== undefined && summaryFile !== '') {
+    appendFileSync(summaryFile, renderJobSummary(summaries, ratchet, stale, context));
+  }
+}
+process.exitCode = ratchetFails(mode, ratchet, stale) ? 1 : 0;
 
 /** Every test result, for the CI artifact. */
 function renderResults(suiteRuns: readonly SuiteRun[]): string {

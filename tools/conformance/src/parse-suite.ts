@@ -108,10 +108,6 @@ function parseTest(test: XmlNode, ctx: TestContext): SuiteTest {
     mode: attribute(test, 'mode') ?? attribute(expression, 'mode') ?? ctx.groupMode,
     predicate: booleanAttribute(test, 'predicate', where) ?? false,
     ordered: booleanAttribute(test, 'ordered', where),
-    checkOrderedFunctions:
-      booleanAttribute(test, 'checkOrderedFunctions', where) ??
-      booleanAttribute(test, 'ordered', where) ??
-      false,
     context: attribute(test, 'context'),
     contextTypes: contextType === undefined ? [] : contextType.split('|').map((t) => t.trim()),
     version: attribute(test, 'version'),
