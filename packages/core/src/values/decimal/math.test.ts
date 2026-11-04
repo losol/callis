@@ -130,6 +130,7 @@ describe('power', () => {
     ['2', '0.5', '1.4142135623731'],
     ['8', '-0.5', '0.353553390593274'],
     ['0', '0.5', '0'],
+    ['2', '2.0000000000000001', '4'], // through Math.pow: the exponent's nearest number is 2
   ])('power(%s, %s) = %s', (base, exponent, expected) => {
     expect(show(power(d(base), d(exponent)))).toBe(expected);
   });
@@ -145,6 +146,8 @@ describe('power', () => {
   it.each([
     ['-1', '0.5'], // N1 example, testPower3
     ['-8', '0.5'],
+    ['-2', '2.0000000000000001'], // fractional, although its nearest number is 2
+    ['-8', '-0.5'],
     ['0', '-1'], // like division by zero, T0004 acceptance criterion
     ['0.0', '-2'],
     ['0', '-0.5'],

@@ -94,6 +94,11 @@ export function log(value: Decimal, base: Decimal): Decimal | undefined {
  */
 export function power(base: Decimal, exponent: Decimal): Decimal | undefined {
   if (!exponent.isInteger()) {
+    // A negative base has no real power for a fractional exponent. Check it on the Decimal: the
+    // exponent's nearest number can be whole (2.0000000000000001 becomes 2).
+    if (base.sign() < 0) {
+      return undefined;
+    }
     return fromNumberResult(base.toNumber() ** exponent.toNumber(), base.sign() === 0);
   }
   const count = exponent.truncate().coefficient;
