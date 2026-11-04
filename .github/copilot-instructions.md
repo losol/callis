@@ -23,6 +23,7 @@ Callis is a FHIRPath engine for TypeScript (`@callis/core`). The general agent i
 - Decisions recorded in `docs/adr/`, unless the PR contradicts them. Examples: own `Decimal`, closure compilation, ESM only, UTC as default timezone, strict choice types.
 - Interpretations recorded in `docs/spec-notes.md`.
 - Work that a later task in `docs/roadmap.md` covers.
+- Work listed under *Follow-ups* in the PR description.
 
 ## How to comment
 

@@ -80,11 +80,49 @@ PR titles follow [Conventional Commits 1.0.0](https://www.conventionalcommits.or
 
 ## Pull requests
 
-- **One task per PR.** Stay within the task's scope and list anything else as a follow-up in the description.
+- **One task per PR.** Stay within the task's scope. Open a follow-up issue for anything else and list it in the description ([Findings during a task](#findings-during-a-task)).
 - **Keep PRs reviewable.** If hand-written changes grow far beyond a few hundred lines, split along the task's natural seams (for example `T0008a` and `T0008b`) and update the task file. Generated files do not count.
 - **Fill in the template.** The description becomes the commit body on `main`, so keep it accurate and delete the template comments. It must start with `Task: T0001` (or `Task: none`) so `git log --grep "Task: T0001"` finds the commit.
 - **Reviews:** Copilot reviews every PR automatically. An AO review can be requested for implementation PRs. The owner's approval is required to merge.
 - **Stay up to date** with `main` by merging it into your branch; avoid force-pushing after review has started.
+
+## Findings during a task
+
+While working on a task you will find things that are not part of it: a bug in merged code, a gap in a later task, a task file that is wrong. Record each finding where the next person will see it. A note that only lives in a PR description is lost once the PR is merged.
+
+| What you find | What to do |
+| --- | --- |
+| Something your task needs | Do it in your PR. |
+| Your task file is wrong or unclear | Fix the task file in your PR and say why in the description. |
+| Your task is too big | Split it (`T0008a`, `T0008b`) and update the task file and the roadmap in your PR. |
+| An ambiguity in the spec | Record your interpretation in `docs/spec-notes.md` in your PR. |
+| Something that blocks your task | Say so in the PR and ask the owner. Do not work around it. |
+| A bug, gap or improvement outside your task | Open a follow-up issue. Do not fix it in your PR. |
+| A problem with another task file, the roadmap or the dependencies | Open a follow-up issue. Do not edit them in your PR. |
+| A question that needs an architecture decision | Open a follow-up issue for the owner. Do not change the ADR. |
+
+### Follow-up issues
+
+- Search the open issues first. If the finding is already there, add a comment instead.
+- One finding per issue, opened when you find it rather than after the merge.
+- Use the **Follow-up** issue form. From the command line, use `gh issue create --label follow-up` with the form's headings: `### Found in` (task ID and PR), `### Kind`, `### What you found` (concrete input, file, spec anchor or test name), `### Why it matters` and `### Suggested home` (an existing task, a new task or the backlog).
+- List the issues under *Follow-ups* in your PR description.
+
+### Changing the plan
+
+The task files and the [roadmap](docs/roadmap.md) are the plan. Issues are the inbox: a follow-up issue does not change the plan by itself.
+
+- The owner triages follow-up issues. An accepted one becomes one of these:
+  - a change to an existing task file (scope, design notes or acceptance criteria)
+  - a new task: a task file with the next free ID, a roadmap row with dependencies, wave and size, and a task issue
+  - a line in the roadmap backlog
+- Plan changes are `docs` PRs with `Task: none`, made by the owner or by an agent the owner asked to do it. The PR closes the follow-up issue. A declined issue is closed with the reason.
+- Inside a task PR, only two plan changes are allowed: correcting that task's own file and splitting that task.
+- Task IDs are never reused or renumbered.
+
+### Task issues
+
+Each scheduled task has a task issue, labelled `task` and with its wave (`wave-1`, …), that links the task file. The task file is the source of truth; the issue is for tracking and discussion. The PR that implements the task closes it with `Closes #<issue>`.
 
 ## Definition of done
 
