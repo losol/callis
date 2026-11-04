@@ -29,7 +29,7 @@ The shared, dependency-free building blocks used by the runtime, functions and m
 
 ### Collections
 
-- Every expression evaluates to a **collection**: a JavaScript array `readonly Item[]`. Empty is `[]`. Collections never contain `null` or `undefined`.
+- Every expression evaluates to a **collection**: a JavaScript array `readonly Item[]`. Empty is `[]`. Collections never contain `null` or `undefined`, and never contain arrays: the `Item` type requires object items to be non-iterable, so a nested collection does not compile. T0008 may narrow `Item` to the closed union of value classes once they all exist.
 - Collections are **never mutated** after they are returned (enforced by `readonly` types). Builders use local mutable arrays. A shared frozen `EMPTY` constant avoids allocations.
 - **Order** is preserved wherever the spec defines it (navigation, `combine`, indexers). Where the spec leaves order undefined (for example the `|` operator, [N1 §6.4.1](https://hl7.org/fhirpath/N1/#union-collections)), Callis still produces a deterministic order: left items first, then new items from the right.
 
@@ -114,11 +114,11 @@ The TSDoc in `src/model/model-provider.ts` is the full contract. The points that
 - `namespace` is never `System`. Type names are case-sensitive.
 - Lookups are prototype-safe: `getType('constructor')` and `getElement(type, '__proto__')` are undefined unless the model defines them, and `getRootType()` reads `resourceType` as an own property.
 - `getType()` should return the same object for the same type, so types can be compared by identity; the engine also treats equal namespace and name as the same type.
-- `getElement()` and `getElements()` include inherited elements. `getElements()` lists them in snapshot order, base types first. A primitive type's implicit `value` is not an element.
+- `getElement()` and `getElements()` include inherited elements and return the same `ElementInfo` objects every time, so callers can cache derived data keyed on them. `getElements()` lists them in snapshot order, base types first. A primitive type's implicit `value` is not an element.
 - Every name in `ElementInfo.typeNames` resolves with `getType()`: backbone types by path, `contentReference` resolved, and System-typed elements such as FHIR's `Element.id` given as the matching model type (`string`).
-- A choice element appears in JSON as its name plus the type name with the first letter in upper case (`valueQuantity`), even when only one type is allowed.
+- A choice element appears in JSON as its name plus the type name with the first letter in upper case (`valueQuantity`), even when only one type is allowed. `choiceJsonName(name, typeName)` in `model-provider.ts` is the one implementation of this rule, for T0018, T0019 and T0024.
 - `isSubtypeOf()` is reflexive.
-- `getSystemType()` covers every type whose values convert implicitly, including derived primitives (`code` → `String`) and `Quantity` with its specializations (`Age`). For `Quantity` this is the type-level answer; whether a value has the UCUM code it needs is checked when the value is converted.
+- `getSystemType()` never returns `Any` (its type excludes it). It covers every type whose values convert implicitly, including derived primitives (`code` → `String`) and `Quantity` with its specializations (`Age`). For `Quantity` this is the type-level answer; whether a value has the UCUM code it needs is checked when the value is converted.
 
 ## Acceptance criteria
 

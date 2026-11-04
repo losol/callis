@@ -73,10 +73,12 @@ type ExpressionNode =
   | IndexerNode          // { kind: 'Indexer', target, index }
   | UnaryNode            // { kind: 'Unary', op: '+' | '-', operand }
   | BinaryNode           // { kind: 'Binary', op, left, right }
-  | TypeOperationNode    // { kind: 'TypeOperation', op: 'is' | 'as', operand, type: TypeSpecifier }
+  | TypeOperationNode    // { kind: 'TypeOperation', op: 'is' | 'as', operand, type: TypeSpecifierNode }
   | VariableNode         // { kind: 'Variable', name }                    — %name
   | ThisNode | IndexNode | TotalNode;                                   // $this, $index, $total
 ```
+
+`TypeSpecifierNode` holds the identifiers of the type name as written (`FHIR.Patient`). It is named apart from `TypeSpecifier` in `src/types/` ([T0003](T0003-types-and-collections.md)), which the parser cannot import; the compiler converts one into the other with `typeSpecifierFromIdentifiers()`.
 
 Literal nodes keep the **raw source text**. The compiler converts it with the value modules. This keeps the parser independent of the `Decimal` and date/time implementations, so they can be built in parallel, and it preserves decimal precision (`1.0` vs `1`). Literal values that are well-formed but invalid (`@2015-02-30`, `@T14:34:28Z`) are handled by the compiler at evaluation time; see [T0008: invalid literal values](T0008-compiler-evaluator.md#invalid-literal-values).
 

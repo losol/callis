@@ -38,6 +38,7 @@ export interface ModelTypeInfo {
    * for a backbone type.
    */
   readonly name: string;
+  /** Whether the type is a primitive, a complex type, a resource or a backbone type. */
   readonly kind: ModelTypeKind;
   /**
    * The name of the base type in the same namespace, such as `DomainResource` for `Patient` or
@@ -80,10 +81,25 @@ export interface ElementInfo {
   readonly isArray: boolean;
   /**
    * Whether the element is a choice (`[x]`). In JSON a choice element appears under its name
-   * followed by the type name with its first letter in upper case: `valueQuantity`,
-   * `valueDateTime`. This holds even when only one type is allowed.
+   * followed by the type name with its first letter in upper case ({@link choiceJsonName}):
+   * `valueQuantity`, `valueDateTime`. This holds even when only one type is allowed.
    */
   readonly isChoice: boolean;
+}
+
+/**
+ * The JSON property name of a choice element for one of its types: the element name followed by
+ * the type name with its first letter in upper case
+ * ([FHIR choice of data types](https://hl7.org/fhir/R4/formats.html#choice)).
+ *
+ * @example
+ * ```ts
+ * choiceJsonName('value', 'Quantity'); // 'valueQuantity'
+ * choiceJsonName('value', 'dateTime'); // 'valueDateTime'
+ * ```
+ */
+export function choiceJsonName(name: string, typeName: string): string {
+  return name + typeName.charAt(0).toUpperCase() + typeName.slice(1);
 }
 
 /**
@@ -132,6 +148,10 @@ export interface ModelProvider {
    * An element of a type by its FHIRPath name, including elements inherited from base types.
    * A choice element is found by its name without `[x]` (`value`), not by a JSON key with a
    * type suffix (`valueQuantity`). Returns undefined if the type has no such element.
+   *
+   * The same `ElementInfo` object is returned for the same element every time, here and in
+   * {@link ModelProvider.getElements}, so callers can cache derived data keyed on it (for
+   * example in a `WeakMap`).
    */
   getElement(type: ModelTypeInfo, name: string): ElementInfo | undefined;
 
@@ -141,7 +161,8 @@ export interface ModelProvider {
    * values use this order.
    *
    * The implicit `value` of a primitive type is not an element: a FHIR `string` lists `id` and
-   * `extension` only.
+   * `extension` only. The `ElementInfo` objects are the ones {@link ModelProvider.getElement}
+   * returns.
    */
   getElements(type: ModelTypeInfo): readonly ElementInfo[];
 
@@ -153,7 +174,7 @@ export interface ModelProvider {
 
   /**
    * The System type that values of a model type convert to implicitly, or undefined if they do
-   * not convert. For FHIR this covers the primitives, including derived ones (`code` →
+   * not convert. Never `Any`, which is only a supertype. For FHIR this covers the primitives, including derived ones (`code` →
    * `String`), and `Quantity` with its specializations such as `Age`
    * ([R5 §2.1.9.1.2](https://hl7.org/fhir/R5/fhirpath.html#types)).
    *
@@ -163,5 +184,5 @@ export interface ModelProvider {
    * ([R5 §2.1.9.1.3](https://hl7.org/fhir/R5/fhirpath.html#quantity)), which is checked when
    * the value is converted.
    */
-  getSystemType(type: ModelTypeInfo): SystemTypeName | undefined;
+  getSystemType(type: ModelTypeInfo): Exclude<SystemTypeName, 'Any'> | undefined;
 }

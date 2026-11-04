@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
+import { ModelNode } from '../model/model-node.ts';
 import type { SystemTypeName } from '../types/system-types.ts';
 import type { Collection, Item } from './collection.ts';
 import { type ItemConversion, singleton } from './singleton.ts';
@@ -62,7 +63,7 @@ describe('singleton', () => {
 
   describe('2. a single item where a Boolean is expected', () => {
     it.each<[string, Item]>([
-      ['a complex value', { family: 'Chalmers' }],
+      ['a complex value', new ModelNode({ value: { family: 'Chalmers' }, name: 'name' })],
       ['a string', 'false'],
       ['an Integer', 0],
     ])('gives true for %s that does not convert', (_label, item) => {

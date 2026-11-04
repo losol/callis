@@ -12,7 +12,7 @@ describe('@callis/core public API', () => {
     expectTypeOf<api.ModelTypeInfo['kind']>().toEqualTypeOf<api.ModelTypeKind>();
     expectTypeOf<api.ElementInfo['typeNames']>().toEqualTypeOf<readonly string[]>();
     expectTypeOf<ReturnType<api.ModelProvider['getSystemType']>>().toEqualTypeOf<
-      api.SystemTypeName | undefined
+      Exclude<api.SystemTypeName, 'Any'> | undefined
     >();
   });
 });

@@ -1,12 +1,21 @@
 import type { ModelTypeInfo } from './model-provider.ts';
 
-/** The fields of a new {@link ModelNode}. Only `value` and `name` are required. */
+/**
+ * The fields of a new {@link ModelNode}; each one sets the node field of the same name. Only
+ * `value` and `name` are required, and the others default to `undefined`.
+ */
 export interface ModelNodeInit {
+  /** The JSON value; pass `undefined` explicitly for a primitive that only has extensions. */
   readonly value: unknown;
+  /** The element name the node is reached by. */
   readonly name: string;
+  /** The model type, if known. */
   readonly type?: ModelTypeInfo | undefined;
+  /** The node this one is navigated from. */
   readonly parent?: ModelNode | undefined;
+  /** The position within a repeating element. */
   readonly index?: number | undefined;
+  /** The matching `_name` object of a FHIR primitive. */
   readonly primitiveElement?: object | undefined;
 }
 

@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import { ModelNode } from '../model/model-node.ts';
+import type { Decimal } from '../values/decimal/decimal.ts';
 import {
   appendAll,
   type Collection,
@@ -8,6 +10,25 @@ import {
   fromOptional,
   type Item,
 } from './collection.ts';
+
+describe('Item', () => {
+  it('admits primitives, value classes, model nodes and JSON objects', () => {
+    expectTypeOf<boolean | string | number | bigint>().toExtend<Item>();
+    expectTypeOf<Decimal>().toExtend<Item>();
+    expectTypeOf<ModelNode>().toExtend<Item>();
+    expectTypeOf<Record<string, unknown>>().toExtend<Item>();
+  });
+
+  it('rejects arrays, so collections cannot nest', () => {
+    expectTypeOf<Collection>().not.toExtend<Item>();
+    expectTypeOf<number[]>().not.toExtend<Item>();
+    // @ts-expect-error a collection is not an item
+    fromOptional([1, 2]);
+    // @ts-expect-error a collection is not an item
+    concat([1], [EMPTY]);
+    expect(new ModelNode({ value: 1, name: 'a' })).toBeInstanceOf(ModelNode);
+  });
+});
 
 describe('EMPTY', () => {
   it('is an empty, frozen array', () => {

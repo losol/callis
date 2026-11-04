@@ -18,6 +18,6 @@ export interface ModelTypes<T extends NamedType> {
   getType(name: string): T | undefined;
   /** Whether `type` is `ancestor` or derives from it. */
   isSubtypeOf(type: T, ancestor: T): boolean;
-  /** The System type that values of `type` convert to implicitly, if any. */
-  getSystemType(type: T): SystemTypeName | undefined;
+  /** The System type that values of `type` convert to implicitly, if any. Never `Any`. */
+  getSystemType(type: T): Exclude<SystemTypeName, 'Any'> | undefined;
 }

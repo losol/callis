@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { stubModel, stubType } from '../../test/support/stub-model.ts';
 import type { ModelTypes } from '../types/model-types.ts';
-import type { ModelProvider, ModelTypeInfo } from './model-provider.ts';
+import { choiceJsonName, type ModelProvider, type ModelTypeInfo } from './model-provider.ts';
 
 // The interface is a contract for T0018 and T0019. These tests pin down its shape and show the
 // behaviour it documents, using the stub model as an example implementation.
@@ -92,5 +92,18 @@ describe('ModelProvider', () => {
 
   it('maps FHIR.date to System.Date', () => {
     expect(stubModel.getSystemType(stubType('date'))).toBe('Date');
+  });
+});
+
+// https://hl7.org/fhir/R4/formats.html#choice: "[x]" is replaced with the title-cased type name.
+describe('choiceJsonName', () => {
+  it.each([
+    ['value', 'Quantity', 'valueQuantity'],
+    ['value', 'dateTime', 'valueDateTime'],
+    ['value', 'string', 'valueString'],
+    ['deceased', 'boolean', 'deceasedBoolean'],
+    ['value', 'base64Binary', 'valueBase64Binary'],
+  ])('names %s with type %s as %s', (name, typeName, expected) => {
+    expect(choiceJsonName(name, typeName)).toBe(expected);
   });
 });

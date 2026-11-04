@@ -15,7 +15,7 @@ interface TypeDefinition {
   readonly kind: ModelTypeKind;
   readonly base?: string;
   readonly isAbstract?: boolean;
-  readonly systemType?: SystemTypeName;
+  readonly systemType?: Exclude<SystemTypeName, 'Any'>;
   readonly elements?: readonly ElementInfo[];
 }
 
@@ -142,7 +142,7 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
 const NAMESPACE = 'FHIR';
 
 const types = new Map<string, ModelTypeInfo>();
-const systemTypes = new Map<ModelTypeInfo, SystemTypeName>();
+const systemTypes = new Map<ModelTypeInfo, Exclude<SystemTypeName, 'Any'>>();
 for (const [name, definition] of DEFINITIONS) {
   const type: ModelTypeInfo = Object.freeze({
     namespace: NAMESPACE,
@@ -211,7 +211,7 @@ export const stubModel: ModelProvider = Object.freeze({
     }
     return false;
   },
-  getSystemType(type: ModelTypeInfo): SystemTypeName | undefined {
+  getSystemType(type: ModelTypeInfo): Exclude<SystemTypeName, 'Any'> | undefined {
     return systemTypes.get(type);
   },
 });

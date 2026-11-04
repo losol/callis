@@ -16,10 +16,18 @@
  * | `Decimal`, `Date`, `DateTime`, `Time`, `Quantity` | value classes (`Decimal`, `DateValue`, …) |
  * | Model data | `ModelNode` |
  *
- * The type is open over `object` so that the value classes, which are built in separate modules,
- * fit without this module depending on them. An item is never an array.
+ * Object items are open over `object`, so the value classes, which are built in separate modules,
+ * fit without this module depending on them. An item is never an array or another collection
+ * (nested collections are a classic FHIRPath bug): object items must not be iterable, so
+ * `const item: Item = [1, 2]` does not compile. A side effect: an object literal written where an
+ * `Item` is expected is checked for excess properties, so wrap JSON data in a `ModelNode`.
  */
-export type Item = boolean | string | number | bigint | object;
+export type Item =
+  | boolean
+  | string
+  | number
+  | bigint
+  | (object & { readonly [Symbol.iterator]?: never });
 
 /**
  * An ordered, read-only list of items. Empty is `[]`.
@@ -86,6 +94,7 @@ export function appendAll(target: Item[], source: Collection): void {
   const count = source.length;
   for (let index = 0; index < count; index++) {
     const item = source[index];
+    // Always true: collections never hold undefined. The check satisfies noUncheckedIndexedAccess.
     if (item !== undefined) {
       target.push(item);
     }
