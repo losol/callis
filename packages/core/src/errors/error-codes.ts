@@ -27,6 +27,7 @@ export type EvaluationErrorCode =
   | 'eval/type-mismatch'
   | 'eval/undefined-variable'
   | 'eval/invalid-literal'
+  | 'eval/invalid-argument'
   | 'eval/async-in-sync'
   | 'eval/aborted'
   | 'eval/limit-exceeded';
