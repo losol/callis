@@ -493,7 +493,7 @@ describe('tokenize', () => {
       ['@2014-01-25T14:30:14-05:00', 'DateTime'],
       ['@2014-01-25T14:30Z', 'DateTime'],
       ['@2014-01-25T14+01:00', 'DateTime'],
-      ['@2014T14:30', 'DateTime'], // the grammar allows a time after a year only
+      ['@2014T14:30', 'DateTime'], // a time may follow a date of any precision, even a year
       ['@2017-11-05T01:30:00.0-04:00', 'DateTime'], // testLiteralDateTimeTZGreater
       ['@2014-01-25T14:30:14.123456789', 'DateTime'], // fractions of any length
       // N1 §4.1.6
@@ -709,6 +709,10 @@ describe('tokenize', () => {
       ['\u0007', 'U+0007'],
       ['\u0085', 'U+0085'],
       ['\ud83d', 'U+D83D'],
+      ['\u00a0', 'U+00A0'], // no-break space
+      ['\u200b', 'U+200B'], // zero-width space
+      ['\ufeff', 'U+FEFF'], // byte order mark
+      ['\u2028', 'U+2028'], // line separator
     ])('names the character %j and its code point', (expression, description) => {
       expect(lexError(expression).message).toBe(`Unexpected character ${description}`);
     });

@@ -73,8 +73,8 @@ class LineTable {
 }
 ```
 
-- `tokenize()` returns every token at once and always ends with an `EOF` token at `expression.length`. The parser can look ahead as far as it needs.
-- `value` is the decoded text for `String` and `DelimitedIdentifier` (quotes removed, escapes decoded) and the decoded name for `EnvironmentVariable` (`%ucum`, `` %`ucum` ``, `%'ucum'` and `%"ucum"` all have the value `ucum`). For `EOF` it is empty. For every other kind it is the source text, for example `1.50` or `@2015-02-04`, so literals keep their raw text.
+- `tokenize()` returns every token at once and always ends with an `EOF` token at `expression.length`. The parser can look ahead as far as it needs. Because the whole expression is lexed first, a lexical error is reported even when a parse error comes earlier in the text.
+- `value` is the decoded text for `String` and `DelimitedIdentifier` (quotes removed, escapes decoded) and the decoded name for `EnvironmentVariable` (`%ucum`, `` %`ucum` ``, `%'ucum'` and `%"ucum"` all have the value `ucum`). For `EOF` it is empty. For every other kind it is the source text, for example `1.50` or `@2015-02-04`, so literals keep their raw text. For a `String` literal, the raw text is `expression.slice(token.start, token.end)` and the decoded text is `value`; the AST should keep the decoded text, so the compiler does not decode escapes a second time.
 - Keywords, including `true`, `false`, the operators `and`, `div`, … and the calendar units, are `Identifier` tokens. To reject `%true` or other reserved words after `%`, the parser can check whether the character after `%` is a letter or `_`.
 - With `includeTrivia`, the tokens cover the expression without gaps; joining their source text rebuilds it.
 - `LineTable` uses the same line breaks as `spanFromOffsets` (`\n`, `\r\n` or a lone `\r`).

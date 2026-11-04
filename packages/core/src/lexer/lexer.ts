@@ -626,10 +626,12 @@ class Lexer {
 /** A character for an error message: quoted if it prints, and always with its code point. */
 function describeCharacter(codePoint: number): string {
   const hex = `U+${codePoint.toString(16).toUpperCase().padStart(4, '0')}`;
-  const isPrintable =
-    codePoint > char.space &&
-    !(codePoint >= 0x7f && codePoint <= 0x9f) &&
-    !char.isHighSurrogate(codePoint) &&
-    !char.isLowSurrogate(codePoint);
-  return isPrintable ? `'${String.fromCodePoint(codePoint)}' (${hex})` : hex;
+  const character = String.fromCodePoint(codePoint);
+  return invisibleCharacter.test(character) ? hex : `'${character}' (${hex})`;
 }
+
+/**
+ * Separators, control and format characters, lone surrogates and other characters that do not
+ * print visibly. Only used on the error path, so a regular expression is fine here.
+ */
+const invisibleCharacter = /^[\p{Z}\p{C}]$/u;
