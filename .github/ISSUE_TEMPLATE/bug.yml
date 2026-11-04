@@ -1,0 +1,45 @@
+name: Bug report
+description: Callis returns a wrong result, throws an unexpected error or crashes.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste real patient data. Use a synthetic resource or an official HL7 example.
+  - type: textarea
+    id: expression
+    attributes:
+      label: Expression
+      description: The FHIRPath expression.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: input
+    attributes:
+      label: Input
+      description: The resource or context the expression ran on, if any.
+      render: json
+    validations:
+      required: false
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: Link the spec section or HL7 test that defines it, if you can.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: The result, or the error code and message.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version and runtime
+      placeholder: "@callis/core 0.1.0, Node.js 24"
+    validations:
+      required: false

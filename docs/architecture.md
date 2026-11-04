@@ -192,7 +192,7 @@ packages/core/src/
 ├── index.ts               public exports only
 ├── api/                   parse, analyze, compile, evaluate, evaluateAsync; options; output adapters; compile cache
 ├── errors/                FhirPathError hierarchy, error codes, SourceSpan, formatting
-├── lexer/                 token.ts, lexer.ts, char-codes.ts
+├── lexer/                 token.ts, lexer.ts, char-codes.ts, line-table.ts
 ├── parser/                ast.ts, parser.ts (Pratt), precedence.ts
 ├── analysis/              analyzer.ts, type-inference.ts, diagnostics.ts
 ├── compiler/              compile.ts (AST → closures), lambda.ts, maybe-promise.ts, constant-fold.ts

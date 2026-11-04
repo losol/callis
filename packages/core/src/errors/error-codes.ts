@@ -10,6 +10,7 @@ export type SyntaxErrorCode =
   | 'syntax/unexpected-token'
   | 'syntax/unexpected-character'
   | 'syntax/unterminated-string'
+  | 'syntax/unterminated-comment'
   | 'syntax/invalid-escape'
   | 'syntax/invalid-date-literal';
 

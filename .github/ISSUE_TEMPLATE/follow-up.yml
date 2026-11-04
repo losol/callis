@@ -1,0 +1,50 @@
+name: Follow-up
+description: Something found while working on a task that is outside its scope.
+labels: [follow-up]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One finding per issue. Search the open issues first, and comment there if the finding is already reported.
+        See [Findings during a task](https://github.com/losol/callis/blob/main/CONTRIBUTING.md#findings-during-a-task).
+  - type: input
+    id: found-in
+    attributes:
+      label: Found in
+      description: The task ID and PR where you found it.
+      placeholder: T0004 in #12
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - Bug in merged code
+        - Missing or incomplete work
+        - Problem with a task file or the roadmap
+        - Spec question
+        - Decision for the owner
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What you found
+      description: Be concrete. Give an input, a file and line, a spec anchor or an HL7 test name.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it matters
+      description: What goes wrong, or what gets harder, if nobody acts on it.
+    validations:
+      required: true
+  - type: input
+    id: home
+    attributes:
+      label: Suggested home
+      description: An existing task (for example T0014), a new task, or the backlog.
+    validations:
+      required: false
