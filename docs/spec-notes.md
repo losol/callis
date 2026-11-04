@@ -59,3 +59,66 @@ How Callis reads the FHIRPath specification where the text is ambiguous, silent,
 - **Spec:** [N1 §9](https://hl7.org/fhirpath/N1/#environment-variables) calls an environment variable "a token introduced by a %", whose name is an identifier, a delimited identifier, or (for backwards compatibility) a string. The grammar's `externalConstant` is a parser rule, which would allow whitespace after the `%`. The FHIR pages ([R4](https://hl7.org/fhir/R4/fhirpath.html#vars), [R5](https://hl7.org/fhir/R5/fhirpath.html#vars)) write the names in double quotes: `%"vs-[name]"`, `%"ext-[name]"`.
 - **Suite:** `testVariables3` (`%ucum`), `testVariables4` (`` %`vs-administrative-gender` ``) and `testExtension2` (`` %`ext-patient-birthTime` ``).
 - **Decision:** `%` and its name form one `EnvironmentVariable` token, so nothing may come between them (`% ucum` is an error). The double-quoted form is accepted as a compatibility extension, with the same escapes as strings. A `"` anywhere else is an unexpected character. The owner confirmed this on 2026-11-04. (T0001)
+
+## Types
+
+### Type names are case-sensitive, and qualified names do not fall back
+
+- **Spec:** [N1 §10.1 Models](https://hl7.org/fhirpath/N1/#models)
+- **Tests:** `testType5`, `testType11`–`testType14`, `testType22`
+- **Decision:** Type names and namespaces are matched exactly. An unqualified name is looked up in the model namespace, then in `System`, so with the FHIR model `boolean` is `FHIR.boolean` and `Boolean` is `System.Boolean`; `Patient.active.is(Boolean)` is false. A qualified name is looked up in its own namespace only: `System.Patient` and `FHIR.Boolean` do not resolve.
+- **Consequence:** with the FHIR model, the unqualified `Quantity` is `FHIR.Quantity`, so `5 'mg' is Quantity` is false (the literal is a `System.Quantity`) and `5 'mg' is System.Quantity` is true. The suite writes `System.Quantity` when it tests literals (`testDecimalLiteralIsNotQuantity`). Without a model, `Quantity` is `System.Quantity`.
+- **Code:** `resolveTypeSpecifier()` in `packages/core/src/types/type-specifier.ts` ([T0003](tasks/T0003-types-and-collections.md)).
+
+### Every type is a `System.Any`, including model types
+
+- **Spec:** [N1 §4.1 Literals](https://hl7.org/fhirpath/N1/#literals) calls `System.Any` "an ultimate root type"; 3.0.0's reflection section defines it as the base type of the primitives.
+- **Tests:** none in the suite.
+- **Decision:** `is System.Any` (and `as`, `ofType()`) is true for every type, System or model.
+- **Code:** `isOfType()` in `packages/core/src/types/type-test.ts` ([T0003](tasks/T0003-types-and-collections.md)).
+
+### FHIR primitives in `is`, `as` and `ofType()`
+
+- **Spec:** [R5 §2.1.9.1.2](https://hl7.org/fhir/R5/fhirpath.html#types); [N1 §6.3](https://hl7.org/fhirpath/N1/#types), [§5.2.4](https://hl7.org/fhirpath/N1/#oftypetype-type-specifier-collection)
+- **Tests:** `testType11`–`testType14`, `testFHIRPathIsFunction1`–`10`, `testFHIRPathAsFunction11`–`22`
+- **Decision:**
+  - `is` does not treat a FHIR primitive as the System type it converts to: `Patient.active.is(System.Boolean)` is false. R5 lifts this restriction for `ofType()` only, so `as` behaves like `is`, and `Patient.name.given.ofType(System.String)` keeps the given names.
+  - All three accept subtypes through the model's inheritance, as N1 says for each of them. `Patient.gender.is(string)` is true because `code` derives from `string`.
+  - The suite marks `testFHIRPathAsFunction11` (`Patient.gender.as(string)`) and `testFHIRPathAsFunction16` (`Patient.gender.ofType(string)`) as contested and expects them to be empty. Callis follows the spec and returns the code. These two tests become exceptions when the conformance runner first runs them with a model ([T0018](tasks/T0018-model-aware-evaluation.md)).
+- **Code:** `isOfType()` and `matchesOfType()` in `packages/core/src/types/type-test.ts` ([T0003](tasks/T0003-types-and-collections.md)).
+
+### `FHIR.date` maps to `System.Date`
+
+- **Spec:** the mapping table in [R5 §2.1.9.1.2](https://hl7.org/fhir/R5/fhirpath.html#types) maps `FHIR.date` to `System.DateTime`.
+- **Tests:** `testExtractBirthDate` expects `birthDate` to have output type `date`.
+- **Decision:** `FHIR.date` maps to `System.Date`, as the suite and the other major implementations do. `dateTime` and `instant` map to `System.DateTime`.
+- **Consequence:** `Patient.birthDate.ofType(System.Date)` keeps the birth date and `Patient.birthDate.ofType(System.DateTime)` is empty, although R5's table suggests the opposite. `ofType()` filters by type and does not apply the implicit `Date → DateTime` conversion.
+- **Code:** the `ModelProvider.getSystemType()` contract in `packages/core/src/model/model-provider.ts` ([T0003](tasks/T0003-types-and-collections.md)); the generated models implement it ([T0019](tasks/T0019-fhir-model-generator.md)).
+
+## Collections and evaluation
+
+### Singleton evaluation uses implicit conversions only
+
+- **Spec:** [N1 §4.5](https://hl7.org/fhirpath/N1/#singleton-evaluation-of-collections) says a single item is used if it "can be converted to the expected input type"; 3.0.0 says "implicitly converted".
+- **Tests:** none specific.
+- **Decision:** Only the implicit conversions of [N1 §5.5](https://hl7.org/fhirpath/N1/#conversion) apply. A single `'5'` where an Integer is expected is an error (`eval/singleton-expected`), not `5`; where a Boolean is expected it is `true` (step 2).
+- **Code:** `singleton()` in `packages/core/src/runtime/singleton.ts` ([T0003](tasks/T0003-types-and-collections.md)).
+
+## Strings
+
+### String equivalence
+
+- **Spec:** [N1 string equivalence](https://hl7.org/fhirpath/N1/#string-equivalence), clarified in 3.0.0
+- **Tests:** `testEquivalent5`–`7`, `testNotEquivalent5`–`7`
+- **Decision:** Two strings are equivalent when they are equal after this normalization:
+  - Every character with the Unicode `White_Space` property becomes a space, as 3.0.0 specifies. Runs of whitespace are not collapsed and the ends are not trimmed (3.0.0 says so explicitly), so `'a  b' ~ 'a b'` is false. U+FEFF, which JavaScript's `\s` matches, is not whitespace.
+  - Case is folded without locale rules by converting to upper case and then to lower case. This approximates Unicode full case folding: `'Straße' ~ 'STRASSE'` and `'σ' ~ 'ς'` are true, and Turkish dotted and dotless i get no special treatment. The spec asks to ignore case "and locale" but names no algorithm.
+  - No Unicode normalization (NFC/NFD) is applied, because the spec does not ask for it: a precomposed `é` is not equivalent to `e` followed by a combining accent.
+- **Code:** `normalizeStringForEquivalence()` in `packages/core/src/values/string.ts` ([T0003](tasks/T0003-types-and-collections.md)).
+
+### String ordering is by code point
+
+- **Spec:** [N1 §6.2](https://hl7.org/fhirpath/N1/#comparison): "String ordering is strictly lexical and is based on the Unicode value of the individual characters."
+- **Tests:** none in the suite.
+- **Decision:** strings are ordered by Unicode code point. JavaScript's `<` compares UTF-16 code units, which puts characters above U+FFFF (surrogate pairs) before U+E000–U+FFFF; Callis corrects for that, so `'\uFFFF' < '\u{10000}'` is true. No locale collation is used.
+- **Code:** `compareStrings()` in `packages/core/src/values/string.ts` ([T0003](tasks/T0003-types-and-collections.md)).
