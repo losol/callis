@@ -88,8 +88,20 @@ describe('ln', () => {
     expect(ln(d(text))).toBeUndefined();
   });
 
-  it('is empty when the result underflows to zero', () => {
-    expect(ln(Decimal.of(10n ** 400n + 1n, 400))).toBeUndefined();
+  it('gives ln(1 + d) = d within 1e-20 of 1, at any distance', () => {
+    // ln(1 + 1e-400) and ln(1 - 1e-30); the differences are far below the number range.
+    expect(show(ln(Decimal.of(10n ** 400n + 1n, 400)))).toBe(Decimal.of(1n, 400).toString());
+    expect(show(ln(Decimal.of(10n ** 30n - 1n, 30)))).toBe(Decimal.of(-1n, 30).toString());
+  });
+
+  // Expected values checked with Python's decimal module at 450 digits, rounded to 15.
+  it.each([
+    ['1e-400', Decimal.of(1n, 400), '-921.034037197618'],
+    ['1e400', Decimal.of(10n ** 400n), '921.034037197618'],
+    ['1e-320', Decimal.of(1n, 320), '-736.827229758095'], // a subnormal number would give -736.827240890974
+    ['2.5e-310', Decimal.of(25n, 311), '-712.88508809628'],
+  ])('keeps 15 significant digits beyond the number range: ln(%s) = %s', (_, value, expected) => {
+    expect(show(ln(value))).toBe(expected);
   });
 });
 
@@ -126,9 +138,28 @@ describe('log', () => {
     expect(log(d(value), d(base))).toBeUndefined();
   });
 
-  it('is empty when the base is too large for a number', () => {
-    expect(log(d('10'), Decimal.of(10n ** 400n))).toBeUndefined();
-  });
+  // Expected values checked with Python's decimal module at 450 digits, rounded to 15.
+  it.each([
+    // Both differences, 1e-323 and 1.1e-323, would round to the same subnormal number.
+    [
+      '1 + 1e-323, 1 + 1.1e-323',
+      Decimal.of(10n ** 324n + 10n, 324),
+      Decimal.of(10n ** 324n + 11n, 324),
+      '0.909090909090909',
+    ],
+    ['10, 1e400', d('10'), Decimal.of(10n ** 400n), '0.0025'],
+    [
+      '1.00001, 1 + 1e-300',
+      d('1.00001'),
+      Decimal.of(10n ** 300n + 1n, 300),
+      `999995000033333${'0'.repeat(280)}`,
+    ],
+  ])(
+    'keeps 15 significant digits beyond the number range: log(%s) = %s',
+    (_, value, base, expected) => {
+      expect(show(log(value, base))).toBe(expected);
+    },
+  );
 });
 
 describe('power', () => {

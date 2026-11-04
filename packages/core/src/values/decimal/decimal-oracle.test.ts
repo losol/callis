@@ -7,6 +7,7 @@ import { Decimal as DecimalJs } from 'decimal.js';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { Decimal } from './decimal.ts';
+import { ln, log } from './math.ts';
 
 /** At least 1,000 runs per property (T0004 acceptance criterion). */
 const RUN_OPTIONS = { numRuns: 1000 };
@@ -206,6 +207,57 @@ describe('Decimal round trips', () => {
       fc.property(fc.double({ noNaN: true, noDefaultInfinity: true }), (value) => {
         expect(Decimal.fromNumber(value)?.toNumber()).toBe(value === 0 ? 0 : value);
       }),
+      RUN_OPTIONS,
+    );
+  });
+});
+
+/** Logarithms are irrational, so the oracle computes them to 60 significant digits. */
+const LogOracle = DecimalJs.clone({ precision: 60, toExpNeg: -9e15, toExpPos: 9e15 });
+
+/** Positive values across the whole range, and values within 1e-450 to 0.1 of 1. */
+const positiveDecimals: fc.Arbitrary<Decimal> = fc.oneof(
+  fc
+    .tuple(
+      fc.bigInt({ min: 1n, max: 10n ** 40n }),
+      fc.integer({ min: 0, max: 450 }),
+      fc.integer({ min: 0, max: 450 }),
+    )
+    .map(([coefficient, scale, zeros]) => Decimal.of(coefficient * 10n ** BigInt(zeros), scale)),
+  fc
+    .tuple(fc.bigInt({ min: -(10n ** 15n), max: 10n ** 15n }), fc.integer({ min: 16, max: 450 }))
+    .map(([coefficient, scale]) => Decimal.ONE.add(Decimal.of(coefficient, scale))),
+);
+
+/** The result is within one unit of its 15th significant digit of the exact value. */
+function expectFifteenDigits(actual: Decimal | undefined, exact: DecimalJs): void {
+  expect(actual).toBeDefined();
+  if (actual !== undefined) {
+    const error = toOracle(actual).minus(exact).abs();
+    expect(error.lte(exact.abs().times('1e-14'))).toBe(true);
+  }
+}
+
+describe('ln and log against decimal.js', () => {
+  it('keep 15 significant digits for ln, near 1 and beyond the number range', () => {
+    fc.assert(
+      fc.property(positiveDecimals, (value) => {
+        expectFifteenDigits(ln(value), LogOracle.ln(toOracle(value)));
+      }),
+      RUN_OPTIONS,
+    );
+  });
+
+  it('keep 15 significant digits for log, near 1 and beyond the number range', () => {
+    fc.assert(
+      fc.property(
+        positiveDecimals,
+        positiveDecimals.filter((base) => !base.equals(Decimal.ONE)),
+        (value, base) => {
+          const exact = LogOracle.ln(toOracle(value)).div(LogOracle.ln(toOracle(base)));
+          expectFifteenDigits(log(value, base), exact);
+        },
+      ),
       RUN_OPTIONS,
     );
   });
