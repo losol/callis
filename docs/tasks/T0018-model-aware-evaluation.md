@@ -64,7 +64,7 @@ Nodes are created lazily during navigation. Conversion to a System value (for ex
 
 ### Lossless decimals in JSON input
 
-`JSON.parse` turns `1.50` into `1.5`, which loses precision that FHIRPath can observe (`toString()`, `~`, `precision()`). Callis accepts ordinary parsed JSON, which is convenient but lossy. It also exports `parseJson(text)`, a small parser with no dependencies that keeps each numeric literal as a `JsonNumber` holding the source text. Navigation understands both forms. The conformance runner uses the lossless path, through its adapter's `parseInput` ([T0022: adapter interface](T0022-conformance-runner.md#adapter-interface)).
+`JSON.parse` turns `1.50` into `1.5`, which loses precision that FHIRPath can observe (`toString()`, `~`, `precision()`). Callis accepts ordinary parsed JSON, which is convenient but lossy. It also exports `parseJson(text)`, a small parser with no dependencies that keeps each numeric literal as a `JsonNumber` holding the source text. Navigation understands both forms. The conformance runner uses the lossless path.
 
 ## Acceptance criteria
 
