@@ -71,8 +71,44 @@ describe('ln', () => {
     expect(show(ln(d(text)))).toBe(expected);
   });
 
+  // Expected values checked with Python's decimal module at 60 digits, rounded to 15.
+  it.each([
+    ['1.000001', '0.000000999999500000333'],
+    ['1.0000000001', '0.000000000099999999995'],
+    ['1.00000000000000001', '0.00000000000000001'], // the nearest number to the input is 1
+    ['0.9999999', '-0.000000100000005'],
+    ['1.4', '0.336472236621213'],
+    ['0.75', '-0.287682072451781'],
+    ['0.5', '-0.693147180559945'],
+  ])('keeps 15 significant digits near 1: ln(%s) = %s', (text, expected) => {
+    expect(show(ln(d(text)))).toBe(expected);
+  });
+
   it.each([['0'], ['-1']])('ln(%s) is empty', (text) => {
     expect(ln(d(text))).toBeUndefined();
+  });
+
+  it('gives ln(1 + d) = d within 1e-20 of 1, at any distance', () => {
+    // ln(1 + 1e-400) and ln(1 - 1e-30); the differences are far below the number range.
+    expect(show(ln(Decimal.of(10n ** 400n + 1n, 400)))).toBe(Decimal.of(1n, 400).toString());
+    expect(show(ln(Decimal.of(10n ** 30n - 1n, 30)))).toBe(Decimal.of(-1n, 30).toString());
+  });
+
+  it('removes the trailing zero when rounding carries the significand to 10', () => {
+    // ln(1 + 9.999999999999999e-22): the 16 nines round up to 1e-21, not 1.0e-21.
+    expect(show(ln(Decimal.of(10n ** 37n + 9999999999999999n, 37)))).toBe(
+      Decimal.of(1n, 21).toString(),
+    );
+  });
+
+  // Expected values checked with Python's decimal module at 450 digits, rounded to 15.
+  it.each([
+    ['1e-400', Decimal.of(1n, 400), '-921.034037197618'],
+    ['1e400', Decimal.of(10n ** 400n), '921.034037197618'],
+    ['1e-320', Decimal.of(1n, 320), '-736.827229758095'], // a subnormal number would give -736.827240890974
+    ['2.5e-310', Decimal.of(25n, 311), '-712.88508809628'],
+  ])('keeps 15 significant digits beyond the number range: ln(%s) = %s', (_, value, expected) => {
+    expect(show(ln(value))).toBe(expected);
   });
 });
 
@@ -89,6 +125,15 @@ describe('log', () => {
     expect(show(log(d(value), d(base)))).toBe(expected);
   });
 
+  // Expected values checked with Python's decimal module at 60 digits, rounded to 15.
+  it.each([
+    ['7', '1.0000001', '19459102.4635082'],
+    ['2', '0.9999', '-6931.12522623266'],
+    ['1.000001', '10', '0.000000434294264756156'],
+  ])('keeps 15 significant digits near 1: log(%s, %s) = %s', (value, base, expected) => {
+    expect(show(log(d(value), d(base)))).toBe(expected);
+  });
+
   it.each([
     ['0', '10'],
     ['-1', '10'],
@@ -100,9 +145,28 @@ describe('log', () => {
     expect(log(d(value), d(base))).toBeUndefined();
   });
 
-  it('is empty when the base is too large for a number', () => {
-    expect(log(d('10'), Decimal.of(10n ** 400n))).toBeUndefined();
-  });
+  // Expected values checked with Python's decimal module at 450 digits, rounded to 15.
+  it.each([
+    // Both differences, 1e-323 and 1.1e-323, would round to the same subnormal number.
+    [
+      '1 + 1e-323, 1 + 1.1e-323',
+      Decimal.of(10n ** 324n + 10n, 324),
+      Decimal.of(10n ** 324n + 11n, 324),
+      '0.909090909090909',
+    ],
+    ['10, 1e400', d('10'), Decimal.of(10n ** 400n), '0.0025'],
+    [
+      '1.00001, 1 + 1e-300',
+      d('1.00001'),
+      Decimal.of(10n ** 300n + 1n, 300),
+      `999995000033333${'0'.repeat(280)}`,
+    ],
+  ])(
+    'keeps 15 significant digits beyond the number range: log(%s) = %s',
+    (_, value, base, expected) => {
+      expect(show(log(value, base))).toBe(expected);
+    },
+  );
 });
 
 describe('power', () => {
@@ -168,6 +232,12 @@ describe('power', () => {
     expect(power(d('2'), Decimal.of(10n ** 400n))).toBeUndefined();
     expect(power(d('0.1'), d('10001'))).toBeUndefined();
     expect(power(d('2'), d('-100000'))).toBeUndefined();
+    // For a negative exponent the bound applies to the denominator 2^40000 (12,042 digits).
+    expect(power(d('2'), d('-30000'))?.toString()).toMatch(/^0\.0{9030}1/);
+    expect(power(d('2'), d('-40000'))).toBeUndefined();
+    // The scale is bounded too, even when the value is 0 or 1.
+    expect(power(d('1.0'), d('100000'))).toBeUndefined();
+    expect(power(d('0.0'), d('100000'))).toBeUndefined();
   });
 
   it('keeps 0, 1 and -1 exact for any whole exponent', () => {

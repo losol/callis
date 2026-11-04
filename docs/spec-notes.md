@@ -14,7 +14,7 @@ How Callis reads the FHIRPath specification where the text is ambiguous, silent,
 
 - **Spec:** [N1 `round`](https://hl7.org/fhirpath/N1/#roundprecision-integer-decimal) and [3.0.0 `round`](https://hl7.org/fhirpath/STU3/#fn-round) say the precision is "the decimal place at which the rounding will occur", but not what happens when the input has fewer decimal places.
 - **Tests:** `testRound1`, `testRound2` (not affected either way).
-- **Decision:** `round(n)` rounds half away from zero to `n` decimal places, and a value that already has at most `n` decimal places is returned unchanged: `1.5.round(3)` is `1.5`, not `1.500`. Padding would claim precision the value does not have, and it would let `x.round(2147483647)` allocate a huge number. The .NET implementation behaves the same way; the Java implementation pads.
+- **Decision:** `round(n)` rounds half away from zero to `n` decimal places, and a value that already has at most `n` decimal places is returned unchanged: `1.5.round(3)` is `1.5`, not `1.500`. Padding would claim precision the value does not have, and it would let `x.round(2147483647)` allocate a huge number.
 
 ### Rounding in decimal equivalence
 
@@ -26,7 +26,7 @@ How Callis reads the FHIRPath specification where the text is ambiguous, silent,
 
 - **Spec:** [3.0.0 §6.6](https://hl7.org/fhirpath/STU3/#math-1) makes arithmetic overflow and underflow empty; [`power`](https://hl7.org/fhirpath/STU3/#powerexponent--integer--decimal--decimal) and [`sqrt`](https://hl7.org/fhirpath/STU3/#sqrt--decimal) are empty when the result "cannot be represented".
 - **Tests:** `testPower3`, `testSqrt2`.
-- **Decision:** the Decimal kernels for `sqrt`, `exp`, `ln`, `log` and `power` return empty for `NaN`, infinite results and results that underflow to zero although the exact value is not zero. An exact integer power with more than 10,000 digits is treated as overflow and is also empty; the spec only asks for 28 digits, and the bound keeps the work small. Where 3.0.0 asks for an error instead of empty (for example `log()` of a non-positive number), the function layer ([T0016](tasks/T0016-fn-math.md)) raises it.
+- **Decision:** the Decimal kernels for `sqrt`, `exp`, `ln`, `log` and `power` return empty for `NaN`, infinite results and results that underflow to zero although the exact value is not zero. For a whole exponent, the exact power `|base|^|exponent|` may have a coefficient of at most 10,000 digits and a scale (digits after the decimal point) of at most 10,000; beyond either bound it is treated as overflow and is also empty. The spec only asks for 28 digits, and the bounds keep the work small. For a negative exponent the bounds apply to that denominator, so `2.power(-40000)` is empty although 28 digits of it would fit. The scale bound alone makes `0.1.power(10001)` and `1.0.power(100000)` empty. Where 3.0.0 asks for an error instead of empty (for example `log()` of a non-positive number), the function layer ([T0016](tasks/T0016-fn-math.md)) raises it.
 
 ## Lexer
 

@@ -157,6 +157,15 @@ describe('conversion to and from Integer', () => {
     expect(decimal.scale).toBe(0);
   });
 
+  it.each([
+    [2147483648, '2147483648'],
+    [2 ** 53, '9007199254740992'],
+    [-(2 ** 60), '-1152921504606846976'],
+    [1e21, '1000000000000000000000'],
+  ])('converts the whole number %s exactly, without a range check', (value, expected) => {
+    expect(Decimal.fromInteger(value).toString()).toBe(expected);
+  });
+
   it.each([1.5, Number.NaN, Number.POSITIVE_INFINITY])(
     'rejects the non-integer %s with eval/invalid-argument',
     (value) => {
