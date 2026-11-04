@@ -41,6 +41,5 @@ Generate compact R4 and R5 models from the official StructureDefinitions and pub
   - `Questionnaire.item.item` resolves to `Questionnaire.item`
   - `Bundle.entry.resource` has type `Resource`
   - `Observation.value[x]` lists the correct types per version
-- [ ] Both providers pass the `ModelProvider` contract suite from T0003 (`describeModelProviderContract` in `packages/core/test/support/model-provider-contract.ts`), starting from a broad set of resources and data types, with fixtures for the primitive → System mapping (including `date` → `Date`, derived primitives and `Quantity`/`Age`) and for choice elements such as `Observation.value` and `Patient.deceased`. The suite lives in `@callis/core`'s test folder and is not published, so the package tests import it by relative path, or the PR moves it to a shared private test-utils workspace package if that is cleaner.
 - [ ] Running the generator twice gives byte-identical output.
 - [ ] Gzip size per model is reported. Over 60 kB needs a justification in the PR.

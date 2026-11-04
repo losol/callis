@@ -17,8 +17,7 @@ Item-level and collection-level `equals`, `equivalent` and `compare` for every v
   - an extension point for model-specific equivalence, which T0020 uses for `Coding`/`CodeableConcept`
   - collection-level `=` (order-sensitive) and `~` (order-insensitive)
   - the return type is `true | false | undefined`
-- `src/runtime/comparison.ts`: `compare(a, b): -1 | 0 | 1 | undefined`, and `eval/type-mismatch` for incompatible types. This module owns the shared ordering result type (`-1 | 0 | 1`); value modules cannot import each other, so they spell it out inline.
-- The model-less date convenience from [T0003](T0003-types-and-collections.md#type-system): in `=`, `~` and comparisons, a string from untyped input data (a `ModelNode` without a model type, not a string literal) is parsed as a date/time when the other operand is a date/time value. It never applies when a model is present.
+- `src/runtime/comparison.ts`: `compare(a, b): -1 | 0 | 1 | undefined`, and `eval/type-mismatch` for incompatible types.
 
 ## Design notes
 
@@ -48,4 +47,3 @@ The equality kernel returns `true | false | undefined` (undefined means "cannot 
 - [ ] Every row of the equality table in the [design notes](#equality-and-equivalence) has tests, including the "undetermined" cases (dates with different precision, incomparable quantities).
 - [ ] Integer and Decimal mix correctly (`1 = 1.0`, `1 ~ 1.0`), and so do Date and DateTime.
 - [ ] Equality of complex JSON objects is recursive and order-sensitive for arrays.
-- [ ] Without a model, `birthDate = @1974-12-25` and `birthDate < @2000` work on a JSON string; a string literal (`'1974-12-25' = @1974-12-25`) is not parsed, and with a model the rule does not apply.

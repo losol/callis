@@ -24,7 +24,7 @@ The shared, dependency-free building blocks used by the runtime, functions and m
 - `src/runtime/singleton.ts`: the four-step singleton evaluation from [N1 §4.5](https://hl7.org/fhirpath/N1/#singleton-evaluation-of-collections), with a conversion callback so it does not depend on value classes.
 - `src/values/string.ts`: string equivalence normalization, plus equality and equivalence kernels for String, Integer and Boolean, and ordering kernels for String and Integer. Boolean has no ordering ([N1 §6.2](https://hl7.org/fhirpath/N1/#comparison)).
 - `packages/core/test/support/stub-model.ts`: a small FHIR-like `ModelProvider` for tests, until the generated models exist (T0019).
-- `packages/core/test/support/model-provider-contract.ts`: `describeModelProviderContract(provider, fixtures)`, a test suite for the rules below. The stub runs it here, and the generated models run it in T0019.
+- `packages/core/test/support/model-provider-contract.ts`: `describeModelProviderContract(provider, fixtures)`, a test suite for the rules below. The stub runs it here; [#56](https://github.com/losol/callis/issues/56) proposes that the generated models run it too.
 
 ## Design notes
 
@@ -39,10 +39,10 @@ The shared, dependency-free building blocks used by the runtime, functions and m
 - A type is named by `{ namespace, name }`. The System types are `Any`, `Boolean`, `String`, `Integer`, `Long` (phase 2), `Decimal`, `Date`, `DateTime`, `Time` and `Quantity`, all derived from `System.Any`.
 - **Resolving type specifiers** ([N1 §10.1](https://hl7.org/fhirpath/N1/#models)): an unqualified name is looked up in the model namespace first (for example `FHIR`), then in `System`. Qualified names (`FHIR.Patient`, `System.String`) are looked up directly.
 - **`is`, `as` and `ofType`** accept the exact type or a subtype, using model inheritance. FHIR primitives follow the FHIR rules ([R5 §2.1.9.1.2](https://hl7.org/fhir/R5/fhirpath.html#types)): `Patient.birthDate is date` is true and `is System.Date` is false. `ofType()` accepts both.
-- **Implicit conversions** ([N1 §5.5](https://hl7.org/fhirpath/N1/#conversion)): `Integer → Decimal`, `Integer → Quantity`, `Decimal → Quantity`, `Date → DateTime`. Phase 2 adds `Integer → Long`, `Long → Decimal` and `Long → Quantity` (the [3.0.0 table](https://hl7.org/fhirpath/STU3/#conversion)). `System.Long` is already a System type name, so a model can map R5's `integer64` to it.
+- **Implicit conversions** ([N1 §5.5](https://hl7.org/fhirpath/N1/#conversion)): `Integer → Decimal`, `Integer → Quantity`, `Decimal → Quantity`, `Date → DateTime`. Phase 2 adds `Integer → Long`, `Long → Decimal` and `Long → Quantity` (the [3.0.0 table](https://hl7.org/fhirpath/STU3/#conversion); T0028's task file lists only the first two, see [#62](https://github.com/losol/callis/issues/62)). `System.Long` is already a System type name, so a model can map R5's `integer64` to it.
 - **FHIR primitives map to System types** using the table on the FHIR page, with one deliberate difference: `FHIR.date` maps to `System.Date`, not `System.DateTime`. The test suite expects this (`birthDate` has output type `date`), and so do the other major implementations. `FHIR.Quantity` maps to `System.Quantity` only when it has a UCUM system and code ([R5 §2.1.9.1.3](https://hl7.org/fhir/R5/fhirpath.html#quantity)).
 - **Explicit conversions** are the `toX()` and `convertsToX()` functions.
-- **Model-less convenience:** a string that comes from untyped input data (not a string literal) is parsed on demand when it is compared with a date/time value. So `birthDate = @1974-12-25` works without a model. The rule never applies when a model is present. It needs the date/time values (T0005) and the equality and comparison dispatch, so [T0009](T0009-equality-kernels.md) implements and tests it.
+- **Model-less convenience:** a string that comes from untyped input data (not a string literal) is parsed on demand when it is compared with a date/time value. So `birthDate = @1974-12-25` works without a model. The rule never applies when a model is present. It needs the date/time values (T0005) and the equality and comparison dispatch, so T0003 does not implement it; [#55](https://github.com/losol/callis/issues/55) proposes T0009 as its home.
 
 ### Empty propagation and singleton evaluation
 

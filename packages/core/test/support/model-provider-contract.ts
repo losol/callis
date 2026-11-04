@@ -1,7 +1,7 @@
 /**
  * A reusable test suite for the `ModelProvider` contract (`src/model/model-provider.ts`).
  *
- * Every provider runs it: the stub model here, and the generated R4 and R5 models (T0019). It
+ * The stub model runs it, and the generated R4 and R5 models should too (issue #56). It
  * checks the rules the TSDoc states, over every type reachable from a few start types through
  * base types and element types, so it needs no list of all types.
  */

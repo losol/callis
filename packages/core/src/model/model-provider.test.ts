@@ -10,7 +10,7 @@ describe('ModelProvider', () => {
   });
 });
 
-// The stub model runs the same contract suite as the generated models (T0019).
+// The contract suite that every provider should pass; the generated models are issue #56.
 describeModelProviderContract(stubModel, {
   startTypes: ['Patient', 'Observation', 'Age'],
   resourceType: 'Patient',

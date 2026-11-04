@@ -4,8 +4,8 @@
  *
  * The kernels take two values of the same type; dispatch over types, implicit conversions and
  * empty operands belong to the runtime (T0009). Ordering kernels return `-1`, `0` or `1`, as in
- * `Array.prototype.sort`; the shared name for that type belongs to `runtime/comparison.ts`
- * (T0009), because value modules cannot import each other.
+ * `Array.prototype.sort`. Value modules cannot import each other, so the type is written out
+ * here; a shared name for it is proposed in issue #57.
  *
  * @see https://hl7.org/fhirpath/N1/#equals
  * @see https://hl7.org/fhirpath/N1/#equivalent
