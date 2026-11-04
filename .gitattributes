@@ -1,3 +1,8 @@
 # Vendored HL7 test-suite files are kept byte for byte as upstream ships them (some use CRLF);
 # fixtures/source.json records their checksums.
 tools/conformance/fixtures/** -text
+
+# Generated conformance files are written with LF, and `pnpm conformance --check` compares the
+# committed reports with fresh output byte for byte, so they stay LF on every checkout.
+docs/conformance/** text eol=lf
+tools/conformance/baseline.json text eol=lf
