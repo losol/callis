@@ -227,7 +227,8 @@ function shiftDateTime(
 ): DateTimeFields {
   const precision = value.precision;
   if (unit === 'year' || unit === 'month') {
-    const months = truncatedMultiple(amount, unit === 'year' ? 12n : 1n);
+    // Drop the fraction in the quantity's own unit first: 1.5 years is 1 year, not 18 months.
+    const months = truncatedMultiple(amount, 1n) * (unit === 'year' ? 12n : 1n);
     // A year-only value takes months directly as years (3.0.0).
     return precision === 'year' ? addYears(value, months / 12n) : addMonths(value, months);
   }

@@ -197,6 +197,15 @@ describe('date/time arithmetic', () => {
     ['@T10:00 + 1.5 hours', '@T11:00'],
     ['@T10:00:00.000 + 0.5 seconds', '@T10:00:00.500'],
     ['@2015 + 1.5 years', '@2016'],
+    // The fraction of a year is dropped in years, not after converting to months.
+    ['@2015-01-01 + 1.5 years', '@2016-01-01'],
+    ['@2015-01-01 - 1.5 years', '@2014-01-01'],
+    ['@2015-01 + 1.9 years', '@2016-01'],
+    ['@2015-01-01T10:00Z + 1.5 years', '@2016-01-01T10:00Z'],
+    ['@2015-01-01T10:00Z - 1.5 years', '@2014-01-01T10:00Z'],
+    ['@2015-01-01 + -1.5 years', '@2014-01-01'],
+    ['@2015-01-01 + 2.5 months', '@2015-03-01'],
+    ['@2015-01-01 - 2.5 months', '@2014-11-01'],
     ['@2015-01 + 18.5 months', '@2016-07'],
   ])('%s = %s (partial values and fractions)', (expression, expected) => {
     expect(calculate(expression)).toBe(expected);
