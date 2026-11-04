@@ -1,0 +1,113 @@
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import { ModelNode } from '../model/model-node.ts';
+import type { Decimal } from '../values/decimal/decimal.ts';
+import {
+  appendAll,
+  type Collection,
+  concat,
+  EMPTY,
+  fromBoolean,
+  fromOptional,
+  type Item,
+} from './collection.ts';
+
+describe('Item', () => {
+  it('admits primitives, value classes, model nodes and JSON objects', () => {
+    expectTypeOf<boolean | string | number | bigint>().toExtend<Item>();
+    expectTypeOf<Decimal>().toExtend<Item>();
+    expectTypeOf<ModelNode>().toExtend<Item>();
+    expectTypeOf<Record<string, unknown>>().toExtend<Item>();
+  });
+
+  it('rejects arrays, so collections cannot nest', () => {
+    expectTypeOf<Collection>().not.toExtend<Item>();
+    expectTypeOf<number[]>().not.toExtend<Item>();
+    // @ts-expect-error a collection is not an item
+    fromOptional([1, 2]);
+    // @ts-expect-error a collection is not an item
+    concat([1], [EMPTY]);
+    expect(new ModelNode({ value: 1, name: 'a' })).toBeInstanceOf(ModelNode);
+  });
+});
+
+describe('EMPTY', () => {
+  it('is an empty, frozen array', () => {
+    expect(EMPTY).toEqual([]);
+    expect(Object.isFrozen(EMPTY)).toBe(true);
+  });
+});
+
+describe('fromOptional', () => {
+  it('wraps an item', () => {
+    expect(fromOptional('a')).toEqual(['a']);
+  });
+
+  it.each<[Item]>([[false], [0], ['']])('wraps the falsy item %j', (item) => {
+    expect(fromOptional(item)).toEqual([item]);
+  });
+
+  it('gives EMPTY for undefined', () => {
+    expect(fromOptional(undefined)).toBe(EMPTY);
+  });
+});
+
+describe('fromBoolean', () => {
+  it.each([
+    [true, [true]],
+    [false, [false]],
+    [undefined, []],
+  ])('gives the collection for %s', (value, expected) => {
+    expect(fromBoolean(value)).toEqual(expected);
+  });
+
+  it('shares frozen collections', () => {
+    expect(fromBoolean(true)).toBe(fromBoolean(true));
+    expect(fromBoolean(false)).toBe(fromBoolean(false));
+    expect(fromBoolean(undefined)).toBe(EMPTY);
+    expect(Object.isFrozen(fromBoolean(true))).toBe(true);
+    expect(Object.isFrozen(fromBoolean(false))).toBe(true);
+  });
+});
+
+describe('concat', () => {
+  // https://hl7.org/fhirpath/N1/#combineother-collection-collection
+  it('keeps the order and the duplicates', () => {
+    expect(concat([1, 2], [2, 3])).toEqual([1, 2, 2, 3]);
+  });
+
+  it('does not change its inputs', () => {
+    const left: Collection = [1];
+    const right: Collection = [2];
+    concat(left, right);
+    expect(left).toEqual([1]);
+    expect(right).toEqual([2]);
+  });
+
+  it('returns the other input when one side is empty', () => {
+    const items: Collection = ['a'];
+    expect(concat(items, EMPTY)).toBe(items);
+    expect(concat(EMPTY, items)).toBe(items);
+    expect(concat(EMPTY, EMPTY)).toBe(EMPTY);
+  });
+});
+
+describe('appendAll', () => {
+  it('appends every item in order', () => {
+    const target: Item[] = ['a'];
+    appendAll(target, ['b', 'c']);
+    expect(target).toEqual(['a', 'b', 'c']);
+  });
+
+  it('appends a collection to itself once', () => {
+    const items: Item[] = [1, 2];
+    appendAll(items, items);
+    expect(items).toEqual([1, 2, 1, 2]);
+  });
+
+  it('handles collections too large to spread into push()', () => {
+    const source: Collection = new Array<number>(200_000).fill(1);
+    const target: Item[] = [];
+    appendAll(target, source);
+    expect(target.length).toBe(200_000);
+  });
+});

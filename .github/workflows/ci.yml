@@ -32,6 +32,8 @@ jobs:
         run: pnpm lint
       - name: Typecheck
         run: pnpm typecheck
+      - name: Roadmap
+        run: pnpm check:roadmap
       - name: Test with coverage
         run: pnpm coverage
       - name: Build
