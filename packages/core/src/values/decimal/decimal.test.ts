@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FhirPathEvaluationError } from '../../errors/fhirpath-error.ts';
-import { Decimal } from './decimal.ts';
+import { Decimal, MAX_DECIMAL_DIGITS } from './decimal.ts';
 
 /** Parses decimal text that a test knows is valid. */
 function d(text: string): Decimal {
@@ -231,7 +231,7 @@ describe('addition, subtraction and multiplication', () => {
     ['-1.5', '1.5', '0.0'],
     ['99999999999999999999.99999999', '0.00000001', '100000000000000000000.00000000'],
   ])('%s + %s = %s, with the larger scale', (a, b, expected) => {
-    expect(d(a).add(d(b)).toString()).toBe(expected);
+    expect(show(d(a).add(d(b)))).toBe(expected);
   });
 
   it.each([
@@ -240,7 +240,7 @@ describe('addition, subtraction and multiplication', () => {
     ['0.1', '0.3', '-0.2'],
     ['5.00', '5', '0.00'],
   ])('%s - %s = %s, with the larger scale', (a, b, expected) => {
-    expect(d(a).subtract(d(b)).toString()).toBe(expected);
+    expect(show(d(a).subtract(d(b)))).toBe(expected);
   });
 
   it.each([
@@ -249,7 +249,7 @@ describe('addition, subtraction and multiplication', () => {
     ['-2', '0.5', '-1.0'],
     ['0.00000001', '0.00000001', '0.0000000000000001'],
   ])('%s * %s = %s, with the sum of the scales', (a, b, expected) => {
-    expect(d(a).multiply(d(b)).toString()).toBe(expected);
+    expect(show(d(a).multiply(d(b)))).toBe(expected);
   });
 });
 
@@ -498,6 +498,85 @@ describe('equivalent', () => {
     const quotient = d('1.2').divide(d('1.8'));
     expect(quotient?.equivalent(d('0.67'))).toBe(true); // testEquivalent11, N1 example
     expect(quotient?.equivalent(d('0.6'))).toBe(false); // testNotEquivalent13
+  });
+});
+
+describe('the size bound', () => {
+  // A Decimal has at most MAX_DECIMAL_DIGITS digits and a scale of at most MAX_DECIMAL_DIGITS.
+  // Results beyond it are overflow or underflow, which is empty:
+  // https://hl7.org/fhirpath/STU3/#math-1
+  const largest = Decimal.of(10n ** 10_000n - 1n); // 10,000 nines
+  const smallest = Decimal.of(1n, 10_000); // 1e-10000
+
+  it('is 10,000 digits', () => {
+    expect(MAX_DECIMAL_DIGITS).toBe(10_000);
+    expect(largest.toString()).toHaveLength(10_000);
+    expect(smallest.toString()).toBe(`0.${'0'.repeat(9_999)}1`);
+  });
+
+  it('rejects values beyond it in of() with eval/invalid-argument', () => {
+    expectInvalidArgument(() => Decimal.of(10n ** 10_000n));
+    expectInvalidArgument(() => Decimal.of(-(10n ** 10_000n)));
+    expectInvalidArgument(() => Decimal.of(1n, 10_001));
+  });
+
+  it('parses text up to it, where leading zeros do not count', () => {
+    expect(Decimal.parse('9'.repeat(10_000))?.equals(largest)).toBe(true);
+    expect(Decimal.parse(`000${'9'.repeat(10_000)}`)?.equals(largest)).toBe(true);
+    expect(Decimal.parse(`-0.${'0'.repeat(9_999)}1`)?.equals(smallest.negate())).toBe(true);
+    expect(Decimal.parse('1'.repeat(10_001))).toBeUndefined();
+    expect(Decimal.parse(`0.${'0'.repeat(10_000)}1`)).toBeUndefined();
+    expect(Decimal.parse(`0.${'0'.repeat(10_001)}`)).toBeUndefined(); // the scale counts for zero too
+  });
+
+  it('gives empty for sums and differences beyond it', () => {
+    expect(largest.add(Decimal.ONE)).toBeUndefined();
+    expect(largest.negate().subtract(Decimal.ONE)).toBeUndefined();
+    expect(show(largest.add(largest.negate()))).toBe('0');
+    expect(show(largest.subtract(Decimal.ONE))).toBe(`${'9'.repeat(9_999)}8`);
+    // 1e9999 + 1e-10000 is exact only with 20,000 digits.
+    expect(Decimal.of(10n ** 9_999n).add(smallest)).toBeUndefined();
+  });
+
+  it('gives empty for products beyond it', () => {
+    expect(Decimal.of(10n ** 5_000n).multiply(Decimal.of(10n ** 5_000n))).toBeUndefined();
+    expect(
+      Decimal.of(10n ** 4_999n)
+        .multiply(Decimal.of(10n ** 5_000n))
+        ?.toString(),
+    ).toHaveLength(10_000);
+    expect(Decimal.of(1n, 6_000).multiply(Decimal.of(1n, 6_000))).toBeUndefined(); // scale 12,000
+  });
+
+  it('ends repeated squaring with empty instead of an error', () => {
+    // From 1.1 the scale doubles with each squaring: 2, 4, …, 8,192, then 16,384.
+    let value: Decimal | undefined = d('1.1');
+    let squarings = 0;
+    while (value !== undefined) {
+      value = value.multiply(value);
+      squarings += 1;
+    }
+    expect(squarings).toBe(14);
+  });
+
+  it('gives empty for quotients beyond it', () => {
+    expect(Decimal.of(10n ** 9_999n).divide(d('0.1'))).toBeUndefined(); // 1e10000
+    expect(Decimal.of(1n, 9_999).divide(Decimal.of(10n ** 9_999n))).toBeUndefined(); // 1e-19998
+    expect(smallest.divide(d('2'))).toBeUndefined(); // 5e-10001
+    // 1 / 3e9980 has 28 significant digits only with a scale of 10,008.
+    expect(Decimal.ONE.divide(Decimal.of(3n * 10n ** 9_980n))).toBeUndefined();
+    expect(Decimal.of(10n ** 9_999n).div(d('0.1'))).toBeUndefined();
+  });
+
+  it('keeps an exact quotient that fits once its trailing zeros are removed', () => {
+    const expected = `2${'0'.repeat(9_999)}`;
+    expect(show(Decimal.of(10n ** 9_999n).divide(d('0.5')))).toBe(expected);
+    expect(show(Decimal.of(10n ** 9_999n).div(d('0.5')))).toBe(expected);
+  });
+
+  it('cannot be left by mod and rounding', () => {
+    expect(largest.mod(smallest)?.sign()).toBe(0);
+    expect(show(Decimal.of(10n ** 10_000n - 5n, 1).round())).toBe(`1${'0'.repeat(9_999)}`);
   });
 });
 

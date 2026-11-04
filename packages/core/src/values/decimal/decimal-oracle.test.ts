@@ -6,7 +6,7 @@
 import { Decimal as DecimalJs } from 'decimal.js';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { Decimal } from './decimal.ts';
+import { Decimal, MAX_DECIMAL_DIGITS } from './decimal.ts';
 import { ln, log } from './math.ts';
 
 /** At least 1,000 runs per property (T0004 acceptance criterion). */
@@ -54,7 +54,7 @@ describe('Decimal against decimal.js', () => {
     fc.assert(
       fc.property(decimals, decimals, (a, b) => {
         const expected = toOracle(a).plus(toOracle(b)).toFixed(Math.max(a.scale, b.scale));
-        expect(a.add(b).toString()).toBe(expected);
+        expect(a.add(b)?.toString()).toBe(expected);
       }),
       RUN_OPTIONS,
     );
@@ -64,7 +64,7 @@ describe('Decimal against decimal.js', () => {
     fc.assert(
       fc.property(decimals, decimals, (a, b) => {
         const expected = toOracle(a).minus(toOracle(b)).toFixed(Math.max(a.scale, b.scale));
-        expect(a.subtract(b).toString()).toBe(expected);
+        expect(a.subtract(b)?.toString()).toBe(expected);
       }),
       RUN_OPTIONS,
     );
@@ -76,7 +76,7 @@ describe('Decimal against decimal.js', () => {
         const expected = toOracle(a)
           .times(toOracle(b))
           .toFixed(a.scale + b.scale);
-        expect(a.multiply(b).toString()).toBe(expected);
+        expect(a.multiply(b)?.toString()).toBe(expected);
       }),
       RUN_OPTIONS,
     );
@@ -226,7 +226,7 @@ const positiveDecimals: fc.Arbitrary<Decimal> = fc.oneof(
     .map(([coefficient, scale, zeros]) => Decimal.of(coefficient * 10n ** BigInt(zeros), scale)),
   fc
     .tuple(fc.bigInt({ min: -(10n ** 15n), max: 10n ** 15n }), fc.integer({ min: 16, max: 450 }))
-    .map(([coefficient, scale]) => Decimal.ONE.add(Decimal.of(coefficient, scale))),
+    .map(([coefficient, scale]) => Decimal.of(10n ** BigInt(scale) + coefficient, scale)),
 );
 
 /**
@@ -266,6 +266,74 @@ describe('ln and log against decimal.js', () => {
         },
       ),
       RUN_OPTIONS,
+    );
+  });
+});
+
+/** Exact enough for sums and products of two values at the size bound (20,000 digits). */
+const BoundOracle = DecimalJs.clone({ precision: 25_000, toExpNeg: -9e15, toExpPos: 9e15 });
+
+/** Values at and near the size bound, mixed with ordinary ones. */
+const nearBoundDecimals: fc.Arbitrary<Decimal> = fc.oneof(
+  fc
+    .tuple(
+      fc.bigInt({ min: -(10n ** 10_000n - 1n), max: 10n ** 10_000n - 1n }),
+      fc.integer({ min: 0, max: MAX_DECIMAL_DIGITS }),
+    )
+    .map(([coefficient, scale]) => Decimal.of(coefficient, scale)),
+  fc
+    .tuple(fc.bigInt({ min: -(10n ** 40n), max: 10n ** 40n }), fc.integer({ min: 0, max: 30 }))
+    .map(([coefficient, scale]) => Decimal.of(coefficient, scale)),
+);
+
+/** Whether an exact result with the given scale fits the size bound. */
+function fitsBound(exact: DecimalJs, scale: number): boolean {
+  const coefficient = exact.times(new BoundOracle(10).pow(scale));
+  return (
+    scale <= MAX_DECIMAL_DIGITS && coefficient.abs().lt(new BoundOracle(10).pow(MAX_DECIMAL_DIGITS))
+  );
+}
+
+function expectBoundedResult(actual: Decimal | undefined, exact: DecimalJs, scale: number): void {
+  if (fitsBound(exact, scale)) {
+    expect(actual?.toString()).toBe(exact.toFixed(scale));
+  } else {
+    expect(actual).toBeUndefined();
+  }
+}
+
+describe('the size bound against decimal.js', () => {
+  const options = { numRuns: 100 };
+  const toBoundOracle = (value: Decimal): DecimalJs =>
+    new BoundOracle(`${value.coefficient}e-${value.scale}`);
+
+  it('gives empty exactly when a sum, difference or product leaves the bound', () => {
+    fc.assert(
+      fc.property(nearBoundDecimals, nearBoundDecimals, (a, b) => {
+        const left = toBoundOracle(a);
+        const right = toBoundOracle(b);
+        const scale = Math.max(a.scale, b.scale);
+        expectBoundedResult(a.add(b), left.plus(right), scale);
+        expectBoundedResult(a.subtract(b), left.minus(right), scale);
+        expectBoundedResult(a.multiply(b), left.times(right), a.scale + b.scale);
+      }),
+      options,
+    );
+  });
+
+  it('never throws for division near the bound', () => {
+    fc.assert(
+      fc.property(nearBoundDecimals, nearBoundDecimals, (a, b) => {
+        for (const result of [a.divide(b), a.div(b), a.mod(b)]) {
+          if (result !== undefined) {
+            expect(result.scale).toBeLessThanOrEqual(MAX_DECIMAL_DIGITS);
+            expect(result.coefficient.toString().replace('-', '').length).toBeLessThanOrEqual(
+              MAX_DECIMAL_DIGITS,
+            );
+          }
+        }
+      }),
+      options,
     );
   });
 });
