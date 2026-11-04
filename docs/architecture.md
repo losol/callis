@@ -198,7 +198,7 @@ packages/core/src/
 ├── compiler/              compile.ts (AST → closures), lambda.ts, maybe-promise.ts, constant-fold.ts
 ├── runtime/               context.ts (EvalContext, Frame), collection.ts, singleton.ts, logic.ts,
 │                          equality.ts, comparison.ts, arithmetic.ts, navigation.ts, variables.ts
-├── types/                 system-types.ts, type-specifier.ts, conversions.ts, type-test.ts (is/as/ofType)
+├── types/                 system-types.ts, type-specifier.ts, model-types.ts, conversions.ts, type-test.ts (is/as/ofType)
 ├── values/
 │   ├── decimal/           decimal.ts, math.ts
 │   ├── datetime/          date.ts, datetime.ts, time.ts, parse.ts, compare.ts, arithmetic.ts
