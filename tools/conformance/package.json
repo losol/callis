@@ -1,0 +1,15 @@
+{
+  "name": "@callis/conformance",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Runs the official HL7 FHIRPath test suite against Callis",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "update-fixtures": "node scripts/update-fixtures.ts"
+  },
+  "devDependencies": {
+    "fast-xml-parser": "5.12.0"
+  }
+}

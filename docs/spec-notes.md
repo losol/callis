@@ -184,3 +184,55 @@ Implemented in `packages/core/src/values/datetime/` ([T0005](tasks/T0005-date-ti
 
 - **Spec:** [N1 toString()](https://hl7.org/fhirpath/N1/#tostring-string) shows offsets as `(+|-)hh:mm`, and [N1 §4.1.7](https://hl7.org/fhirpath/N1/#datetime) allows `Z` as a synonym for `+00:00`.
 - **Decision:** `toString()` writes a zero offset as `Z`, whether the input had `Z`, `+00:00` or `-00:00`. Both forms are valid FHIR.
+
+## Conformance suite
+
+How the conformance runner ([T0022](tasks/T0022-conformance-runner.md), [`tools/conformance`](../tools/conformance/README.md)) reads the attributes of the [HL7 test suite](https://github.com/FHIR/fhir-test-cases/tree/master/r5/fhirpath). The test schema is vendored as `tools/conformance/fixtures/r5/testSchema.xsd`.
+
+### Semantic errors found during evaluation
+
+- **Spec:** [N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation) lets an implementation check types at compile time or at run time.
+- **Tests:** every `invalid="semantic"` test, for example `testDollarOrderNotAllowed`, `isEffectOnLogic3Base` and the `isSemanticChecks` group.
+- **Decision:** a `FhirPathSemanticError` passes. A `FhirPathEvaluationError` also passes, and the report counts it as "detected late", so the gap to static analysis ([T0024](tasks/T0024-static-analysis.md)) stays visible.
+
+### `ordered="true"` asks for ordered-function checks
+
+- **Spec:** [N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation) (strict evaluation) and the `ordered` attribute in `testSchema.xsd`, which documents it as "check the order of results".
+- **Tests:** `testDollarOrderNotAllowed`. R4 marks it `checkOrderedFunctions="true"`, R5 marks the same test `ordered="true"`, and both expect a semantic error for `Patient.children().skip(1)` in strict mode.
+- **Decision:** `ordered="true"` and `checkOrderedFunctions="true"` both ask the engine to report ordered functions on unordered input (`checkOrderedFunctions` in the adapter options). Results are compared in order unless `ordered="false"`, which is the schema's default reading anyway.
+
+### `predicate="true"`
+
+- **Spec:** the schema only says the test "represents a predicate".
+- **Tests:** `testPatientHasBirthDate` (and `testExtractBirthDate`, which is `predicate="false"`).
+- **Decision:** the result is converted to a Boolean before it is compared, as the HL7 Java test runner does: a single Boolean stays as it is; otherwise the result is `true` when it is not empty.
+
+### Comparing expected outputs
+
+- **Spec:** `testSchema.xsd` lists the output types `boolean`, `integer`, `decimal`, `string`, `date`, `dateTime`, `time`, `code`, `id` and `Quantity`, but not how values compare. The reference is the HL7 Java test runner (`FHIRPathTests.java` in [hapifhir/org.hl7.fhir.core](https://github.com/hapifhir/org.hl7.fhir.core)).
+- **Tests:** all tests with outputs.
+- **Decision:** follow the Java runner, except where noted.
+  - The result item's type must be the output type. System types count as the output type of the same name (`System.Decimal` as `decimal`), FHIR types as their own name (`FHIR.code` as `code`), as Java compares `fhirType()`. So an expected `string` does not accept a `code`, and FHIR types the schema does not list (`uri`, `instant`, `Age`) never match a typed output.
+  - Decimals compare by value and by number of decimal places, because precision is visible in FHIRPath and Callis keeps it ([ADR-0005](adr/0005-bigint-decimal.md); [N1 §4.1.4](https://hl7.org/fhirpath/N1/#decimal) asks for fixed-precision decimals). `1.50` does not match `1.5`. Java compares the text; Callis also treats `-0.0` as `0.0`, `+1` as `1` and `01` as `1`.
+  - Dates, date/times and times compare as text without the `@` and `T` literal prefixes, so a different precision or a different way of writing the offset is a different value.
+  - Quantities compare by value (as decimals) and by unit.
+  - An output with empty text checks only the type, as in Java.
+  - Outputs without a type (the R4 boundary tests) hold a FHIRPath literal, as the schema says; Java compares only their text. Callis compares by the kind of literal (Boolean, number, string, date/time or quantity) and accepts any result type of that kind: the R4 file writes `@2014-01` for a month-precision DateTime, which as a literal would be a Date.
+  - With `ordered="false"`, each output must pair with a different result item. Java only checks that each result item matches some output.
+
+### Tests that use STU features inside phase-1 groups
+
+- **Spec:** [ADR-0001](adr/0001-spec-baseline.md) puts STU features in phase 2.
+- **Tests:** `testPeriodInvariantNew` (group `period`) uses `lowBoundary()` and `highBoundary()`; the `type()` tests in `testType` and the `matchesFull()` tests in `testMatches` are STU too.
+- **Decision:** tests are classified one by one: a test that calls an STU function is STU, even in a group whose other tests are phase 1. The reports show the task that implements it.
+
+### Modes
+
+- **Spec:** the `mode` values in `testSchema.xsd`.
+- **Tests:** the tests and groups with a `mode`.
+- **Decision:** `strict`, `lenient/polymorphics`, `element`, `html` and the `semantic` group mode of `isSemanticChecks` (not in the schema) are phase 1. `tx` (`%terminologies`) is STU ([T0032](tasks/T0032-fhir-phase2.md)). `cda` and `custom` are out of scope and skipped, as are the whole `cdaTests` and `documentFunctions` groups, including their tests that have their own `mode="element"`.
+
+### Duplicate test names
+
+- **Tests:** the R4 file has two tests named `testEquivalent23` (R5 renamed the second to `testEquivalent24`).
+- **Decision:** test IDs are the names, made unique with a `#2`, `#3`, … suffix in document order. The second R4 test is `testEquivalent23#2` in reports and in the baseline.

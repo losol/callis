@@ -214,5 +214,8 @@ You need Node.js 22.18+, 24.11+ or 26+ (the `engines` range in `package.json`, s
 | `pnpm check:roadmap` | Check that the roadmap and the task files agree. |
 | `pnpm sync:roadmap` | Show what the [roadmap sync](#roadmap-sync) would change on GitHub. Add `--apply` to make the changes. |
 | `pnpm changeset` | Add a changeset. |
+| `pnpm conformance` | Run the HL7 FHIRPath test suite, write the reports in `docs/conformance/` and compare with the baseline. |
+| `pnpm conformance --update-baseline` | The same, and record newly passing tests in the baseline. |
+| `pnpm test:conformance -t testLiterals` | Run suite tests as Vitest tests, with a diff for each wrong result. |
 
-The conformance runner gets its own command when [T0022](docs/tasks/T0022-conformance-runner.md) adds it.
+CI also runs `pnpm conformance --check`, which is non-blocking until [T0023](docs/tasks/T0023-xml-fixture-conversion.md). The conformance runner is described in [tools/conformance](tools/conformance/README.md).
