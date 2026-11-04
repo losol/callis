@@ -20,7 +20,7 @@ Instructions for AI coding agents working on Callis. This file follows the [AGEN
 - Handle findings outside your task as described in [Findings during a task](CONTRIBUTING.md#findings-during-a-task): open a follow-up issue for each one (search first, one finding per issue) and list it under *Follow-ups* in the PR description. Do not fix them in your PR.
 - If your task file is wrong, unclear or too big, fix or split it in your PR and say why. Do not silently diverge from it.
 - In a task PR, do not edit other task files, the roadmap or ADRs; only your own task file, and the roadmap when you split your task. Open a follow-up issue instead; the owner decides how the plan changes.
-- When the owner asks you to change the plan, do it in a separate `docs` PR with `Task: none`, as described in [Changing the plan](CONTRIBUTING.md#changing-the-plan). Change only what you were asked to.
+- When the owner asks you to change the plan, do it in a separate `docs` PR with `Task: none`, as described in [Changing the plan](CONTRIBUTING.md#changing-the-plan). Change only what you were asked to. The roadmap is the source of truth for titles, waves, sizes and dependencies; do not edit those on GitHub, because the [roadmap sync](CONTRIBUTING.md#roadmap-sync) overwrites them.
 - Do not change an architecture decision on your own. Decisions that would change an ADR need the owner: ask.
 
 ## Hard rules
@@ -68,6 +68,7 @@ Instructions for AI coding agents working on Callis. This file follows the [AGEN
 | `pnpm test -t "<name>"` | Run the tests whose name matches. |
 | `pnpm typecheck` | Type-check everything. |
 | `pnpm check:title "<title>"` | Check a PR title before you open the PR. |
+| `pnpm check:roadmap` | Check that the roadmap and the task files agree, after a plan change. |
 | `pnpm changeset` | Add a changeset. |
 
 The full list is in [CONTRIBUTING.md](CONTRIBUTING.md#commands).
