@@ -381,36 +381,38 @@ describe('comparison laws (property-based)', () => {
     millisecond: fc.constantFrom(0, 1, 999),
   };
 
-  const dateLike = fc
-    .record({
-      ...components,
-      precision: fc.constantFrom(...precisions),
-      offsetMinutes: fc.option(fc.constantFrom(-840, -300, 0, 330, 840), { nil: undefined }),
-      asDate: fc.boolean(),
-    })
-    .map((fields): DateValue | DateTimeValue => {
-      const level = precisions.indexOf(fields.precision);
-      const at = (component: Precision, value: number): number | undefined =>
-        precisions.indexOf(component) <= level ? value : undefined;
-      const day = Math.min(fields.day, daysInMonth(fields.year, fields.month));
-      if (fields.asDate && level <= 2) {
-        return DateValue.create({
+  const dateLikeWith = (offsets: readonly number[]): fc.Arbitrary<DateValue | DateTimeValue> =>
+    fc
+      .record({
+        ...components,
+        precision: fc.constantFrom(...precisions),
+        offsetMinutes: fc.option(fc.constantFrom(...offsets), { nil: undefined }),
+        asDate: fc.boolean(),
+      })
+      .map((fields): DateValue | DateTimeValue => {
+        const level = precisions.indexOf(fields.precision);
+        const at = (component: Precision, value: number): number | undefined =>
+          precisions.indexOf(component) <= level ? value : undefined;
+        const day = Math.min(fields.day, daysInMonth(fields.year, fields.month));
+        if (fields.asDate && level <= 2) {
+          return DateValue.create({
+            year: fields.year,
+            month: at('month', fields.month),
+            day: at('day', day),
+          });
+        }
+        return DateTimeValue.create({
           year: fields.year,
           month: at('month', fields.month),
           day: at('day', day),
+          hour: at('hour', fields.hour),
+          minute: at('minute', fields.minute),
+          second: at('second', fields.second),
+          millisecond: at('millisecond', fields.millisecond),
+          offsetMinutes: level >= 3 ? fields.offsetMinutes : undefined,
         });
-      }
-      return DateTimeValue.create({
-        year: fields.year,
-        month: at('month', fields.month),
-        day: at('day', day),
-        hour: at('hour', fields.hour),
-        minute: at('minute', fields.minute),
-        second: at('second', fields.second),
-        millisecond: at('millisecond', fields.millisecond),
-        offsetMinutes: level >= 3 ? fields.offsetMinutes : undefined,
       });
-    });
+  const dateLike = dateLikeWith([-840, -300, 0, 330, 840]);
 
   const time = fc
     .record({ ...components, precision: fc.constantFrom(...timePrecisions) })
@@ -513,4 +515,73 @@ describe('comparison laws (property-based)', () => {
       });
     });
   }
+
+  describe('agreement with the component-by-component rule of N1', () => {
+    // https://hl7.org/fhirpath/N1/#datetime-equality, taken literally: values with an offset are
+    // normalized to UTC (here with Date's UTC methods, independently of calendar.ts), then the
+    // components are compared from the year down, with seconds and milliseconds as one decimal.
+    // Whole-hour offsets and the default offset 0 keep every value on its own precision's grid,
+    // which is where the literal rule is well defined.
+    const seconds = (second: number | undefined, millisecond: number | undefined) =>
+      second === undefined ? undefined : second * 1000 + (millisecond ?? 0);
+
+    const componentsInUtc = (value: TemporalValue): readonly (number | undefined)[] => {
+      if (value instanceof TimeValue) {
+        return [value.hour, value.minute, seconds(value.second, value.millisecond)];
+      }
+      if (value instanceof DateValue || value.offsetMinutes === undefined) {
+        const time = value instanceof DateTimeValue ? value : undefined;
+        return [
+          value.year,
+          value.month,
+          value.day,
+          time?.hour,
+          time?.minute,
+          seconds(time?.second, time?.millisecond),
+        ];
+      }
+      const local = new Date(0);
+      local.setUTCFullYear(value.year, (value.month ?? 1) - 1, value.day ?? 1);
+      local.setUTCHours(value.hour ?? 0, value.minute ?? 0, value.second ?? 0, 0);
+      const utc = new Date(local.getTime() - value.offsetMinutes * 60_000);
+      return [
+        utc.getUTCFullYear(),
+        utc.getUTCMonth() + 1,
+        utc.getUTCDate(),
+        utc.getUTCHours(),
+        value.minute === undefined ? undefined : utc.getUTCMinutes(),
+        seconds(value.second === undefined ? undefined : utc.getUTCSeconds(), value.millisecond),
+      ];
+    };
+
+    const componentWalk = (a: TemporalValue, b: TemporalValue): number | undefined => {
+      const left = componentsInUtc(a);
+      const right = componentsInUtc(b);
+      for (let index = 0; index < left.length; index++) {
+        const x = left[index];
+        const y = right[index];
+        if (x === undefined || y === undefined) {
+          return x === y ? 0 : undefined;
+        }
+        if (x !== y) {
+          return x < y ? -1 : 1;
+        }
+      }
+      return 0;
+    };
+
+    for (const [name, values] of [
+      ['Date and DateTime', dateLikeWith([-840, -300, -60, 0, 60, 600, 840])],
+      ['Time', time],
+    ] as const) {
+      it(`gives the same result for ${name}`, () => {
+        fc.assert(
+          fc.property(values, values, (a, b) => {
+            expect(compareTemporal(a, b)).toBe(componentWalk(a, b));
+          }),
+          { numRuns: 3000 },
+        );
+      });
+    }
+  });
 });

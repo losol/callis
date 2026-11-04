@@ -26,15 +26,23 @@ export interface DateTimeFields extends DateFields {
  * @see https://hl7.org/fhirpath/N1/#datetime
  */
 export class DateTimeValue {
+  /** The year, 1–9999. */
   readonly year: number;
+  /** The month, 1–12; undefined when the precision is coarser than month. */
   readonly month: number | undefined;
+  /** The day of the month, 1–31; undefined when the precision is coarser than day. */
   readonly day: number | undefined;
+  /** The hour, 0–23; undefined when the precision is coarser than hour. */
   readonly hour: number | undefined;
+  /** The minute, 0–59; undefined when the precision is coarser than minute. */
   readonly minute: number | undefined;
+  /** The second, 0–59; undefined when the precision is coarser than second. */
   readonly second: number | undefined;
+  /** The millisecond, 0–999; undefined when the precision is coarser than millisecond. */
   readonly millisecond: number | undefined;
   /** Minutes east of UTC; undefined when the value has no timezone. `Z` is 0. */
   readonly offsetMinutes: number | undefined;
+  /** The finest component the value has. */
   readonly precision: Precision;
 
   private constructor(fields: DateTimeFields, precision: Precision) {
@@ -47,6 +55,7 @@ export class DateTimeValue {
     this.millisecond = fields.millisecond;
     this.offsetMinutes = fields.offsetMinutes;
     this.precision = precision;
+    Object.freeze(this);
   }
 
   /**

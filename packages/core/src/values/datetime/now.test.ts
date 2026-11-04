@@ -63,14 +63,12 @@ describe('takeNowSnapshot', () => {
   });
 
   it.each([
-    [new Date(Number.NaN), 0, 'an invalid Date'],
-    [utc('2026-11-04T21:05:09.007Z'), 841, 'an offset beyond +14:00'],
-    [utc('2026-11-04T21:05:09.007Z'), 0.5, 'a fractional offset'],
-    [new Date(8.64e15), 0, 'a year beyond 9999'],
-  ])('raises eval/datetime-out-of-range for %s at offset %d (%s)', (at, offset) => {
-    expect(() => takeNowSnapshot(at, offset)).toThrow(
-      expect.objectContaining({ code: 'eval/datetime-out-of-range' }),
-    );
+    [new Date(Number.NaN), 0, 'eval/invalid-argument', 'an invalid Date'],
+    [utc('2026-11-04T21:05:09.007Z'), 841, 'eval/invalid-argument', 'an offset beyond +14:00'],
+    [utc('2026-11-04T21:05:09.007Z'), 0.5, 'eval/invalid-argument', 'a fractional offset'],
+    [new Date(8.64e15), 0, 'eval/datetime-out-of-range', 'a year beyond 9999'],
+  ])('raises an error for %s at offset %d: %s (%s)', (at, offset, code) => {
+    expect(() => takeNowSnapshot(at, offset)).toThrow(expect.objectContaining({ code }));
   });
 });
 
@@ -90,9 +88,9 @@ describe('resolveTimezoneOffset', () => {
     expect(Object.is(resolveTimezoneOffset('local', at), expected)).toBe(true);
   });
 
-  it.each([841, -841, 1.5, Number.NaN])('raises eval/datetime-out-of-range for %d', (offset) => {
+  it.each([841, -841, 1.5, Number.NaN])('raises eval/invalid-argument for %d', (offset) => {
     expect(() => resolveTimezoneOffset(offset, at)).toThrow(
-      expect.objectContaining({ code: 'eval/datetime-out-of-range' }),
+      expect.objectContaining({ code: 'eval/invalid-argument' }),
     );
   });
 });

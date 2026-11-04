@@ -88,6 +88,8 @@ const MAX_MILLISECONDS = 366n * MAX_YEARS * MILLISECONDS.day;
  * days, a Time takes hours to milliseconds.
  * @throws FhirPathEvaluationError `eval/datetime-out-of-range` if a Date or DateTime result falls
  * outside 0001–9999.
+ * @throws FhirPathEvaluationError `eval/invalid-argument` if the amount is `NaN` or infinite, or a
+ * decimal amount's scale is not an integer.
  * @see https://hl7.org/fhirpath/N1/#addition-2
  */
 export function addCalendar(value: DateValue, amount: CalendarAmount, unit: string): DateValue;
@@ -107,21 +109,7 @@ export function addCalendar(
   amount: CalendarAmount,
   unit: string,
 ): TemporalValue {
-  const calendarUnit = toCalendarUnit(unit);
-  const exact = typeof amount === 'number' ? decimalFromNumber(amount) : amount;
-  if (value instanceof TimeValue) {
-    return addToTime(value, exact, calendarUnit);
-  }
-  if (value instanceof DateValue) {
-    if (!isDateUnit(calendarUnit)) {
-      throw new FhirPathEvaluationError(
-        'eval/invalid-calendar-unit',
-        'A Date can only be changed by years, months, weeks or days',
-      );
-    }
-    return addToDateTime(DateTimeValue.fromDate(value), exact, calendarUnit).toDateValue();
-  }
-  return addToDateTime(value, exact, calendarUnit);
+  return addSigned(value, amount, unit, false);
 }
 
 /**
@@ -147,8 +135,32 @@ export function subtractCalendar(
   amount: CalendarAmount,
   unit: string,
 ): TemporalValue {
-  const exact = typeof amount === 'number' ? decimalFromNumber(amount) : amount;
-  return addCalendar(value, { coefficient: -exact.coefficient, scale: exact.scale }, unit);
+  return addSigned(value, amount, unit, true);
+}
+
+/** Adds the amount, or subtracts it when `negate` is set. The unit is checked first. */
+function addSigned(
+  value: TemporalValue,
+  amount: CalendarAmount,
+  unit: string,
+  negate: boolean,
+): TemporalValue {
+  const calendarUnit = toCalendarUnit(unit);
+  const exact = toDecimalAmount(amount);
+  const signed = negate ? { coefficient: -exact.coefficient, scale: exact.scale } : exact;
+  if (value instanceof TimeValue) {
+    return addToTime(value, signed, calendarUnit);
+  }
+  if (value instanceof DateValue) {
+    if (!isDateUnit(calendarUnit)) {
+      throw new FhirPathEvaluationError(
+        'eval/invalid-calendar-unit',
+        'A Date can only be changed by years, months, weeks or days',
+      );
+    }
+    return addToDateTime(DateTimeValue.fromDate(value), signed, calendarUnit).toDateValue();
+  }
+  return addToDateTime(value, signed, calendarUnit);
 }
 
 /**
@@ -362,13 +374,31 @@ function truncatedMultiple(amount: DecimalAmount, factor: bigint): bigint {
   if (amount.scale <= 0) {
     return amount.coefficient * factor * 10n ** BigInt(-amount.scale);
   }
-  return (amount.coefficient * factor) / 10n ** BigInt(amount.scale);
+  const product = amount.coefficient * factor;
+  // With at least as many fractional digits as the product has digits, |amount × factor| < 1.
+  // Checking first avoids building 10^scale for a huge scale.
+  const digits = (product < 0n ? -product : product).toString().length;
+  if (amount.scale >= digits) {
+    return 0n;
+  }
+  return product / 10n ** BigInt(amount.scale);
+}
+
+/** The amount as an exact decimal. */
+function toDecimalAmount(amount: CalendarAmount): DecimalAmount {
+  if (typeof amount === 'number') {
+    return decimalFromNumber(amount);
+  }
+  if (!Number.isSafeInteger(amount.scale)) {
+    throw invalidAmount();
+  }
+  return amount;
 }
 
 /** The exact decimal value of a finite number, from its shortest round-trip string. */
 function decimalFromNumber(amount: number): DecimalAmount {
   if (!Number.isFinite(amount)) {
-    throw outOfRange();
+    throw invalidAmount();
   }
   if (Number.isInteger(amount)) {
     return { coefficient: BigInt(amount), scale: 0 };
@@ -377,6 +407,13 @@ function decimalFromNumber(amount: number): DecimalAmount {
   const [mantissa = '', exponent = '0'] = String(amount).split('e');
   const [whole = '', fraction = ''] = mantissa.split('.');
   return { coefficient: BigInt(whole + fraction), scale: fraction.length - Number(exponent) };
+}
+
+function invalidAmount(): FhirPathEvaluationError {
+  return new FhirPathEvaluationError(
+    'eval/invalid-argument',
+    'Expected a finite amount for date/time arithmetic',
+  );
 }
 
 function outOfRange(): FhirPathEvaluationError {

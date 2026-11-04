@@ -18,9 +18,9 @@ import type { TemporalValue } from './temporal-value.ts';
 import { TimeValue } from './time.ts';
 
 /**
- * The result of comparing two date/time values: negative, zero or positive as for a sort
- * comparator, or undefined when the order is unknown because the values have different
- * precisions.
+ * The result of comparing two date/time values: -1 if the first is earlier, 0 if they are the
+ * same, 1 if the first is later, or undefined when the order is unknown because the values have
+ * different precisions.
  */
 export type TemporalComparison = -1 | 0 | 1 | undefined;
 

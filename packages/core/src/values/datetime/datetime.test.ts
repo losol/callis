@@ -24,6 +24,13 @@ function codeOf(action: () => unknown): string | undefined {
 }
 
 describe('DateTimeValue', () => {
+  it('is frozen, so it cannot be changed from JavaScript either', () => {
+    const value = literal('@2014-01-25T14:30Z');
+    expect(Object.isFrozen(value)).toBe(true);
+    expect(Reflect.set(value, 'precision', 'year')).toBe(false);
+    expect(value.toLiteral()).toBe('@2014-01-25T14:30Z');
+  });
+
   it.each<[DateTimeFields, string]>([
     [{ year: 2014, hour: 10 }, 'a time without a full date'],
     [{ year: 2014, month: 1, offsetMinutes: 60 }, 'an offset without a time'],

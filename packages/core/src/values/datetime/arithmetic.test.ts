@@ -284,14 +284,42 @@ describe('date/time arithmetic', () => {
     ).toBe('@2014-01-11');
   });
 
-  it.each([Number.NaN, Number.POSITIVE_INFINITY, 1e21])(
-    'raises eval/datetime-out-of-range for the amount %d',
-    (amount) => {
-      expect(() => addCalendar(literal('@2014-01-01'), amount, 'days')).toThrow(
-        expect.objectContaining({ code: 'eval/datetime-out-of-range' }),
+  it.each([
+    [Number.NaN, 'eval/invalid-argument'],
+    [Number.POSITIVE_INFINITY, 'eval/invalid-argument'],
+    [Number.NEGATIVE_INFINITY, 'eval/invalid-argument'],
+    [1e21, 'eval/datetime-out-of-range'],
+  ])('raises an error for the amount %d (%s)', (amount, code) => {
+    expect(() => addCalendar(literal('@2014-01-01'), amount, 'days')).toThrow(
+      expect.objectContaining({ code }),
+    );
+    expect(() => subtractCalendar(literal('@2014-01-01'), amount, 'days')).toThrow(
+      expect.objectContaining({ code }),
+    );
+  });
+
+  it('raises eval/invalid-argument for a decimal amount whose scale is not an integer', () => {
+    expect(() =>
+      addCalendar(literal('@2014-01-01'), { coefficient: 1n, scale: 0.5 }, 'days'),
+    ).toThrow(expect.objectContaining({ code: 'eval/invalid-argument' }));
+  });
+
+  it('checks the unit before the amount, for addition and subtraction alike', () => {
+    for (const calculateWith of [addCalendar, subtractCalendar]) {
+      expect(() => calculateWith(literal('@2014-01-01'), Number.NaN, 'cm')).toThrow(
+        expect.objectContaining({ code: 'eval/invalid-calendar-unit' }),
       );
-    },
-  );
+    }
+  });
+
+  it('treats an amount with a huge scale as zero without computing 10^scale', () => {
+    const tiny = { coefficient: 123n, scale: 2 ** 31 };
+    expect(addCalendar(literal('@T10:00:00.000'), tiny, 's').toLiteral()).toBe('@T10:00:00.000');
+    expect(subtractCalendar(literal('@2014-01-01'), tiny, 'days').toLiteral()).toBe('@2014-01-01');
+    expect(
+      addCalendar(literal('@T10:00:00.000'), { coefficient: 1999n, scale: 3 }, 's').toLiteral(),
+    ).toBe('@T10:00:01.999');
+  });
 
   it('does not change its input', () => {
     const value = literal('@2014-01-31T10:00Z');

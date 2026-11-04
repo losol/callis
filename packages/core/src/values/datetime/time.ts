@@ -19,10 +19,15 @@ export interface TimeFields {
  * @see https://hl7.org/fhirpath/N1/#time
  */
 export class TimeValue {
+  /** The hour, 0–23. */
   readonly hour: number;
+  /** The minute, 0–59; undefined when the precision is coarser than minute. */
   readonly minute: number | undefined;
+  /** The second, 0–59; undefined when the precision is coarser than second. */
   readonly second: number | undefined;
+  /** The millisecond, 0–999; undefined when the precision is coarser than millisecond. */
   readonly millisecond: number | undefined;
+  /** The finest component the value has. */
   readonly precision: TimePrecision;
 
   private constructor(fields: TimeFields, precision: TimePrecision) {
@@ -31,6 +36,7 @@ export class TimeValue {
     this.second = fields.second;
     this.millisecond = fields.millisecond;
     this.precision = precision;
+    Object.freeze(this);
   }
 
   /**

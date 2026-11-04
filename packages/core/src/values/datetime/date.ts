@@ -17,9 +17,13 @@ export interface DateFields {
  * @see https://hl7.org/fhirpath/N1/#date
  */
 export class DateValue {
+  /** The year, 1–9999. */
   readonly year: number;
+  /** The month, 1–12; undefined when the precision is coarser than month. */
   readonly month: number | undefined;
+  /** The day of the month, 1–31; undefined when the precision is coarser than day. */
   readonly day: number | undefined;
+  /** The finest component the value has. */
   readonly precision: DatePrecision;
 
   private constructor(fields: DateFields, precision: DatePrecision) {
@@ -27,6 +31,7 @@ export class DateValue {
     this.month = fields.month;
     this.day = fields.day;
     this.precision = precision;
+    Object.freeze(this);
   }
 
   /**

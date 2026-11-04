@@ -24,6 +24,13 @@ function codeOf(action: () => unknown): string | undefined {
 }
 
 describe('DateValue', () => {
+  it('is frozen, so it cannot be changed from JavaScript either', () => {
+    const value = literal('@2014-01-25');
+    expect(Object.isFrozen(value)).toBe(true);
+    expect(Reflect.set(value, 'precision', 'year')).toBe(false);
+    expect(value.toLiteral()).toBe('@2014-01-25');
+  });
+
   it('derives the precision from the components', () => {
     expect(DateValue.create({ year: 2014 }).precision).toBe('year');
     expect(DateValue.create({ year: 2014, month: 1 }).precision).toBe('month');

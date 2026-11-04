@@ -24,6 +24,13 @@ function codeOf(action: () => unknown): string | undefined {
 }
 
 describe('TimeValue', () => {
+  it('is frozen, so it cannot be changed from JavaScript either', () => {
+    const value = literal('@T14:30');
+    expect(Object.isFrozen(value)).toBe(true);
+    expect(Reflect.set(value, 'precision', 'year')).toBe(false);
+    expect(value.toLiteral()).toBe('@T14:30');
+  });
+
   it.each<[TimeFields, string]>([
     [{ hour: 14, second: 1 }, 'a second without a minute'],
     [{ hour: 14, minute: 0, millisecond: 1 }, 'a millisecond without a second'],

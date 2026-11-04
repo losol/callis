@@ -11,9 +11,13 @@ export const MAX_YEAR = 9999;
 /** Largest timezone offset in minutes: ±14:00, the widest offset in use. */
 export const MAX_OFFSET_MINUTES: number = 14 * 60;
 
+/** Milliseconds in a second. */
 export const MS_PER_SECOND = 1000;
+/** Milliseconds in a minute. */
 export const MS_PER_MINUTE: number = 60 * MS_PER_SECOND;
+/** Milliseconds in an hour. */
 export const MS_PER_HOUR: number = 60 * MS_PER_MINUTE;
+/** Milliseconds in a day, without leap seconds. */
 export const MS_PER_DAY: number = 24 * MS_PER_HOUR;
 
 const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] as const;
