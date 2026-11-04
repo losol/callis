@@ -2,6 +2,7 @@
  * Tags each suite test as phase 1, STU (phase 2) or unsupported, so progress is measured against
  * the right target (ADR-0001). See `docs/architecture.md#specification-baseline-and-scope`.
  */
+import { decodeEscapes } from './escapes.ts';
 import type { SuiteTest } from './suite.ts';
 
 /** Which part of the roadmap a test belongs to. */
@@ -172,12 +173,15 @@ export function classifyTest(test: SuiteTest): Classification {
   return PHASE1;
 }
 
-/** The first STU function or syntax in an expression, ignoring strings and comments. */
+/**
+ * The first STU function or syntax in an expression. Strings and comments are ignored, and a
+ * delimited identifier counts as its name, so ``(2 | 1).`sort`()`` calls `sort()`.
+ */
 export function findStuFeature(
   expression: string,
 ): { readonly what: string; readonly task: string } | undefined {
-  const code = stripLiterals(expression);
-  for (const match of code.matchAll(/(?<![\w`])([A-Za-z_]\w*)\s*\(/g)) {
+  const code = prepareForScan(expression);
+  for (const match of code.matchAll(/(?<!\w)([A-Za-z_]\w*)\s*\(/g)) {
     const name = match[1] ?? '';
     if (Object.hasOwn(STU_FUNCTIONS, name)) {
       return { what: `${name}()`, task: STU_FUNCTIONS[name] ?? '' };
@@ -191,11 +195,24 @@ export function findStuFeature(
   return undefined;
 }
 
-/** Blanks out string literals, delimited identifiers and comments. */
-function stripLiterals(expression: string): string {
+const SIMPLE_IDENTIFIER = /^[A-Za-z_]\w*$/;
+
+/**
+ * Blanks out string literals and comments, and replaces each delimited identifier with its decoded
+ * name when that is a simple identifier ([N1 §8.6](https://hl7.org/fhirpath/N1/#identifiers):
+ * delimited identifiers use the string escapes). Other delimited identifiers are blanked out; no
+ * STU function or variable has such a name.
+ */
+function prepareForScan(expression: string): string {
   return expression.replace(
     /'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
-    ' ',
+    (token) => {
+      if (!token.startsWith('`')) {
+        return ' ';
+      }
+      const name = decodeEscapes(token.slice(1, -1));
+      return SIMPLE_IDENTIFIER.test(name) ? name : ' ';
+    },
   );
 }
 

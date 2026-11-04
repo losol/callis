@@ -3,6 +3,7 @@
  * up in `tools/conformance/README.md` and, where they interpret the suite, in `docs/spec-notes.md`.
  */
 import type { ResultItem } from './adapter.ts';
+import { decodeEscapes } from './escapes.ts';
 import type { ExpectedOutput, OutputType } from './suite.ts';
 
 /**
@@ -248,15 +249,8 @@ function unquote(literal: string): string | undefined {
   if (literal.length < 2 || !literal.startsWith("'") || !literal.endsWith("'")) {
     return undefined;
   }
-  return literal.slice(1, -1).replace(/\\(u[0-9a-fA-F]{4}|.)/g, (_, sequence: string) => {
-    if (sequence.startsWith('u') && sequence.length === 5) {
-      return String.fromCharCode(Number.parseInt(sequence.slice(1), 16));
-    }
-    return ESCAPES[sequence] ?? sequence;
-  });
+  return decodeEscapes(literal.slice(1, -1));
 }
-
-const ESCAPES: Readonly<Record<string, string>> = { f: '\f', n: '\n', r: '\r', t: '\t' };
 
 /** Whether every expected output can be paired with a different result item (Kuhn's algorithm). */
 function isPerfectMatching(

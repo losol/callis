@@ -21,6 +21,10 @@ describe('classifyTest', () => {
     ['$total', '$total (T0026)', 'T0026'],
     ['1L + 1', 'Long literal (T0028)', 'T0028'],
     ["%terminologies.expand('x')", '%terminologies (T0032)', 'T0032'],
+    // N1 §8.6 (https://hl7.org/fhirpath/N1/#identifiers): a delimited identifier is the same name.
+    ['(2 | 1).`sort`()', 'sort() (T0027)', 'T0027'],
+    ['(2 | 1).`\\u0073ort`()', 'sort() (T0027)', 'T0027'],
+    ["%`terminologies`.expand('x')", '%terminologies (T0032)', 'T0032'],
   ])('puts %s in STU', (expression, reason, task) => {
     expect(classifyTest(makeTest({ expression }))).toEqual({ phase: 'stu', reason, task });
   });
@@ -73,7 +77,8 @@ describe('classifyTest', () => {
 describe('findStuFeature', () => {
   it.each([
     "'sort(' + 'x'",
-    '`sort`(1)',
+    'Patient.`sort`',
+    '`sort me`(1)',
     '// sort()\n1',
     '/* split() */ 1',
     'Patient.ofType(Patient)',
