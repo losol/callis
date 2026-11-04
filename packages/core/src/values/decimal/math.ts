@@ -235,14 +235,25 @@ function toScientific(value: Decimal): ScaledNumber {
   };
 }
 
-/** Rounds a scaled result to 15 significant digits and applies its power of ten. */
+/**
+ * Rounds a scaled result to 15 significant digits and applies its power of ten, without trailing
+ * zeros after the decimal point.
+ */
 function fromScaledResult({ significand, exponent }: ScaledNumber): Decimal | undefined {
   const rounded = fromNumberResult(significand, true);
   if (rounded === undefined) {
     return undefined;
   }
-  const scale = rounded.scale - exponent;
-  return scale >= 0
-    ? Decimal.of(rounded.coefficient, scale)
-    : Decimal.of(rounded.coefficient * 10n ** BigInt(-scale), 0);
+  let coefficient = rounded.coefficient;
+  let scale = rounded.scale - exponent;
+  if (scale < 0) {
+    return Decimal.of(coefficient * 10n ** BigInt(-scale), 0);
+  }
+  // Rounding can carry the significand to 10 (9.999999999999999 → 10), whose zero would land
+  // after the decimal point once the power of ten is applied.
+  while (scale > 0 && coefficient % 10n === 0n) {
+    coefficient /= 10n;
+    scale -= 1;
+  }
+  return Decimal.of(coefficient, scale);
 }

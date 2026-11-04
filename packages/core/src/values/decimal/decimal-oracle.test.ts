@@ -240,6 +240,8 @@ function expectFifteenDigits(actual: Decimal | undefined, exact: DecimalJs): voi
     // exact.e is the exponent of the leading digit, so the 15th digit is worth 10^(e − 14).
     const unit = new Oracle(10).pow(exact.e - 14);
     expect(error.lte(unit.times(2))).toBe(true);
+    // Like division, the result has no trailing zeros after the decimal point.
+    expect(actual.scale === 0 || actual.coefficient % 10n !== 0n).toBe(true);
   }
 }
 

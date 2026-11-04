@@ -94,6 +94,13 @@ describe('ln', () => {
     expect(show(ln(Decimal.of(10n ** 30n - 1n, 30)))).toBe(Decimal.of(-1n, 30).toString());
   });
 
+  it('removes the trailing zero when rounding carries the significand to 10', () => {
+    // ln(1 + 9.999999999999999e-22): the 16 nines round up to 1e-21, not 1.0e-21.
+    expect(show(ln(Decimal.of(10n ** 37n + 9999999999999999n, 37)))).toBe(
+      Decimal.of(1n, 21).toString(),
+    );
+  });
+
   // Expected values checked with Python's decimal module at 450 digits, rounded to 15.
   it.each([
     ['1e-400', Decimal.of(1n, 400), '-921.034037197618'],
