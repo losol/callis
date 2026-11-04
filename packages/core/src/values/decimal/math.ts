@@ -4,7 +4,8 @@
  *
  * `power` with a whole exponent is computed exactly with `BigInt`. Everything else goes through
  * JavaScript numbers and `Math.*`, so the input is rounded to the nearest `number` first and the
- * result is rounded to 15 significant digits, the most a `number` reliably holds. Values beyond the
+ * result is rounded to 15 significant digits, the most a `number` reliably holds. (`ln` and `log`
+ * avoid that first rounding near 1, where it would cost most of the precision.) Values beyond the
  * `number` range lose their meaning on the way in.
  *
  * A result that cannot be represented gives `undefined` (empty): `NaN` (`(-1).sqrt()`), infinite
@@ -48,18 +49,18 @@ export function exp(value: Decimal): Decimal | undefined {
 }
 
 /**
- * The natural logarithm, through `Math.log`, rounded to 15 significant digits.
+ * The natural logarithm, rounded to 15 significant digits. Near 1 it keeps that precision too:
+ * `1.000001.ln()` is `0.000000999999500000333`.
  *
  * @returns the logarithm, or `undefined` (empty) for zero and negative input.
  * @see https://hl7.org/fhirpath/N1/#ln-decimal
  */
 export function ln(value: Decimal): Decimal | undefined {
-  return fromNumberResult(Math.log(value.toNumber()), true);
+  return fromNumberResult(naturalLogarithm(value), value.equals(Decimal.ONE));
 }
 
 /**
- * The logarithm to the given base, through `Math.log`, rounded to 15 significant digits:
- * `16.log(2)` is `4`.
+ * The logarithm to the given base, rounded to 15 significant digits: `16.log(2)` is `4`.
  *
  * @returns the logarithm, or `undefined` (empty) for non-positive input, a non-positive base, or
  *   base 1.
@@ -67,11 +68,26 @@ export function ln(value: Decimal): Decimal | undefined {
  */
 export function log(value: Decimal, base: Decimal): Decimal | undefined {
   // Checked separately because ln(0) is -Infinity, and x / -Infinity would wrongly give 0.
-  const baseLogarithm = Math.log(base.toNumber());
+  const baseLogarithm = naturalLogarithm(base);
   if (!Number.isFinite(baseLogarithm) || baseLogarithm === 0) {
     return undefined;
   }
-  return fromNumberResult(Math.log(value.toNumber()) / baseLogarithm, true);
+  return fromNumberResult(naturalLogarithm(value) / baseLogarithm, value.equals(Decimal.ONE));
+}
+
+/** Values closer to 1 than this use `Math.log1p` in {@link naturalLogarithm}. */
+const LOG1P_RANGE = Decimal.of(5n, 1);
+
+/**
+ * `ln(value)` as a number. Near 1, `Math.log` would first round the value to the nearest number,
+ * which loses most of the digits that matter (`1.0000000001` keeps about 6 correct digits). So
+ * there the difference `value − 1` is computed exactly and passed to `Math.log1p`.
+ */
+function naturalLogarithm(value: Decimal): number {
+  const difference = value.subtract(Decimal.ONE);
+  return difference.abs().compare(LOG1P_RANGE) < 0
+    ? Math.log1p(difference.toNumber())
+    : Math.log(value.toNumber());
 }
 
 /**
@@ -86,9 +102,14 @@ export function log(value: Decimal, base: Decimal): Decimal | undefined {
  *
  * A whole exponent may have a fractional part of zeros (`2.0`).
  *
+ * The exact power `|base|^|exponent|` is bounded: its coefficient and its scale may each have at
+ * most 10,000 digits, or the result is empty. For a negative exponent the bound applies to that
+ * denominator, so `2.power(-40000)` is empty although 28 digits of it would fit. The scale counts
+ * too, so `1.0.power(100000)` and `0.0.power(100000)` are empty: their exact scale is 100,000.
+ *
  * @returns the power, or `undefined` (empty) if it cannot be represented: a negative base with a
  *   fractional exponent (`(-1).power(0.5)`), a zero base with a negative exponent, or an exact
- *   result with more than 10,000 digits.
+ *   power beyond the bound above.
  * @see https://hl7.org/fhirpath/N1/#powerexponent-integer-decimal-integer-decimal
  * @see https://hl7.org/fhirpath/STU3/#powerexponent--integer--decimal--decimal
  */

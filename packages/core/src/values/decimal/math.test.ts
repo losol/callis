@@ -71,8 +71,25 @@ describe('ln', () => {
     expect(show(ln(d(text)))).toBe(expected);
   });
 
+  // Expected values checked with Python's decimal module at 60 digits, rounded to 15.
+  it.each([
+    ['1.000001', '0.000000999999500000333'],
+    ['1.0000000001', '0.000000000099999999995'],
+    ['1.00000000000000001', '0.00000000000000001'], // the nearest number to the input is 1
+    ['0.9999999', '-0.000000100000005'],
+    ['1.4', '0.336472236621213'],
+    ['0.75', '-0.287682072451781'],
+    ['0.5', '-0.693147180559945'],
+  ])('keeps 15 significant digits near 1: ln(%s) = %s', (text, expected) => {
+    expect(show(ln(d(text)))).toBe(expected);
+  });
+
   it.each([['0'], ['-1']])('ln(%s) is empty', (text) => {
     expect(ln(d(text))).toBeUndefined();
+  });
+
+  it('is empty when the result underflows to zero', () => {
+    expect(ln(Decimal.of(10n ** 400n + 1n, 400))).toBeUndefined();
   });
 });
 
@@ -86,6 +103,15 @@ describe('log', () => {
     ['1', '10', '0'],
     ['2', '4', '0.5'],
   ])('log(%s, %s) = %s', (value, base, expected) => {
+    expect(show(log(d(value), d(base)))).toBe(expected);
+  });
+
+  // Expected values checked with Python's decimal module at 60 digits, rounded to 15.
+  it.each([
+    ['7', '1.0000001', '19459102.4635082'],
+    ['2', '0.9999', '-6931.12522623266'],
+    ['1.000001', '10', '0.000000434294264756156'],
+  ])('keeps 15 significant digits near 1: log(%s, %s) = %s', (value, base, expected) => {
     expect(show(log(d(value), d(base)))).toBe(expected);
   });
 
@@ -168,6 +194,12 @@ describe('power', () => {
     expect(power(d('2'), Decimal.of(10n ** 400n))).toBeUndefined();
     expect(power(d('0.1'), d('10001'))).toBeUndefined();
     expect(power(d('2'), d('-100000'))).toBeUndefined();
+    // For a negative exponent the bound applies to the denominator 2^40000 (12,042 digits).
+    expect(power(d('2'), d('-30000'))?.toString()).toMatch(/^0\.0{9030}1/);
+    expect(power(d('2'), d('-40000'))).toBeUndefined();
+    // The scale is bounded too, even when the value is 0 or 1.
+    expect(power(d('1.0'), d('100000'))).toBeUndefined();
+    expect(power(d('0.0'), d('100000'))).toBeUndefined();
   });
 
   it('keeps 0, 1 and -1 exact for any whole exponent', () => {

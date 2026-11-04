@@ -95,6 +95,10 @@ export class Decimal {
    * Converts an Integer to a Decimal with scale 0: the implicit `Integer → Decimal` conversion
    * ([N1 §5.5](https://hl7.org/fhirpath/N1/#conversion)).
    *
+   * It does not check the 32-bit Integer range, which Integer values already respect. Any other
+   * whole `number` converts exactly to the value it holds (`2 ** 53` gives `9007199254740992`).
+   * Long values are `bigint`s; use {@link Decimal.of} for them.
+   *
    * @throws FhirPathEvaluationError `eval/invalid-argument` if `value` is not an integer.
    */
   static fromInteger(value: number): Decimal {
