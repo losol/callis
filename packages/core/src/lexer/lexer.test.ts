@@ -376,6 +376,12 @@ describe('tokenize', () => {
       expect(lex("'\ud83d\\uDE00'")).toEqual([['String', '😀']]);
     });
 
+    // A regression test for a quadratic slowdown: with one pass, this takes milliseconds.
+    it('decodes a string with many escapes in one pass', () => {
+      const expression = `'${'a\\n'.repeat(500_000)}'`;
+      expect(tokenize(expression)[0]?.value).toBe('a\n'.repeat(500_000));
+    });
+
     // N1 says the backslash of an unknown sequence is ignored, but the suite rejects `'\u+041'`
     // (testLiteralUnicodeInvalid), so Callis rejects them all. See docs/spec-notes.md.
     it.each([

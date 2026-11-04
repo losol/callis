@@ -264,6 +264,9 @@ class Lexer {
     const source = this.#source;
     const quote = source.charCodeAt(start);
     let value = '';
+    // The last decoded code unit, for the surrogate checks. It is tracked here because reading it
+    // back from `value` would flatten the growing string on every escape, which is quadratic.
+    let previous = Number.NaN;
     let chunkStart = start + 1;
     let pos = chunkStart;
     while (pos < source.length) {
@@ -273,9 +276,14 @@ class Lexer {
         return value + source.slice(chunkStart, pos);
       }
       if (code === char.backslash && pos + 1 < source.length) {
-        value += source.slice(chunkStart, pos);
+        if (pos > chunkStart) {
+          value += source.slice(chunkStart, pos);
+          previous = source.charCodeAt(pos - 1);
+        }
         this.#pos = pos;
-        value += this.#escape(value.charCodeAt(value.length - 1));
+        const decoded = this.#escape(previous);
+        value += decoded;
+        previous = decoded.charCodeAt(decoded.length - 1);
         pos = this.#pos;
         chunkStart = pos;
       } else {
