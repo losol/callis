@@ -1,0 +1,3 @@
+# Vendored HL7 test-suite files are kept byte for byte as upstream ships them (some use CRLF);
+# fixtures/source.json records their checksums.
+tools/conformance/fixtures/** -text
