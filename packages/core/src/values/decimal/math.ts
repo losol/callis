@@ -30,6 +30,24 @@ const MAX_EXACT_POWER_DIGITS = 10_000;
 /** The smallest coefficient with more than `MAX_EXACT_POWER_DIGITS` digits. */
 const EXACT_POWER_LIMIT = 10n ** BigInt(MAX_EXACT_POWER_DIGITS);
 
+/** `significand × 10^exponent`, for numbers whose power of ten does not fit in a `number`. */
+interface ScaledNumber {
+  readonly significand: number;
+  readonly exponent: number;
+}
+
+/** Values closer to 1 than this use `Math.log1p` in {@link naturalLogarithm}. */
+const LOG1P_RANGE = Decimal.of(5n, 1);
+
+/**
+ * Powers of ten that a normal `number` holds with full precision, with room to spare (normal
+ * numbers reach from about 2.2e-308 to 1.8e308).
+ */
+const NUMBER_EXPONENT_RANGE = 300;
+
+/** Below this distance from 1, `ln(1 + d)` is `d` to far more than 15 significant digits. */
+const LINEAR_RANGE = Decimal.of(1n, 20);
+
 /**
  * The square root, through `Math.sqrt`, rounded to 15 significant digits: `81.sqrt()` is `9`.
  *
@@ -80,76 +98,6 @@ export function log(value: Decimal, base: Decimal): Decimal | undefined {
     significand: logarithm.significand / baseLogarithm.significand,
     exponent: logarithm.exponent - baseLogarithm.exponent,
   });
-}
-
-/** `significand × 10^exponent`, for numbers whose power of ten does not fit in a `number`. */
-interface ScaledNumber {
-  readonly significand: number;
-  readonly exponent: number;
-}
-
-/** Values closer to 1 than this use `Math.log1p` in {@link naturalLogarithm}. */
-const LOG1P_RANGE = Decimal.of(5n, 1);
-
-/**
- * Powers of ten that a normal `number` holds with full precision, with room to spare (normal
- * numbers reach from about 2.2e-308 to 1.8e308).
- */
-const NUMBER_EXPONENT_RANGE = 300;
-
-/** Below this distance from 1, `ln(1 + d)` is `d` to far more than 15 significant digits. */
-const LINEAR_RANGE = Decimal.of(1n, 20);
-
-/**
- * `ln(value)`, without first rounding `value` to a `number`, which would lose most of the digits
- * near 1 (`1.0000000001` keeps about 6) and everything beyond the `number` range:
- *
- * - Within 1e-20 of 1, `ln(1 + d) = d − d²/2 + …` is `d`, kept exactly with its power of ten.
- * - Within 0.5 of 1, the exact difference `d = value − 1` goes to `Math.log1p`.
- * - Elsewhere, `value = m × 10^k` with `1 ≤ m < 10`, and `ln(value) = ln(m) + k × ln(10)`.
- *
- * @returns the logarithm, or `undefined` for zero and negative input.
- */
-function naturalLogarithm(value: Decimal): ScaledNumber | undefined {
-  if (value.sign() <= 0) {
-    return undefined;
-  }
-  const difference = value.subtract(Decimal.ONE);
-  const distance = difference.abs();
-  if (distance.compare(LOG1P_RANGE) >= 0) {
-    const { significand, exponent } = toScientific(value);
-    // Inside the number range Math.log is more precise: ln(m) + k × ln(10) cancels partly for
-    // small k (ln(0.5) = ln(5) − ln(10)). Outside it, k × ln(10) dominates and nothing cancels.
-    return Math.abs(exponent) <= NUMBER_EXPONENT_RANGE
-      ? { significand: Math.log(value.toNumber()), exponent: 0 }
-      : { significand: Math.log(significand) + exponent * Math.LN10, exponent: 0 };
-  }
-  if (distance.compare(LINEAR_RANGE) >= 0) {
-    return { significand: Math.log1p(difference.toNumber()), exponent: 0 };
-  }
-  return difference.sign() === 0 ? { significand: 0, exponent: 0 } : toScientific(difference);
-}
-
-/** A non-zero value as `m × 10^k` with `1 ≤ |m| < 10`; `m` is rounded to the nearest number. */
-function toScientific(value: Decimal): ScaledNumber {
-  const digits = (value.coefficient < 0n ? -value.coefficient : value.coefficient).toString()
-    .length;
-  return {
-    significand: Decimal.of(value.coefficient, digits - 1).toNumber(),
-    exponent: digits - 1 - value.scale,
-  };
-}
-
-/** Rounds a scaled result to 15 significant digits and applies its power of ten. */
-function fromScaledResult({ significand, exponent }: ScaledNumber): Decimal | undefined {
-  const rounded = fromNumberResult(significand, true);
-  if (rounded === undefined) {
-    return undefined;
-  }
-  const scale = rounded.scale - exponent;
-  return scale >= 0
-    ? Decimal.of(rounded.coefficient, scale)
-    : Decimal.of(rounded.coefficient * 10n ** BigInt(-scale), 0);
 }
 
 /**
@@ -245,4 +193,56 @@ function fromNumberResult(result: number, zeroIsExact: boolean): Decimal | undef
   // A decimal with at most 15 significant digits survives the trip through a number unchanged,
   // and the shortest round-trip string drops the trailing zeros that toPrecision() adds.
   return Decimal.fromNumber(Number(result.toPrecision(NUMBER_SIGNIFICANT_DIGITS)));
+}
+
+/**
+ * `ln(value)`, without first rounding `value` to a `number`, which would lose most of the digits
+ * near 1 (`1.0000000001` keeps about 6) and everything beyond the `number` range:
+ *
+ * - Within 1e-20 of 1, `ln(1 + d) = d − d²/2 + …` is `d`, kept exactly with its power of ten.
+ * - Within 0.5 of 1, the exact difference `d = value − 1` goes to `Math.log1p`.
+ * - Elsewhere, `value = m × 10^k` with `1 ≤ m < 10`, and `ln(value) = ln(m) + k × ln(10)`.
+ *
+ * @returns the logarithm, or `undefined` for zero and negative input.
+ */
+function naturalLogarithm(value: Decimal): ScaledNumber | undefined {
+  if (value.sign() <= 0) {
+    return undefined;
+  }
+  const difference = value.subtract(Decimal.ONE);
+  const distance = difference.abs();
+  if (distance.compare(LOG1P_RANGE) >= 0) {
+    const { significand, exponent } = toScientific(value);
+    // Inside the number range Math.log is more precise: ln(m) + k × ln(10) cancels partly for
+    // small k (ln(0.5) = ln(5) − ln(10)). Outside it, k × ln(10) dominates and nothing cancels.
+    return Math.abs(exponent) <= NUMBER_EXPONENT_RANGE
+      ? { significand: Math.log(value.toNumber()), exponent: 0 }
+      : { significand: Math.log(significand) + exponent * Math.LN10, exponent: 0 };
+  }
+  if (distance.compare(LINEAR_RANGE) >= 0) {
+    return { significand: Math.log1p(difference.toNumber()), exponent: 0 };
+  }
+  return difference.sign() === 0 ? { significand: 0, exponent: 0 } : toScientific(difference);
+}
+
+/** A non-zero value as `m × 10^k` with `1 ≤ |m| < 10`; `m` is rounded to the nearest number. */
+function toScientific(value: Decimal): ScaledNumber {
+  const digits = (value.coefficient < 0n ? -value.coefficient : value.coefficient).toString()
+    .length;
+  return {
+    significand: Decimal.of(value.coefficient, digits - 1).toNumber(),
+    exponent: digits - 1 - value.scale,
+  };
+}
+
+/** Rounds a scaled result to 15 significant digits and applies its power of ten. */
+function fromScaledResult({ significand, exponent }: ScaledNumber): Decimal | undefined {
+  const rounded = fromNumberResult(significand, true);
+  if (rounded === undefined) {
+    return undefined;
+  }
+  const scale = rounded.scale - exponent;
+  return scale >= 0
+    ? Decimal.of(rounded.coefficient, scale)
+    : Decimal.of(rounded.coefficient * 10n ** BigInt(-scale), 0);
 }

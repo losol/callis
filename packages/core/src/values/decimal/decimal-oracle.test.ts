@@ -229,12 +229,17 @@ const positiveDecimals: fc.Arbitrary<Decimal> = fc.oneof(
     .map(([coefficient, scale]) => Decimal.ONE.add(Decimal.of(coefficient, scale))),
 );
 
-/** The result is within one unit of its 15th significant digit of the exact value. */
+/**
+ * The result is within 2 units of the 15th significant digit of the exact value. Rounding to 15
+ * digits alone accounts for half a unit; the rest is the error of `Math.*`.
+ */
 function expectFifteenDigits(actual: Decimal | undefined, exact: DecimalJs): void {
   expect(actual).toBeDefined();
   if (actual !== undefined) {
     const error = toOracle(actual).minus(exact).abs();
-    expect(error.lte(exact.abs().times('1e-14'))).toBe(true);
+    // exact.e is the exponent of the leading digit, so the 15th digit is worth 10^(e − 14).
+    const unit = new Oracle(10).pow(exact.e - 14);
+    expect(error.lte(unit.times(2))).toBe(true);
   }
 }
 
