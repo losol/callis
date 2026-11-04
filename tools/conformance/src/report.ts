@@ -1,6 +1,7 @@
 /**
  * Renders the conformance reports: the Markdown reports in `docs/conformance/`, the JSON summary
- * and the CI job summary. Output is deterministic (no dates), so committed reports can be checked.
+ * (a CI artifact) and the CI job summary. Output is deterministic (no dates), so committed reports
+ * can be compared with a fresh run.
  */
 import type { RatchetMode, RatchetResult } from './baseline.ts';
 import { formatRefs } from './baseline.ts';
@@ -102,7 +103,7 @@ export function renderSuiteReport(
   return `${lines.join('\n').trimEnd()}\n`;
 }
 
-/** The JSON summary of all suites, for `docs/conformance/summary.json`. */
+/** The JSON summary of all suites, for the CI artifact (`--summary <file>`). */
 export function renderJsonSummary(
   summaries: readonly SuiteSummary[],
   context: ReportContext,
@@ -159,8 +160,9 @@ export function renderJobSummary(
 }
 
 /**
- * Human-readable lines about the ratchet and stale reports. Things the run has not recorded yet
- * fail only in `check` mode, so they are marked ❌ there and ℹ️ otherwise.
+ * Human-readable lines about the ratchet and stale reports. Baseline changes the run has not
+ * recorded yet fail only in `check` mode, so they are marked ❌ there and ℹ️ otherwise. Stale
+ * reports never fail a run and are marked ⚠️.
  */
 export function ratchetMessages(
   ratchet: RatchetResult,
@@ -194,7 +196,7 @@ export function ratchetMessages(
   }
   for (const report of staleReports) {
     messages.push(
-      `${mark} \`${report}\` is out of date. Run \`pnpm conformance\` and commit the result.`,
+      `⚠️ \`${report}\` is out of date. Run \`pnpm conformance\` and commit the result.`,
     );
   }
   return messages;

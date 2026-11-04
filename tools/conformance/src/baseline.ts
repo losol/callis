@@ -94,24 +94,18 @@ export function checkRatchet(baseline: Baseline, runs: readonly SuiteRun[]): Rat
 }
 
 /**
- * Whether a run fails. A regression always fails. In `check` mode (CI) the baseline and the reports
- * must also be up to date: tests that left the baseline or newly pass must be recorded, and the
- * committed reports must match the run. In `update` mode those are recorded instead.
+ * Whether a run fails. A regression always fails. In `check` mode (CI) the baseline must also be up
+ * to date: tests that left it or newly pass must be recorded in the PR that changes them. In `update`
+ * mode they are recorded instead. Out-of-date reports never fail a run; `check` mode only warns
+ * about them (owner decision on #65), so parallel PRs do not have to serialize on the report files.
  */
-export function ratchetFails(
-  mode: RatchetMode,
-  ratchet: RatchetResult,
-  staleReports: readonly string[],
-): boolean {
+export function ratchetFails(mode: RatchetMode, ratchet: RatchetResult): boolean {
   if (ratchet.regressions.length > 0) {
     return true;
   }
   return (
     mode === 'check' &&
-    (ratchet.vanished.length > 0 ||
-      ratchet.excluded.length > 0 ||
-      ratchet.newPasses.length > 0 ||
-      staleReports.length > 0)
+    (ratchet.vanished.length > 0 || ratchet.excluded.length > 0 || ratchet.newPasses.length > 0)
   );
 }
 

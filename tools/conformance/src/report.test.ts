@@ -171,7 +171,8 @@ describe('renderJobSummary', () => {
     );
     expect(markdown).toContain('| R5 | Phase 1 | 3 | 1 | 1 | 1 |');
     expect(markdown).toContain('❌ 1 test(s) in the baseline no longer pass: r5/testX.');
-    expect(markdown).toContain('❌ `docs/conformance/r5.md` is out of date.');
+    // Owner decision on #65: stale reports only warn.
+    expect(markdown).toContain('⚠️ `docs/conformance/r5.md` is out of date.');
   });
 });
 

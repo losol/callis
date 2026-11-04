@@ -12,8 +12,7 @@
       "!**/coverage",
       "!**/*.md",
       "!tools/conformance/fixtures",
-      "!tools/conformance/baseline.json",
-      "!docs/conformance"
+      "!tools/conformance/baseline.json"
     ]
   },
   "formatter": {

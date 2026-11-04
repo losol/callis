@@ -87,13 +87,12 @@ describe('updateBaseline', () => {
 describe('ratchetFails', () => {
   const ref = [{ suite: 'r5' as const, id: 't' }];
   const clean: RatchetResult = { regressions: [], newPasses: [], vanished: [], excluded: [] };
-  const cases: readonly (readonly [string, RatchetResult, readonly string[]])[] = [
-    ['nothing to record', clean, []],
-    ['a regression', { ...clean, regressions: ref }, []],
-    ['a test that left the suite', { ...clean, vanished: ref }, []],
-    ['a test that is now excluded', { ...clean, excluded: ref }, []],
-    ['an unrecorded pass', { ...clean, newPasses: ref }, []],
-    ['a stale report', clean, ['docs/conformance/r5.md']],
+  const cases: readonly (readonly [string, RatchetResult])[] = [
+    ['nothing to record', clean],
+    ['a regression', { ...clean, regressions: ref }],
+    ['a test that left the suite', { ...clean, vanished: ref }],
+    ['a test that is now excluded', { ...clean, excluded: ref }],
+    ['an unrecorded pass', { ...clean, newPasses: ref }],
   ];
   // Expected exit status per mode: [report, update, check].
   const expected: Readonly<Record<string, readonly [boolean, boolean, boolean]>> = {
@@ -102,12 +101,11 @@ describe('ratchetFails', () => {
     'a test that left the suite': [false, false, true],
     'a test that is now excluded': [false, false, true],
     'an unrecorded pass': [false, false, true],
-    'a stale report': [false, false, true],
   };
   const modes: readonly RatchetMode[] = ['report', 'update', 'check'];
 
-  it.each(cases)('with %s', (name, ratchet, stale) => {
-    expect(modes.map((mode) => ratchetFails(mode, ratchet, stale))).toEqual(expected[name]);
+  it.each(cases)('with %s', (name, ratchet) => {
+    expect(modes.map((mode) => ratchetFails(mode, ratchet))).toEqual(expected[name]);
   });
 });
 
