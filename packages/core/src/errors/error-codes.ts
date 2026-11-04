@@ -28,7 +28,9 @@ export type EvaluationErrorCode =
   | 'eval/invalid-literal'
   | 'eval/async-in-sync'
   | 'eval/aborted'
-  | 'eval/limit-exceeded';
+  | 'eval/limit-exceeded'
+  | 'eval/datetime-out-of-range'
+  | 'eval/invalid-calendar-unit';
 
 /** Every stable error code. */
 export type ErrorCode = SyntaxErrorCode | SemanticErrorCode | EvaluationErrorCode;

@@ -201,7 +201,8 @@ packages/core/src/
 ├── types/                 system-types.ts, type-specifier.ts, conversions.ts, type-test.ts (is/as/ofType)
 ├── values/
 │   ├── decimal/           decimal.ts, math.ts
-│   ├── datetime/          date.ts, datetime.ts, time.ts, parse.ts, compare.ts, arithmetic.ts
+│   ├── datetime/          date.ts, datetime.ts, time.ts, parse.ts, compare.ts, arithmetic.ts, now.ts,
+│   │                      calendar.ts, format.ts, precision.ts, temporal-value.ts
 │   ├── quantity/          quantity.ts, calendar-units.ts, unit-system.ts (interface + minimal implementation)
 │   └── string.ts          equivalence normalization and helpers
 ├── model/                 model-provider.ts, model-node.ts, json-navigation.ts, primitive-extensions.ts, lossless-json.ts
