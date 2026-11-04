@@ -24,6 +24,9 @@ const NUMBER_SIGNIFICANT_DIGITS = 15;
  */
 const MAX_EXACT_POWER_DIGITS = 10_000;
 
+/** The smallest coefficient with more than `MAX_EXACT_POWER_DIGITS` digits. */
+const EXACT_POWER_LIMIT = 10n ** BigInt(MAX_EXACT_POWER_DIGITS);
+
 /**
  * The square root, through `Math.sqrt`, rounded to 15 significant digits: `81.sqrt()` is `9`.
  *
@@ -112,9 +115,12 @@ function exactPower(base: Decimal, count: bigint): Decimal | undefined {
   // `times` may be Infinity for an absurd exponent; the size checks below then reject it.
   const times = Number(count);
   const magnitude = base.coefficient < 0n ? -base.coefficient : base.coefficient;
-  const digits = magnitude <= 1n ? 1 : times * log10(magnitude);
   const scale = base.scale === 0 ? 0 : base.scale * times;
-  if (digits > MAX_EXACT_POWER_DIGITS || scale > MAX_EXACT_POWER_DIGITS) {
+  // A cheap preflight on log10 of the result, so a huge power is never computed. A result just
+  // above the limit can pass it (log10 is one less than the digit count), so the exact check
+  // below decides.
+  const estimatedLog10 = magnitude <= 1n ? 0 : times * log10(magnitude);
+  if (estimatedLog10 > MAX_EXACT_POWER_DIGITS || scale > MAX_EXACT_POWER_DIGITS) {
     return undefined;
   }
   if (magnitude <= 1n) {
@@ -122,7 +128,11 @@ function exactPower(base: Decimal, count: bigint): Decimal | undefined {
     const negative = base.coefficient < 0n && count % 2n === 1n;
     return Decimal.of(negative ? -magnitude : magnitude, scale);
   }
-  return Decimal.of(base.coefficient ** count, scale);
+  const coefficient = base.coefficient ** count;
+  if (coefficient >= EXACT_POWER_LIMIT || -coefficient >= EXACT_POWER_LIMIT) {
+    return undefined;
+  }
+  return Decimal.of(coefficient, scale);
 }
 
 /** An estimate of `log10(value)` for a positive `value` of any size. */

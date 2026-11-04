@@ -156,6 +156,11 @@ describe('power', () => {
 
   it('is empty when an exact result would have more than 10,000 digits', () => {
     expect(power(d('10'), d('9999'))?.toString()).toHaveLength(10_000);
+    expect(power(d('-10'), d('9999'))?.toString()).toHaveLength(10_001); // with the sign
+    // 10^10000 has 10,001 digits, although its log10 is exactly 10,000.
+    expect(power(d('10'), d('10000'))).toBeUndefined();
+    expect(power(Decimal.of(10n ** 10_000n), d('1'))).toBeUndefined();
+    expect(power(Decimal.of(-(10n ** 10_000n)), d('1'))).toBeUndefined();
     expect(power(d('10'), d('10001'))).toBeUndefined();
     expect(power(d('2'), Decimal.of(10n ** 400n))).toBeUndefined();
     expect(power(d('0.1'), d('10001'))).toBeUndefined();
