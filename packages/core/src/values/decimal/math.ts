@@ -20,8 +20,9 @@ import { Decimal } from './decimal.ts';
 const NUMBER_SIGNIFICANT_DIGITS = 15;
 
 /**
- * Exact powers with more digits than this are treated as overflow (empty). The spec asks for at
- * least 28 digits; this bound keeps `BigInt` work small (well under a millisecond).
+ * An exact power whose coefficient has more digits than this, or whose scale is larger than this,
+ * is treated as overflow (empty). The spec asks for at least 28 digits; this bound keeps `BigInt`
+ * work small (well under a millisecond).
  */
 const MAX_EXACT_POWER_DIGITS = 10_000;
 
@@ -102,10 +103,11 @@ function naturalLogarithm(value: Decimal): number {
  *
  * A whole exponent may have a fractional part of zeros (`2.0`).
  *
- * The exact power `|base|^|exponent|` is bounded: its coefficient and its scale may each have at
- * most 10,000 digits, or the result is empty. For a negative exponent the bound applies to that
- * denominator, so `2.power(-40000)` is empty although 28 digits of it would fit. The scale counts
- * too, so `1.0.power(100000)` and `0.0.power(100000)` are empty: their exact scale is 100,000.
+ * The exact power `|base|^|exponent|` is bounded in two ways, or the result is empty: its
+ * coefficient may have at most 10,000 digits, and its scale (the digits after the decimal point)
+ * may be at most 10,000. For a negative exponent the bounds apply to that denominator, so
+ * `2.power(-40000)` is empty although 28 digits of it would fit. The scale bound alone makes
+ * `0.1.power(10001)`, `1.0.power(100000)` and `0.0.power(100000)` empty.
  *
  * @returns the power, or `undefined` (empty) if it cannot be represented: a negative base with a
  *   fractional exponent (`(-1).power(0.5)`), a zero base with a negative exponent, or an exact
