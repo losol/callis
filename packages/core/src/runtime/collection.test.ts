@@ -77,6 +77,12 @@ describe('appendAll', () => {
     expect(target).toEqual(['a', 'b', 'c']);
   });
 
+  it('appends a collection to itself once', () => {
+    const items: Item[] = [1, 2];
+    appendAll(items, items);
+    expect(items).toEqual([1, 2, 1, 2]);
+  });
+
   it('handles collections too large to spread into push()', () => {
     const source: Collection = new Array<number>(200_000).fill(1);
     const target: Item[] = [];

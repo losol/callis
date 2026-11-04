@@ -79,9 +79,15 @@ export function concat(left: Collection, right: Collection): Collection {
 /**
  * Appends every item of `source` to `target`, a collection being built. Unlike
  * `target.push(...source)` it works for collections of any size.
+ *
+ * `source` may be `target` itself: its length is read once, so its items are appended once.
  */
 export function appendAll(target: Item[], source: Collection): void {
-  for (const item of source) {
-    target.push(item);
+  const count = source.length;
+  for (let index = 0; index < count; index++) {
+    const item = source[index];
+    if (item !== undefined) {
+      target.push(item);
+    }
   }
 }
