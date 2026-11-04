@@ -142,7 +142,7 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
 const NAMESPACE = 'FHIR';
 
 const types = new Map<string, ModelTypeInfo>();
-const systemTypes = new Map<ModelTypeInfo, Exclude<SystemTypeName, 'Any'>>();
+const systemTypes = new Map<string, Exclude<SystemTypeName, 'Any'>>();
 for (const [name, definition] of DEFINITIONS) {
   const type: ModelTypeInfo = Object.freeze({
     namespace: NAMESPACE,
@@ -153,17 +153,17 @@ for (const [name, definition] of DEFINITIONS) {
   });
   types.set(name, type);
   if (definition.systemType !== undefined) {
-    systemTypes.set(type, definition.systemType);
+    systemTypes.set(name, definition.systemType);
   }
 }
 
-/** All elements of each type, inherited ones first, as a snapshot lists them. */
-const elementLists = new Map<ModelTypeInfo, readonly ElementInfo[]>();
-const elementMaps = new Map<ModelTypeInfo, ReadonlyMap<string, ElementInfo>>();
+/** All elements of each type by type name, inherited ones first, as a snapshot lists them. */
+const elementLists = new Map<string, readonly ElementInfo[]>();
+const elementMaps = new Map<string, ReadonlyMap<string, ElementInfo>>();
 for (const type of types.values()) {
   const all = Object.freeze(collectElements(type));
-  elementLists.set(type, all);
-  elementMaps.set(type, new Map(all.map((info) => [info.name, info])));
+  elementLists.set(type.name, all);
+  elementMaps.set(type.name, new Map(all.map((info) => [info.name, info])));
 }
 
 function lookUp(name: string): ModelTypeInfo {
@@ -174,14 +174,17 @@ function lookUp(name: string): ModelTypeInfo {
   return type;
 }
 
-function collectElements(type: ModelTypeInfo): readonly ElementInfo[] {
+function collectElements(type: ModelTypeInfo): ElementInfo[] {
   const definition = DEFINITIONS.find(([name]) => name === type.name)?.[1];
   const base = type.baseName === undefined ? undefined : lookUp(type.baseName);
   const inherited = base === undefined ? [] : collectElements(base);
   return [...inherited, ...(definition?.elements ?? [])];
 }
 
-/** A FHIR-like {@link ModelProvider} for tests. */
+/**
+ * A FHIR-like {@link ModelProvider} for tests. Like a real provider, it identifies a type passed
+ * to its methods by name, so copies of type objects work.
+ */
 export const stubModel: ModelProvider = Object.freeze({
   namespace: NAMESPACE,
   version: '0.0.0-stub',
@@ -197,22 +200,22 @@ export const stubModel: ModelProvider = Object.freeze({
     return type?.kind === 'resource' ? type : undefined;
   },
   getElement(type: ModelTypeInfo, name: string): ElementInfo | undefined {
-    return elementMaps.get(type)?.get(name);
+    return elementMaps.get(type.name)?.get(name);
   },
   getElements(type: ModelTypeInfo): readonly ElementInfo[] {
-    return elementLists.get(type) ?? [];
+    return elementLists.get(type.name) ?? [];
   },
   isSubtypeOf(type: ModelTypeInfo, ancestor: ModelTypeInfo): boolean {
-    for (let current: ModelTypeInfo | undefined = type; current !== undefined; ) {
-      if (current === ancestor) {
+    for (let name: string | undefined = type.name; name !== undefined; ) {
+      if (name === ancestor.name) {
         return true;
       }
-      current = current.baseName === undefined ? undefined : types.get(current.baseName);
+      name = types.get(name)?.baseName;
     }
     return false;
   },
   getSystemType(type: ModelTypeInfo): Exclude<SystemTypeName, 'Any'> | undefined {
-    return systemTypes.get(type);
+    return systemTypes.get(type.name);
   },
 });
 

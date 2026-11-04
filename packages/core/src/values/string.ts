@@ -3,15 +3,14 @@
  * String (`string`), Integer (`number`) and Boolean (`boolean`).
  *
  * The kernels take two values of the same type; dispatch over types, implicit conversions and
- * empty operands belong to the runtime (T0009).
+ * empty operands belong to the runtime (T0009). Ordering kernels return `-1`, `0` or `1`, as in
+ * `Array.prototype.sort`; the shared name for that type belongs to `runtime/comparison.ts`
+ * (T0009), because value modules cannot import each other.
  *
  * @see https://hl7.org/fhirpath/N1/#equals
  * @see https://hl7.org/fhirpath/N1/#equivalent
  * @see https://hl7.org/fhirpath/N1/#comparison
  */
-
-/** The result of an ordering comparison: negative, zero or positive as in `Array.prototype.sort`. */
-export type Ordering = -1 | 0 | 1;
 
 /** Every character in the Unicode `White_Space` property, which includes FHIRPath's whitespace. */
 const WHITE_SPACE = /\p{White_Space}/gu;
@@ -63,7 +62,7 @@ export function stringEquivalent(left: string, right: string): boolean {
  * JavaScript's `<` compares UTF-16 code units instead, which puts characters above U+FFFF
  * (stored as surrogate pairs) before U+E000–U+FFFF. This function corrects for that.
  */
-export function compareStrings(left: string, right: string): Ordering {
+export function compareStrings(left: string, right: string): -1 | 0 | 1 {
   if (left === right) {
     return 0;
   }
@@ -113,7 +112,7 @@ export function integerEquivalent(left: number, right: number): boolean {
  *
  * @see https://hl7.org/fhirpath/N1/#comparison
  */
-export function compareIntegers(left: number, right: number): Ordering {
+export function compareIntegers(left: number, right: number): -1 | 0 | 1 {
   if (left === right) {
     return 0;
   }

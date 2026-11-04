@@ -27,8 +27,9 @@ export type ModelTypeKind = 'primitive' | 'complex' | 'resource' | 'backbone';
  * A type defined by a model.
  *
  * Model data is immutable and shared across evaluations. A provider should return the same object
- * for the same type every time, so types can be compared by identity; the engine also accepts two
- * objects with the same namespace and name as the same type.
+ * for the same type every time, so the common case compares by identity. A type is identified by
+ * its namespace and name, though: provider methods accept a copy as the same type (see
+ * {@link ModelProvider}), and so does the engine.
  */
 export interface ModelTypeInfo {
   /** The model namespace, such as `FHIR`. Always the provider's {@link ModelProvider.namespace}. */
@@ -113,7 +114,9 @@ export function choiceJsonName(name: string, typeName: string): string {
  * - **immutable and shareable**: one provider is used by many concurrent evaluations;
  * - **prototype-safe**: names come from expressions and input data, so a lookup of
  *   `constructor`, `__proto__` or `toString` returns undefined unless the model really defines
- *   it. Use `Map`, objects created with `Object.create(null)`, or `Object.hasOwn`.
+ *   it. Use `Map`, objects created with `Object.create(null)`, or `Object.hasOwn`;
+ * - **keyed by name**: methods that take a {@link ModelTypeInfo} identify it by its `name`, so a
+ *   copy (`{ ...type }`) gives the same answers as the object the provider returned.
  *
  * `namespace`, `getType`, `isSubtypeOf` and `getSystemType` are also what the type system uses
  * to resolve type specifiers and to run `is`, `as` and `ofType()`.
