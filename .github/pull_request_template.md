@@ -16,7 +16,7 @@ Task: TXXXX
 
 ## Testing
 
-<!-- What you added and ran. Once the conformance runner exists: passing tests before → after. -->
+<!-- What you added and ran. If evaluation behaviour changed: passing conformance tests per phase before → after (`pnpm conformance`). -->
 
 ## Follow-ups
 

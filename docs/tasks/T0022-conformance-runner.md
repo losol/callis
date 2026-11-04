@@ -20,7 +20,7 @@ Run the official HL7 FHIRPath test suite and report the results ([design notes](
 - Typed comparison of expected outputs (`boolean`, `integer`, `decimal`, `string`, `date`, `dateTime`, `time`, `code`, `id`, `Quantity`).
 - Support for `invalid`, `predicate`, `ordered`, `context`/`contextType`, `mode` and `version`.
 - Classification of each test as *phase 1*, *STU* or *unsupported*.
-- An **injectable evaluator**: the runner calls a small adapter interface, such as `{ evaluate(input, expression, options): unknown[] }` plus an error-class mapping, rather than importing `@callis/core` directly. A stub adapter in the runner is used until an engine exists. It answers "not implemented", so every test is reported as failing or skipped, not crashed.
+- An **injectable evaluator**: the runner calls a small adapter interface ([adapter interface](#adapter-interface)) rather than importing `@callis/core` directly. A stub adapter in the runner is used until an engine exists. It answers "not implemented", so every test is reported as failing or skipped, not crashed.
   - T0008 wires the adapter to the engine's internal `compile()`/`evaluate()`.
   - T0025 switches it to the public API.
 - A runner CLI and a Vitest project (`pnpm test:conformance`).
@@ -44,6 +44,30 @@ Run the official HL7 FHIRPath test suite and report the results ([design notes](
 - **Outputs:** committed reports `docs/conformance/r4.md` and `r5.md`, a JSON summary, and a CI job summary.
 - **Ratchet:** `tools/conformance/baseline.json` lists the passing tests. CI fails if a test that used to pass now fails. A PR that makes more tests pass updates the baseline.
 - It also runs as a Vitest project (`pnpm test:conformance`) to get per-test diffs.
+
+### Adapter interface
+
+Defined in `tools/conformance/src/adapter.ts` and documented in [`tools/conformance/README.md`](../../tools/conformance/README.md#plugging-in-an-evaluator). `tools/conformance/src/engine-adapter.ts` chooses the adapter; it is the only file T0008 and T0025 change to plug in the engine.
+
+```ts
+interface EvaluatorAdapter {
+  readonly name: string;
+  parseInput?(text: string): unknown;   // default JSON.parse; T0018's lossless parser goes here
+  evaluate(input: unknown, expression: string, options: EvaluationOptions): readonly unknown[] | PromiseLike<readonly unknown[]>;
+  describeValue(value: unknown): ResultItem;       // { type: 'System.Decimal', value: '1.50' }, …
+  classifyError(error: unknown): ClassifiedError;  // syntax | semantic | execution | not-implemented | other
+}
+```
+
+`EvaluationOptions` carries what the test asks for: the FHIR version, `context` and `contextType`, the raw `mode`, and `strict`, `lenientChoiceSuffix`, `checkOrderedFunctions` and `skipStaticCheck` derived from it. `describeValue` keeps the typed comparison independent of the engine's value classes.
+
+### Decisions made while building the runner
+
+- **Converted inputs:** an XML input `name.xml` is read from `name.json` in the same fixture folder. T0023 writes those files; until then the tests are skipped as "fixture not converted".
+- **Classification** is per test, not per group: a test that calls an STU function is STU even in a phase-1 group (for example `testPeriodInvariantNew` in `period`, and the `type()` tests in `testType`).
+- **Comparison** follows the HL7 Java test runner (exact types, decimals with their precision, type-only checks for empty outputs); the details and the few differences are in [spec notes](../spec-notes.md#comparing-expected-outputs).
+- **The ratchet** also fails CI when tests pass that are not in the baseline yet, and when the committed reports are out of date (`pnpm conformance --check`), so the baseline and the reports always match the code.
+- **Exceptions** are listed in `tools/conformance/src/exceptions.ts`, each with its `spec-notes.md` entry, and are skipped.
 
 ## Acceptance criteria
 

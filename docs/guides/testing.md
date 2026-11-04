@@ -49,9 +49,9 @@ How tests are written in Callis. The overall strategy is in [architecture.md](..
 
 ## Conformance suite
 
-- Run the conformance runner whenever evaluation behaviour changes ([T0022](../tasks/T0022-conformance-runner.md)).
-- When tests start passing, update the baseline in the same PR. The baseline may only go up.
-- Never remove a baseline entry to make CI pass. If a suite expectation is wrong for Callis, record it in `docs/spec-notes.md` with the reason and mark the test as an exception.
+- Run the conformance runner (`pnpm conformance`) whenever evaluation behaviour changes ([tools/conformance](../../tools/conformance/README.md)). `pnpm test:conformance -t <name>` shows a diff for each failing suite test.
+- When tests start passing, update the baseline in the same PR (`pnpm conformance --update-baseline`). The baseline may only go up.
+- Never remove a baseline entry to make CI pass. If a suite expectation is wrong for Callis, record it in `docs/spec-notes.md` with the reason and mark the test as an exception in [`tools/conformance/src/exceptions.ts`](../../tools/conformance/src/exceptions.ts).
 
 ## Snapshots and coverage
 

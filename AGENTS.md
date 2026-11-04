@@ -45,13 +45,13 @@ Instructions for AI coding agents working on Callis. This file follows the [AGEN
 - **Code:** [code style guide](docs/guides/code-style.md). Biome handles formatting; the guide covers what a tool cannot check.
 - **Tests:** [testing guide](docs/guides/testing.md).
 - **PR title:** Conventional Commits, for example `feat(core): add lexer`. It becomes the commit on `main` ([details](CONTRIBUTING.md#pull-request-titles-and-commit-messages)).
-- **PR description:** fill in the template, start with `Task: T0001`, include the conformance delta once the runner exists, and delete the template comments.
+- **PR description:** fill in the template, start with `Task: T0001`, include the conformance delta (passing tests per phase before → after, from `pnpm conformance`), and delete the template comments.
 - **Changesets:** add one for user-visible changes to published packages.
 
 ## Before you push
 
 - Run `pnpm check` (lint, typecheck, tests, build, package checks).
-- When evaluation behaviour changes, run the conformance runner (from T0022) and update the baseline if more tests pass.
+- When evaluation behaviour changes, run `pnpm conformance --update-baseline` and commit the baseline and the reports in `docs/conformance/` ([tools/conformance](tools/conformance/README.md)).
 - Re-read your own diff:
   - no debug output, no unrelated changes, no commented-out code
   - no `TODO` without a task reference, as in `TODO(T0033): …`
@@ -70,6 +70,8 @@ Instructions for AI coding agents working on Callis. This file follows the [AGEN
 | `pnpm check:title "<title>"` | Check a PR title before you open the PR. |
 | `pnpm check:roadmap` | Check that the roadmap and the task files agree, after a plan change. |
 | `pnpm changeset` | Add a changeset. |
+| `pnpm conformance` | Run the HL7 test suite, write the reports and check the baseline (`--update-baseline` records new passes). |
+| `pnpm test:conformance -t "<name>"` | Run matching suite tests as Vitest tests, with diffs. |
 
 The full list is in [CONTRIBUTING.md](CONTRIBUTING.md#commands).
 
