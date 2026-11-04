@@ -57,7 +57,7 @@ export function renderSuiteReport(
   if (summary.skipReasons.length > 0) {
     lines.push('', '## Skipped tests', '', '| Reason | Tests |', '| --- | ---: |');
     for (const { reason, count } of summary.skipReasons) {
-      lines.push(`| ${cell(reason)} | ${count} |`);
+      lines.push(`| ${linkSpecNotes(cell(reason))} | ${count} |`);
     }
   }
 
@@ -218,6 +218,11 @@ function countsRow(label: string, counts: Counts): string {
 function sourceLink(source: FixtureSource): string {
   const url = `https://github.com/${source.repository}/tree/${source.commit}`;
   return `[${source.repository}@${source.commit.slice(0, 7)}](${url})`;
+}
+
+/** Turns the `spec-notes#anchor` of an exception's skip reason into a link to that note. */
+function linkSpecNotes(text: string): string {
+  return text.replace(/spec-notes#([\w-]+)/g, '[spec notes](../spec-notes.md#$1)');
 }
 
 /** A table cell: one line, pipes escaped. */

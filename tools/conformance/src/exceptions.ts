@@ -17,7 +17,22 @@ export interface SuiteException {
 }
 
 /** The exceptions in force. Add one together with its `docs/spec-notes.md` entry. */
-export const SUITE_EXCEPTIONS: readonly SuiteException[] = [];
+export const SUITE_EXCEPTIONS: readonly SuiteException[] = [
+  {
+    // Owner decision in #50: keep ADR-0012 (UTC) rather than an "unknown offset" policy.
+    suites: ['r4', 'r5'],
+    tests: ['testEquality23', 'testNEquality17'],
+    reason: 'a value without an offset is UTC (ADR-0012); the suite expects empty',
+    note: 'a-value-without-a-timezone-offset-is-utc',
+  },
+  {
+    // #51: the R5 copy, the source of truth, applies the fraction as 3.0.0 says.
+    suites: ['r4'],
+    tests: ['testPlusDate19'],
+    reason: 'the R4 copy ignores the 0.1 s fraction; Callis follows R5 and 3.0.0',
+    note: 'fractions-in-datetime-arithmetic',
+  },
+];
 
 /** The exception for a test, if there is one. */
 export function findException(

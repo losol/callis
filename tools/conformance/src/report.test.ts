@@ -70,7 +70,11 @@ const run: SuiteRun = {
         summary: 'expected [integer 2], got [integer 1]',
       },
     }),
-    result(delimited, { status: 'skip', skipReason: 'fixture not converted', skipCause: 'input' }),
+    result(delimited, {
+      status: 'skip',
+      skipReason: 'exception: wrong label (spec-notes#some-note)',
+      skipCause: 'exception',
+    }),
     result(sorted, {
       classification: { phase: 'stu', reason: 'sort() (T0027)', task: 'T0027' },
       status: 'fail',
@@ -108,7 +112,7 @@ describe('renderSuiteReport', () => {
 
       | Reason | Tests |
       | --- | ---: |
-      | fixture not converted | 1 |
+      | exception: wrong label ([spec notes](../spec-notes.md#some-note)) | 1 |
 
       ## Groups
 

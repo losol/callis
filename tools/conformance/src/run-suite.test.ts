@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ErrorKind, EvaluationOptions, EvaluatorAdapter } from './adapter.ts';
 import { classifyTest } from './classify.ts';
+import { findException, SUITE_EXCEPTIONS } from './exceptions.ts';
 import { type InputReader, loadSuite, NOT_CONVERTED } from './fixtures.ts';
 import { createRunner, evaluationOptions } from './run-suite.ts';
 import { stubAdapter } from './stub-adapter.ts';
@@ -305,11 +306,14 @@ describe.each(SUITE_IDS)('the vendored %s suite with the stub adapter', (id) => 
         expect(result.status, test.id).toBe('fail');
         expect(result.failure?.kind, test.id).toBe('not-implemented');
       }
-      const unsupported = classifyTest(test).phase === 'unsupported';
-      if (!unsupported && test.inputFile?.endsWith('.xml')) {
+      // Out-of-scope tests and documented exceptions are skipped whatever their input.
+      const runnable =
+        classifyTest(test).phase !== 'unsupported' &&
+        findException(SUITE_EXCEPTIONS, id, test.id) === undefined;
+      if (runnable && test.inputFile?.endsWith('.xml')) {
         expect(result.skipReason, test.id).toBe(NOT_CONVERTED);
       }
-      if (!unsupported && (test.inputFile === undefined || test.inputFile.endsWith('.json'))) {
+      if (runnable && (test.inputFile === undefined || test.inputFile.endsWith('.json'))) {
         expect(result.status, test.id).toBe('fail');
       }
     }

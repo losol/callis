@@ -131,7 +131,7 @@ Implemented in `packages/core/src/values/datetime/` ([T0005](tasks/T0005-date-ti
 
 - **Spec:** [N1 Date/Time equality](https://hl7.org/fhirpath/N1/#datetime-equality) leaves the default offset for values without one to the implementation.
 - **Tests:** `testEquality23` (`@2012-04-15T15:00:00Z = @2012-04-15T10:00:00`) and `testNEquality17` (the same with `!=`) expect empty. The suite notes that the result "could be impacted by the timezone of the engine running the test".
-- **Decision:** The owner chose UTC as the default ([ADR-0012](adr/0012-evaluation-defaults.md)). The value without an offset is read as 10:00Z, so the results are `false` and `true`, and these two tests fail. No fixed default offset gives empty; that would need a policy where a missing offset is unknown (anywhere within ±14:00).
+- **Decision:** The owner chose UTC as the default ([ADR-0012](adr/0012-evaluation-defaults.md)). The value without an offset is read as 10:00Z, so the results are `false` and `true`, and these two tests fail. No fixed default offset gives empty; that would need a policy where a missing offset is unknown (anywhere within ±14:00). The owner kept UTC (#50), so both tests are conformance exceptions in the R4 and R5 reports (`tools/conformance/src/exceptions.ts`).
 
 ### Partial values across timezone offsets
 
@@ -172,7 +172,7 @@ Implemented in `packages/core/src/values/datetime/` ([T0005](tasks/T0005-date-ti
   - Seconds keep their fraction down to milliseconds, and anything finer is dropped (`1.5 'ms'` adds 1 ms).
   - The result is then converted to the value's precision and truncated toward zero. A value with second precision ignores a fraction of a second (`@T10:00:00 + 0.5 seconds` is `@T10:00:00`), and `@2014 - 23 months` is `@2013`.
   - Weeks follow the first rule too: the fraction is dropped before the weeks become days, so `1.5 weeks` adds 7 days, not 10. Reading "multiply by 7, then calculate in days" as 10.5 days, truncated to 10, is also defensible; Callis treats weeks like every other unit above seconds.
-- **R4 suite:** the R4 copy of the suite (`tests-fhir-r4.xml`) still expects `testPlusDate19` to ignore the fraction (`@1973-12-25T00:00:00.000+10:00 + 0.1 's'` unchanged). Callis follows the R5 copy, which is the source of truth and matches 3.0.0, so `testPlusDate19` is an expected failure in the R4 report.
+- **R4 suite:** the R4 copy of the suite (`tests-fhir-r4.xml`) still expects `testPlusDate19` to ignore the fraction (`@1973-12-25T00:00:00.000+10:00 + 0.1 's'` unchanged). Callis follows the R5 copy, which is the source of truth and matches 3.0.0, so the R4 `testPlusDate19` is a conformance exception (`tools/conformance/src/exceptions.ts`, #51). The R5 test runs as usual.
 
 ### String forms accepted by toDateTime() and toTime()
 
