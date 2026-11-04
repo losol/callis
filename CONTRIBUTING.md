@@ -14,6 +14,7 @@ Everything in this repository is written in English.
 | `docs/tasks/` | One file per task: goal, scope, design notes, acceptance criteria. |
 | [`docs/guides/`](docs/guides/) | How to write code ([code style](docs/guides/code-style.md)) and tests ([testing](docs/guides/testing.md)). |
 | `docs/spec-notes.md` | Interpretations of the FHIRPath specification (created when first needed). |
+| GitHub issues and the *Callis roadmap* project | Task status, follow-ups and bugs ([task issues](#task-issues-and-the-project-board)). |
 
 ## Workflow
 
@@ -114,15 +115,32 @@ The task files and the [roadmap](docs/roadmap.md) are the plan. Issues are the i
 
 - The owner triages follow-up issues. An accepted one becomes one of these:
   - a change to an existing task file (scope, design notes or acceptance criteria)
-  - a new task: a task file with the next free ID, a roadmap row with dependencies, wave and size, and a task issue
+  - a new task: a task file with the next free ID and a roadmap row with dependencies, wave and size (the [roadmap sync](#roadmap-sync) creates its task issue)
   - a line in the roadmap backlog
-- Plan changes are `docs` PRs with `Task: none`, made by the owner or by an agent the owner asked to do it. The PR closes the follow-up issue. A declined issue is closed with the reason.
+- Plan changes are `docs` PRs with `Task: none`, made by the owner or by an agent the owner asked to do it. The PR closes the follow-up issue. A declined issue is closed with the reason. Run `pnpm check:roadmap` before you push.
 - Inside a task PR, only two plan changes are allowed: correcting that task's own file and splitting that task.
 - Task IDs are never reused or renumbered.
 
-### Task issues
+### Task issues and the project board
 
-Each scheduled task has a task issue, labelled `task` and with its wave (`wave-1`, …), that links the task file. The task file is the source of truth; the issue is for tracking and discussion. The PR that implements the task closes it with `Closes #<issue>`.
+Every task has a task issue titled like `T0001: Lexer`, labelled `task` and with its wave (`wave-1`, …), and an item on the *Callis roadmap* project board of the `losol` organization. The issue links the task file. The PR that implements the task closes the issue with `Closes #<issue>`.
+
+| What | Source of truth | Copied to |
+| --- | --- | --- |
+| Scope, design notes, acceptance criteria | The task file | Nowhere; the issue links the file. |
+| Title, phase, wave, size, dependencies | The overview table in the [roadmap](docs/roadmap.md) | The task file header, the dependency graph and the waves table (checked); the issue title and labels, its "blocked by" links and the project fields (synced). |
+| Status, assignee, linked PR | The task issue and the project board | Nowhere. |
+| Findings during a task | Follow-up issues | The plan, once the owner accepts them. |
+
+Do not change the synced data on GitHub by hand; change the roadmap instead. The next sync overwrites it.
+
+### Roadmap sync
+
+- `pnpm check:roadmap` checks that the overview table, the dependency graph, the waves table and the header of every task file agree. It is part of `pnpm check` and CI.
+- `pnpm sync:roadmap` shows what would change on GitHub, and `pnpm sync:roadmap --apply` makes the changes. The sync creates missing task issues, sets their titles and labels, links each issue as "blocked by" the issues of its dependencies, and adds the issues to the project board with the fields Task, Phase, Wave, Size and Depends on. It fills in Status only when it is empty.
+- The sync never rewrites issue bodies, closes or reopens issues, or touches issues without the `task` label. A task removed from the roadmap keeps its issue; close it by hand.
+- After a plan change is merged, the **Roadmap sync** workflow runs the sync on `main`. It needs the `ROADMAP_SYNC_TOKEN` secret (see [Repository settings](#repository-settings)). Without the secret the workflow does nothing, and a maintainer runs the sync by hand.
+- To add a task: write the task file, then add its row to the overview, its edges to the graph and its ID to the waves table, and run `pnpm check:roadmap`. The sync creates the task issue after the merge.
 
 ## Definition of done
 
@@ -172,6 +190,7 @@ For maintainers. These settings make the rules above hold:
 - **Merging:** squash merge only. The squash commit takes the PR title as its subject and the PR description as its body. Branches are deleted automatically after merge.
 - **Required checks** (once T0000 has added them): CI, and a PR-title check for Conventional Commits.
 - **Approval:** the owner's approval is required.
+- **Secrets:** `ROADMAP_SYNC_TOKEN` for the [roadmap sync](#roadmap-sync). A fine-grained token owned by `losol` with read and write access to issues in this repository and to the organization's projects, or a classic token with the `repo` and `project` scopes.
 
 ## Commands
 
@@ -192,6 +211,11 @@ You need Node.js 22.18+, 24.11+ or 26+ (the `engines` range in `package.json`, s
 | `pnpm build` | Build all packages with tsdown. |
 | `pnpm check:packages` | Run publint, attw, the zero-dependency check and the size report. Needs a build first. |
 | `pnpm check:title "feat(core): add lexer"` | Check a PR title against the rules above, as CI does. |
+| `pnpm check:roadmap` | Check that the roadmap and the task files agree. |
+| `pnpm sync:roadmap` | Show what the [roadmap sync](#roadmap-sync) would change on GitHub. Add `--apply` to make the changes. |
 | `pnpm changeset` | Add a changeset. |
+| `pnpm conformance` | Run the HL7 FHIRPath test suite, write the reports in `docs/conformance/` and compare with the baseline. |
+| `pnpm conformance --update-baseline` | The same, and record newly passing tests in the baseline. |
+| `pnpm test:conformance -t testLiterals` | Run suite tests as Vitest tests, with a diff for each wrong result. |
 
-The conformance runner gets its own command when [T0022](docs/tasks/T0022-conformance-runner.md) adds it.
+CI also runs `pnpm conformance --check`, which is non-blocking until [T0023](docs/tasks/T0023-xml-fixture-conversion.md). The conformance runner is described in [tools/conformance](tools/conformance/README.md).

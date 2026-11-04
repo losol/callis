@@ -10,13 +10,17 @@
     "build": "pnpm --filter \"./packages/*\" run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:conformance": "vitest run --config tools/conformance/vitest.suite.config.ts",
     "coverage": "vitest run --coverage",
     "typecheck": "tsc -p scripts && pnpm --recursive run typecheck",
     "lint": "biome ci",
     "format": "biome check --write",
     "check:packages": "pnpm --filter \"./packages/*\" run check:package && node scripts/check-runtime-deps.ts && node scripts/report-size.ts",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm check:packages",
+    "conformance": "node tools/conformance/src/cli.ts",
+    "check": "pnpm lint && pnpm typecheck && pnpm check:roadmap && pnpm test && pnpm build && pnpm check:packages",
     "check:title": "node scripts/check-pr-title.ts",
+    "check:roadmap": "node scripts/check-roadmap.ts",
+    "sync:roadmap": "node scripts/sync-roadmap.ts",
     "changeset": "changeset"
   },
   "devDependencies": {

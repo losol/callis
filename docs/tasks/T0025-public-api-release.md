@@ -2,7 +2,7 @@
 
 Part of the [roadmap](../roadmap.md). Phase 1 · wave 7 · size M.
 
-- **Depends on:** phase 1
+- **Depends on:** [T0007](T0007-ucum.md), [T0010](T0010-operators.md), [T0011](T0011-fn-existence.md), [T0012](T0012-fn-filtering.md), [T0013](T0013-fn-subsetting-combining.md), [T0014](T0014-fn-conversion.md), [T0015](T0015-fn-string.md), [T0016](T0016-fn-math.md), [T0017](T0017-fn-tree-utility.md), [T0021](T0021-hooks-async.md), [T0023](T0023-xml-fixture-conversion.md), [T0024](T0024-static-analysis.md) (together they cover all of phase 1)
 - **Parallel with:** –
 - **Background:** [ADR-0009](../adr/0009-esm-only-zero-deps.md), [ADR-0012](../adr/0012-evaluation-defaults.md) (option and output defaults)
 
