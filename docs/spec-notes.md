@@ -56,6 +56,12 @@ Implemented in `packages/core/src/values/datetime/` ([T0005](tasks/T0005-date-ti
 - **Tests:** none.
 - **Decision:** Such a literal is not a date and time (ISO 8601 needs a full date before a time), so it is an invalid literal value, like `@2015-02-30`: the parser returns nothing and the compiler raises `eval/invalid-literal` at evaluation ([T0008](tasks/T0008-compiler-evaluator.md#invalid-literal-values)). The string forms for `toDateTime()` and FHIR `dateTime` reject it too.
 
+### Leap seconds
+
+- **Spec:** FHIR's [`dateTime`, `instant` and `time`](https://hl7.org/fhir/R4/datatypes.html#dateTime) patterns allow the second `60`. FHIRPath's own ranges stop at `:59` ([N1 §4.1.6](https://hl7.org/fhirpath/N1/#time), [§4.1.7](https://hl7.org/fhirpath/N1/#datetime)).
+- **Tests:** none.
+- **Decision:** leap seconds are not supported ([ADR-0006](adr/0006-own-date-time-types.md)). A value with the second `60`, such as `2015-12-31T23:59:60Z`, does not parse, so `toDateTime()` gives empty for it, and arithmetic and comparison never meet one.
+
 ### Quoted calendar keywords in arithmetic
 
 - **Spec:** [3.0.0 Date/Time Arithmetic](https://hl7.org/fhirpath/STU3/) lists the calendar keywords unquoted and the UCUM units quoted.
@@ -70,6 +76,8 @@ Implemented in `packages/core/src/values/datetime/` ([T0005](tasks/T0005-date-ti
   - The precision in the first rule is the quantity's unit. Above seconds the fraction is dropped before anything else, so `@T10:00 + 1.5 hours` is `@T11:00`, not `@T11:30`.
   - Seconds keep their fraction down to milliseconds, and anything finer is dropped (`1.5 'ms'` adds 1 ms).
   - The result is then converted to the value's precision and truncated toward zero. A value with second precision ignores a fraction of a second (`@T10:00:00 + 0.5 seconds` is `@T10:00:00`), and `@2014 - 23 months` is `@2013`.
+  - Weeks follow the first rule too: the fraction is dropped before the weeks become days, so `1.5 weeks` adds 7 days, not 10. Reading "multiply by 7, then calculate in days" as 10.5 days, truncated to 10, is also defensible; Callis treats weeks like every other unit above seconds.
+- **R4 suite:** the R4 copy of the suite (`tests-fhir-r4.xml`) still expects `testPlusDate19` to ignore the fraction (`@1973-12-25T00:00:00.000+10:00 + 0.1 's'` unchanged). Callis follows the R5 copy, which is the source of truth and matches 3.0.0, so `testPlusDate19` is an expected failure in the R4 report.
 
 ### String forms accepted by toDateTime() and toTime()
 

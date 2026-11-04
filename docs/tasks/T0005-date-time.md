@@ -94,7 +94,9 @@ What the runtime tasks consume from `src/values/datetime/` (nothing is exported 
 | `arithmetic.ts` | `addCalendar(value, amount, unit)`, `subtractCalendar(value, amount, unit)`; `amount` is a `number` or any `{ coefficient: bigint; scale: number }`, so a T0004 `Decimal` fits; `unit` is the quantity's unit string | T0010 |
 | `now.ts` | `resolveTimezoneOffset(option, at)` for the `timezoneOffset` option, and `takeNowSnapshot(at, offsetMinutes)` → `{ now, today, timeOfDay }` | T0017, T0025 |
 
-Error codes added by this task: `eval/datetime-out-of-range` (invalid components, or arithmetic leaving 0001–9999) and `eval/invalid-calendar-unit` (`'a'`, `'mo'`, a non-time unit, or a unit the value type does not take).
+Error codes added by this task: `eval/datetime-out-of-range` (invalid components, or arithmetic leaving 0001–9999) and `eval/invalid-calendar-unit` (`'a'`, `'mo'`, a non-time unit, or a unit the value type does not take). An amount that is `NaN` or infinite, an invalid `now` instant and a `timezoneOffset` beyond ±14:00 raise `eval/invalid-argument` (from T0004).
+
+`arithmetic.ts` owns the mapping from quantity units to calendar units for date/time arithmetic (keywords in both forms, quoted keywords, and `'wk'` … `'ms'`). T0010 passes the quantity's unit string to `addCalendar` as it is. [T0006](T0006-quantity.md)'s `calendar-units.ts` serves quantity equality and conversion; it cannot import `values/datetime` under the dependency rules, so the two tables must be kept consistent rather than shared.
 
 ## Acceptance criteria
 
