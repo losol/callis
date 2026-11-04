@@ -6,7 +6,7 @@ import type { NamedType, SystemTypeName } from './system-types.ts';
  * `ModelProvider` (in `model/model-provider.ts`) satisfies this interface structurally. It is
  * declared here because `types` must not depend on `model` (see the module dependency rules in
  * `docs/architecture.md`). The type parameter is the model's own type object, so functions such as
- * {@link resolveTypeSpecifier} give back the provider's `ModelTypeInfo`, not a bare
+ * `resolveTypeSpecifier()` give back the provider's `ModelTypeInfo`, not a bare
  * {@link NamedType}.
  *
  * @typeParam T - The model's type object, for example `ModelTypeInfo`.
