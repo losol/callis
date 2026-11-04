@@ -1,0 +1,43 @@
+name: Roadmap sync
+
+# Copies docs/roadmap.md to the task issues and the project board after it changes on main.
+# See CONTRIBUTING.md, "Roadmap sync".
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/roadmap.md
+      - docs/tasks/**
+      - scripts/roadmap.ts
+      - scripts/sync-roadmap.ts
+  workflow_dispatch:
+
+concurrency:
+  group: roadmap-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      # The script uses only Node.js built-ins and the preinstalled GitHub CLI, so there is
+      # nothing to install. GITHUB_TOKEN cannot write to organization projects, hence the secret.
+      - name: Sync
+        env:
+          GH_TOKEN: ${{ secrets.ROADMAP_SYNC_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice title=Roadmap sync::The ROADMAP_SYNC_TOKEN secret is not set, so the sync was skipped."
+            exit 0
+          fi
+          node scripts/sync-roadmap.ts --apply

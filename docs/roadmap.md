@@ -7,6 +7,7 @@
 
 - **One task = one PR.** A worker reads its task file and the ADRs it links. If a task turns out too big, split it in the PR that starts it (for example `T0008a`/`T0008b`) and update the task file and this index.
 - **Changes to the plan** start as follow-up issues and land in their own `docs` PRs ([Findings during a task](../CONTRIBUTING.md#findings-during-a-task)). New tasks take the next free ID; IDs are never reused.
+- **This file is the source of truth** for task titles, phases, waves, sizes and dependencies. The overview table is the master; the graph, the waves table and the task file headers must match it (`pnpm check:roadmap`). The [roadmap sync](../CONTRIBUTING.md#roadmap-sync) copies it to the task issues and the project board.
 - **Workflow, PR titles and the definition of done** are in [CONTRIBUTING.md](../CONTRIBUTING.md); agents also follow [AGENTS.md](../AGENTS.md).
 - **Conformance groups** listed for a task are the groups from the HL7 test suite (`tests-fhir-r5.xml`) that the task should turn green. Until the conformance runner and converted fixtures exist (T0022, T0023), they are informational. After that, the PR shows the conformance delta, and the baseline may only go up.
 - **Sizes** are rough, for one worker: **S** ≈ 1 day, **M** ≈ 2–4 days, **L** ≈ 1–2 weeks.
@@ -40,7 +41,7 @@
 | [T0022](tasks/T0022-conformance-runner.md) | Conformance runner | 1 | T0000 | 1 | M |
 | [T0023](tasks/T0023-xml-fixture-conversion.md) | FHIR XML fixture conversion | 1 | T0019, T0022 | 3 | M |
 | [T0024](tasks/T0024-static-analysis.md) | Static analysis and strict mode | 1 | T0018, T0019 | 5 | L |
-| [T0025](tasks/T0025-public-api-release.md) | Public API, documentation and release 0.1.0 | 1 | phase 1 | 7 | M |
+| [T0025](tasks/T0025-public-api-release.md) | Public API, documentation and release 0.1.0 | 1 | T0007, T0010, T0011, T0012, T0013, T0014, T0015, T0016, T0017, T0021, T0023, T0024 | 7 | M |
 | [T0026](tasks/T0026-stu-aggregates.md) | STU: aggregates and variables | 2 | T0025 | 8 | M |
 | [T0027](tasks/T0027-stu-collections.md) | STU: collection additions | 2 | T0025 | 8 | M |
 | [T0028](tasks/T0028-stu-long.md) | STU: `Long` type | 2 | T0025 | 8 | M |
