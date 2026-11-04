@@ -71,7 +71,7 @@ Error codes are stable strings grouped by stage, for example:
 
 - **syntax:** `syntax/unexpected-token`, `syntax/unterminated-string`, `syntax/invalid-escape`, `syntax/invalid-date-literal`
 - **semantic:** `semantic/unknown-function`, `semantic/wrong-arity`, `semantic/unknown-element`, `semantic/unknown-type`
-- **evaluation:** `eval/singleton-expected`, `eval/type-mismatch`, `eval/undefined-variable`, `eval/invalid-literal`, `eval/async-in-sync`, `eval/aborted`, `eval/limit-exceeded`
+- **evaluation:** `eval/singleton-expected`, `eval/type-mismatch`, `eval/undefined-variable`, `eval/invalid-literal`, `eval/invalid-argument`, `eval/async-in-sync`, `eval/aborted`, `eval/limit-exceeded`
 
 A formatted error looks like this:
 
