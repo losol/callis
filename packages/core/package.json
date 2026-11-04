@@ -1,0 +1,38 @@
+{
+  "name": "@callis/core",
+  "version": "0.0.0",
+  "description": "A FHIRPath engine for TypeScript",
+  "keywords": [
+    "fhirpath",
+    "fhir",
+    "hl7",
+    "healthcare",
+    "typescript"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/losol/callis.git",
+    "directory": "packages/core"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p .",
+    "check:package": "publint --strict && attw --pack . --profile esm-only"
+  }
+}

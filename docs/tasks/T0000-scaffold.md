@@ -42,7 +42,7 @@ A working pnpm monorepo where every later task can add code and tests without to
   - `src/index.ts` with an **empty public API**
   - an internal `src/errors/` skeleton: the `FhirPathError` hierarchy, `SourceSpan`, the `ErrorCode` union and `format()` from [errors and diagnostics](#errors-and-diagnostics). Every wave-1 task needs this module, so it is created here to avoid merge conflicts.
 - **Contributor docs:** [CONTRIBUTING.md](../../CONTRIBUTING.md) and [AGENTS.md](../../AGENTS.md) already describe the workflow and conventions. Fill in their **Commands** sections: install, `pnpm check` and its parts, running a single test file, and adding a changeset.
-- **PR-title check:** a CI job that checks PR titles against Conventional Commits with the allowed types and scopes from CONTRIBUTING.md (for example [`amannn/action-semantic-pull-request`](https://github.com/amannn/action-semantic-pull-request)).
+- **PR-title check:** a CI job that checks PR titles against the rules in CONTRIBUTING.md: allowed types and scopes, exactly one scope (optional only for `docs`, `build`, `ci` and `chore`), a summary that starts with a lowercase letter and has no trailing period, and at most 72 characters. The rules live in `scripts/pr-title.ts` with tests, and `pnpm check:title` runs them locally. Generic actions such as `amannn/action-semantic-pull-request` cannot express all of these rules.
 - **Biome rules** that enforce the [code style guide](../guides/code-style.md) where Biome supports it (for example no default exports).
 
 ## Out of scope

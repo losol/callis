@@ -1,0 +1,9 @@
+packages:
+  - packages/*
+  - tools/*
+
+# Record exact versions when adding dependencies.
+saveExact: true
+
+# Refuse to install on a Node.js version outside `engines` in package.json.
+engineStrict: true
