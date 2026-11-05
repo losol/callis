@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FhirPathSyntaxError } from '../../../packages/core/src/errors/fhirpath-error.ts';
 import { tokenize } from '../../../packages/core/src/lexer/lexer.ts';
+import type { Token } from '../../../packages/core/src/lexer/token.ts';
 import { parse } from '../../../packages/core/src/parser/parser.ts';
 import { loadSuite } from './fixtures.ts';
 import { allTests, SUITE_IDS, type SuiteTest } from './suite.ts';
@@ -8,12 +9,12 @@ import { allTests, SUITE_IDS, type SuiteTest } from './suite.ts';
 // Syntax only: do not skip tests for missing converted inputs or unimplemented functions.
 // https://hl7.org/fhirpath/N1/grammar.html
 // https://hl7.org/fhirpath/N1/#operator-precedence
-function exclusion(test: SuiteTest): string | undefined {
+function exclusion(test: Pick<SuiteTest, 'group' | 'expression'>): string | undefined {
   if (test.group === 'documentFunctions' || test.group === 'cdaTests') return test.group;
   // Scan tokens, not strings: quoted text and comments must not exclude an expression.
   // Lexical errors still reach the syntax assertion below.
   try {
-    const tokens = tokenize(test.expression);
+    const tokens = scopeTokens(test.expression);
     for (let index = 0; index < tokens.length; index++) {
       const token = tokens[index];
       const previous = tokens[index - 1];
@@ -24,12 +25,35 @@ function exclusion(test: SuiteTest): string | undefined {
         previous.end === token.start
       )
         return 'T0028 Long literal';
-      if (token?.kind === '{' && tokens[index + 1]?.kind !== '}') return 'T0031 instance selector';
+      if (
+        token?.kind === '{' &&
+        tokens[index + 1]?.kind !== '}' &&
+        (previous?.kind === 'Identifier' || previous?.kind === 'DelimitedIdentifier')
+      )
+        return 'T0031 instance selector';
     }
   } catch (error) {
     if (!(error instanceof FhirPathSyntaxError)) throw error;
   }
   return undefined;
+}
+
+// The phase-1 lexer has no ':' token. Inspect the valid prefix before a selector's colon.
+// Other lexical failures still reach the parser assertion; quoted colons tokenize normally.
+function scopeTokens(expression: string): readonly Token[] {
+  try {
+    return tokenize(expression);
+  } catch (error) {
+    if (
+      error instanceof FhirPathSyntaxError &&
+      error.code === 'syntax/unexpected-character' &&
+      error.span !== undefined &&
+      expression[error.span.start] === ':'
+    ) {
+      return tokenize(expression.slice(0, error.span.start));
+    }
+    throw error;
+  }
 }
 
 for (const suite of SUITE_IDS) {
@@ -65,4 +89,33 @@ it.each(
   ),
 )('parses mislabelled extension call $id', (test) => {
   expect(() => parse(test.expression)).not.toThrow();
+});
+
+// Guard exclusions so future fixture updates cannot silently hide ordinary grammar errors.
+it.each([
+  ['1L', 'T0028 Long literal'],
+  ["'1L'", undefined],
+  ['1 /* L */', undefined],
+  ['1 L', undefined],
+  ['1`L`', undefined],
+  ['Patient { name: 1 }', 'T0031 instance selector'],
+  ['{}', undefined],
+  ['{1}', undefined],
+  ["'{x}'", undefined],
+  ["'unterminated", undefined],
+])('classifies phase-2 syntax without hiding %s', (expression, expected) => {
+  expect(exclusion({ group: 'testLiterals', expression })).toBe(expected);
+});
+
+it('keeps the pinned suite exceptions explicit', () => {
+  const r4 = allTests(loadSuite('r4'));
+  const r5 = allTests(loadSuite('r5'));
+  expect(r4.filter((test) => exclusion(test) !== undefined)).toHaveLength(115);
+  expect(r5.filter((test) => exclusion(test) !== undefined)).toHaveLength(118);
+  expect(r5.filter((test) => test.id === 'htmlTest01')).toHaveLength(1);
+  expect(
+    r5
+      .filter((test) => test.group === 'documentFunctions' && test.invalid === 'syntax')
+      .map((test) => test.id),
+  ).toEqual(['testSection13', 'testEntry12', 'testSameSubject16', 'testHasCoding10']);
 });

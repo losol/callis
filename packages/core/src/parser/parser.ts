@@ -7,7 +7,7 @@ import { INFIX_BINDING_POWER, isInfixOperator, POSTFIX_BINDING_POWER } from './p
 
 /** Options for syntax parsing, independent of evaluation limits. */
 export interface ParseOptions {
-  /** Maximum recursive expression depth, including the root (default 1,000). */
+  /** Maximum recursive expression depth, including the root (default and maximum 1,000). */
   readonly maxDepth?: number;
 }
 

@@ -90,8 +90,8 @@ The AST is part of the public API (`parse()`), but its shape is not frozen befor
 
 ## Acceptance criteria
 
-- [ ] Each adjacent pair of precedence levels has a test, as does left-associativity and the N1 §6.8 example `-7.combine(3)`. `x as Quantity.unit` parses as a type specifier.
-- [ ] Every in-scope `<expression>` in `tests-fhir-r4.xml` and `tests-fhir-r5.xml` without `invalid="syntax"` parses, and every in-scope `invalid="syntax"` one throws `FhirPathSyntaxError`. Exceptions, each listed in the PR:
+- [x] Each adjacent pair of precedence levels has a test, as does left-associativity and the N1 §6.8 example `-7.combine(3)`. `x as Quantity.unit` parses as a type specifier.
+- [x] Every in-scope `<expression>` in `tests-fhir-r4.xml` and `tests-fhir-r5.xml` without `invalid="syntax"` parses, and every in-scope `invalid="syntax"` one throws `FhirPathSyntaxError`. Exceptions, each listed in the PR:
   - out-of-scope groups (`documentFunctions`, `cdaTests`)
   - expressions that use phase-2 syntax (`L` literals, instance selectors)
   - the R5 `htmlTest01` expression `text.div.htmlChecks()`, which violates the identifier grammar because `div` is reserved. It must throw; the corrected ``text.`div`.htmlChecks()`` form must parse. See [spec notes](../spec-notes.md#reserved-div-in-an-html-fixture).
@@ -99,5 +99,5 @@ The AST is part of the public API (`parse()`), but its shape is not frozen befor
 
   The XML files come from T0022's vendored fixtures; if T0022 has not landed yet, copy the two files into the test folder temporarily.
 
-- [ ] No imports from `values/`; literal conversion is the compiler's job (T0008).
-- [ ] Line coverage of `parser/` is at least 95%.
+- [x] No imports from `values/`; literal conversion is the compiler's job (T0008).
+- [x] Line coverage of `parser/` is at least 95%.
