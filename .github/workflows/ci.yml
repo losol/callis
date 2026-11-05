@@ -59,8 +59,10 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
+      # Not the site (T0035): it tests the library, and a dependency of the site does not support
+      # Node 26 yet, which engine-strict turns into an install error. The site has its own job.
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --filter "!@callis/site"
       - name: Test
         run: pnpm test
 
@@ -118,6 +120,8 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Test the site
+        run: pnpm site:test
       - name: Build the site
         run: pnpm site:build
       # A build that produced an empty site, or only the fallback page, must not pass.

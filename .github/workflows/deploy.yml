@@ -43,9 +43,11 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       # This job builds independently of CI: it would rather fail than publish a site that does not
-      # typecheck or build.
+      # typecheck, pass its tests or build.
       - name: Typecheck the site
         run: pnpm --filter @callis/site run typecheck
+      - name: Test the site
+        run: pnpm site:test
       - name: Build the site
         run: pnpm site:build
       # Wrangler is run directly, not through cloudflare/wrangler-action: that is one third-party

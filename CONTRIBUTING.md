@@ -209,6 +209,7 @@ The site at <https://callis.losol.no> is built from this repository by `apps/sit
 
 - **Writing for it:** write documents as usual. Link to other documents by path (`../adr/0001-spec-baseline.md`); the site turns the link into a link to the page, or to GitHub when the document is not published. A document's title is its first heading.
 - **What is published:** the list is in [`apps/site/docs.config.ts`](apps/site/docs.config.ts). The repository is public, so everything under `docs/` is published. To leave a document out, add its path to `ignore`.
+- **Node:** the site needs the development Node (`.node-version`, 24); a dependency of it does not support Node 26 yet, so `pnpm install` fails there. On Node 26 install without the site: `pnpm install --filter "!@callis/site"`.
 - **CI** builds the site on every pull request, so a change that breaks it fails the PR. The **Deploy** workflow builds it again and publishes it as a Cloudflare Worker with static assets on every push to `main`; it can also be run by hand.
 - **The progress page** reads the git history. It counts a task as merged at the first commit whose message has a `Task: T0001` line, which is why the PR description must start with it.
 
