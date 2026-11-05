@@ -24,7 +24,9 @@
     "check:title": "node scripts/check-pr-title.ts",
     "check:roadmap": "node scripts/check-roadmap.ts",
     "sync:roadmap": "node scripts/sync-roadmap.ts",
-    "changeset": "changeset"
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "release": "pnpm build && pnpm check:packages && changeset publish"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",

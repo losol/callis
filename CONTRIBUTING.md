@@ -13,6 +13,7 @@ Everything in this repository is written in English.
 | [`docs/roadmap.md`](docs/roadmap.md) | Task index, dependency graph and waves. |
 | `docs/tasks/` | One file per task: goal, scope, design notes, acceptance criteria. |
 | [`docs/guides/`](docs/guides/) | How to write code ([code style](docs/guides/code-style.md)) and tests ([testing](docs/guides/testing.md)). |
+| [`RELEASING.md`](RELEASING.md) | How the owner releases the packages. |
 | `docs/spec-notes.md` | Interpretations of the FHIRPath specification (created when first needed). |
 | GitHub issues and the *Callis roadmap* project | Task status, follow-ups and bugs ([task issues](#task-issues-and-the-project-board)). |
 
@@ -167,8 +168,19 @@ Users depend on the public API, and other packages implement its interfaces (`Mo
 Versions and changelogs are managed with [Changesets](https://github.com/changesets/changesets), not with commit messages.
 
 - Add a changeset (`pnpm changeset`) for every user-visible change to a published package: behaviour, API, types or packaging. Tests, docs and internal tooling do not need one.
-- Choose the bump with [SemVer](https://semver.org) in mind. Before 1.0, use `minor` for new features and breaking changes, and `patch` for fixes.
+- Choose the bump with [SemVer](https://semver.org) in mind. Before 1.0, use `minor` for new features and breaking changes, and `patch` for fixes. Never use `major` before 1.0: it would release 1.0.0.
 - Write the summary for users of the package: what changed, and how to migrate if they must.
+
+## Releases
+
+Only the owner releases, following the runbook in [RELEASING.md](RELEASING.md). Agents never publish.
+
+- **A placeholder reserves each package name.** npm only configures a trusted publisher for a package that exists. So before a package's first release, the owner publishes a placeholder `0.0.1` by hand, with no code, and deprecates it at once.
+- **Every release, from 0.1.0 on,** goes through the [Release workflow](.github/workflows/release.yml) with [changesets/action](https://github.com/changesets/action), with provenance. Nothing is published until the owner merges the version PR, and it is not merged before 0.1.0 is ready.
+- **The version PR.** While changesets are pending, every push to `main` opens or updates a PR titled `chore: version packages`. It bumps the versions, writes the changelogs and deletes the changesets. It is a draft, and every update turns it back into one, so releasing starts with a deliberate *Ready for review*. Its body lists each package with the version it will publish. Only the owner merges it.
+- **CI on the version PR.** The workflow pushes with the `GITHUB_TOKEN`, and events from that token start no workflows, so the version PR gets no checks by itself. Close and reopen it before you merge: that runs CI and the PR-title check, which the branch rules require.
+- **Publishing.** Merging the version PR leaves no changesets pending. The next run builds the packages, runs the package checks (`pnpm release`) and publishes every package whose version is not on npm yet. It tags each one, for example `@callis/core@0.1.0`, and creates a GitHub release.
+- **npm trusted publishing.** The workflow signs in to npm with OIDC, so no npm token exists anywhere, and npm adds [provenance](https://docs.npmjs.com/generating-provenance-statements) to each version. The job runs in the `npm` environment, which only allows `main`. On npm, each package has a [trusted publisher](https://docs.npmjs.com/trusted-publishers/) for this repository, `release.yml` and the `npm` environment, and the trusted publisher allows direct `npm publish`. New trusted publishers only allow `npm stage publish` by default, and Changesets publishes directly. A new trusted publisher expires if it has not published within two days, so it is created right before the package's first release from the workflow.
 
 ## Specification questions and decisions
 
@@ -201,6 +213,7 @@ For maintainers. These settings make the rules above hold:
 - **Required checks:** `CI result` and `Conventional Commits`. `CI result` is the last job in the CI workflow and fails when any other CI job fails, so CI jobs can change without changing this setting. `Conventional Commits` is the PR-title check.
 - **Approval:** the owner's approval is required.
 - **Secrets:** `ROADMAP_SYNC_TOKEN` for the [roadmap sync](#roadmap-sync). A fine-grained token owned by `losol` with read and write access to issues in this repository and to the organization's projects, or a classic token with the `repo` and `project` scopes.
+- **Environments:** `npm`, for the release workflow, with `main` as its only deployment branch.
 - **Documentation site:** the [deploy workflow](#documentation-site) needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, as organization secrets that include this repository or as repository secrets, and a `site` environment whose only deployment branch is `main`. The Worker is named `callis`, and the custom domain `callis.losol.no` is attached to it in Cloudflare; the deploy adds no route, domain or DNS configuration. GitHub Pages stays off: the site is served from Cloudflare.
 
 ## Documentation site
@@ -237,6 +250,8 @@ You need Node.js 22.18+, 24.11+ or 26+ (the `engines` range in `package.json`, s
 | `pnpm check:roadmap` | Check that the roadmap and the task files agree. |
 | `pnpm sync:roadmap` | Show what the [roadmap sync](#roadmap-sync) would change on GitHub. Add `--apply` to make the changes. |
 | `pnpm changeset` | Add a changeset. |
+| `pnpm changeset:version` | Apply the pending changesets: bump versions and write changelogs. The release workflow runs it for the version PR. |
+| `pnpm release` | Build, run the package checks and publish with Changesets. Only the release workflow runs it. |
 | `pnpm conformance` | Run the HL7 FHIRPath test suite, write the reports in `docs/conformance/` and compare with the baseline. |
 | `pnpm conformance --update-baseline` | The same, and record newly passing tests in the baseline. |
 | `pnpm test:conformance -t testLiterals` | Run suite tests as Vitest tests, with a diff for each wrong result. |

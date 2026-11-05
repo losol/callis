@@ -170,7 +170,7 @@ The full sketch, including options, output modes and limits, is in [T0025](tasks
 ```text
 callis/
 ├── .changeset/
-├── .github/workflows/          ci.yml, deploy.yml (release.yml later)
+├── .github/workflows/          ci.yml, pr-title.yml, roadmap-sync.yml, release.yml, deploy.yml
 ├── docs/                       architecture.md, roadmap.md, adr/, tasks/, spec-notes.md, conformance/
 ├── apps/                       private, never published
 │   └── site/                   documentation site and progress page (callis.losol.no)
