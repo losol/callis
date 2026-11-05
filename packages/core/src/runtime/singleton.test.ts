@@ -123,6 +123,7 @@ describe('singleton', () => {
         () => singleton([new ModelNode({ value: {}, name: 'name' })], 'Decimal', toDecimalText),
         'eval/type-mismatch',
       );
+      expectEvaluationError(() => singleton([1], 'Any', () => undefined), 'eval/type-mismatch');
     });
 
     it('follows the same rules when the expected type is only known at runtime', () => {

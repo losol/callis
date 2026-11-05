@@ -69,7 +69,6 @@ export function singleton(
   if (count === 0) {
     return undefined;
   }
-  const expected = expectedType === 'Any' ? 'item' : expectedType;
   const item = collection[0];
   if (count === 1 && item !== undefined) {
     const value = convert(item);
@@ -81,9 +80,11 @@ export function singleton(
     }
     throw new FhirPathEvaluationError(
       'eval/type-mismatch',
-      `Expected ${expected}, but found an item that cannot be converted to ${expected}`,
+      `Expected ${expectedType}, but found an item that cannot be converted to ${expectedType}`,
     );
   }
+  // "Expected a single item" reads better than "a single Any".
+  const expected = expectedType === 'Any' ? 'item' : expectedType;
   throw new FhirPathEvaluationError(
     'eval/singleton-expected',
     `Expected a single ${expected} but found ${count} items`,
