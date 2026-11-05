@@ -1,5 +1,23 @@
-import type { ElementInfo, ModelProvider, ModelTypeInfo, SystemTypeName } from '@callis/core';
-import type { TypeRow } from './model-data.ts';
+import type {
+  ElementInfo,
+  ModelProvider,
+  ModelTypeInfo,
+  ModelTypeKind,
+  SystemTypeName,
+} from '@callis/core';
+
+/** Private wire format: element name, model type names, flags (array=1, choice=2). */
+export type ElementRow = readonly [string, readonly string[], number];
+
+/** Private wire format: name, kind, base, abstractness, System mapping, snapshot children. */
+export type TypeRow = readonly [
+  string,
+  ModelTypeKind,
+  string | null,
+  boolean,
+  Exclude<SystemTypeName, 'Any'> | null,
+  readonly ElementRow[],
+];
 
 /** Builds private indexes once; no mutable data escapes into evaluations. */
 export function createProvider(version: string, rows: readonly TypeRow[]): ModelProvider {

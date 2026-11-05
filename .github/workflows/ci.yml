@@ -45,7 +45,8 @@ jobs:
           if git cat-file -e "${DIFF_BASE}^{commit}" 2>/dev/null &&
              git diff --quiet "$DIFF_BASE" "$DIFF_HEAD" -- \
                tools/model-gen \
-               packages/fhir-r4/src/model-data.ts packages/fhir-r5/src/model-data.ts \
+               packages/fhir-r4/src/provider.ts packages/fhir-r4/src/model-data.ts \
+               packages/fhir-r5/src/provider.ts packages/fhir-r5/src/model-data.ts \
                .github/workflows/model-gen.yml .github/workflows/ci.yml; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else

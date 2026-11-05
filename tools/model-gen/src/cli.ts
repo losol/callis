@@ -12,7 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emitModel, generateModel, type StructureDefinition } from './generate.ts';
+import { emitModel, emitProvider, generateModel, type StructureDefinition } from './generate.ts';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const cache = join(root, 'tools/model-gen/.cache');
@@ -29,6 +29,7 @@ const releases = [
   },
 ];
 const check = process.argv.includes('--check');
+const template = readFileSync(join(root, 'tools/model-gen/runtime/provider.ts'), 'utf8');
 
 async function download(url: string, source: string): Promise<Uint8Array> {
   const response = await fetch(url, { signal: AbortSignal.timeout(120_000) });
@@ -75,16 +76,21 @@ for (const release of releases) {
         (name) => JSON.parse(readFileSync(join(directory, name), 'utf8')) as StructureDefinition,
       );
     const rows = generateModel(definitions);
-    const output = join(root, `packages/fhir-${release.name}/src/model-data.ts`);
-    const text = emitModel(rows, source);
-    if (check) {
-      if (!existsSync(output) || readFileSync(output, 'utf8') !== text) {
-        throw new Error(
-          `Generated output differs: ${output}; run pnpm --filter @callis/model-gen generate`,
-        );
-      }
-    } else writeFileSync(output, text);
-    console.log(`${source}: ${rows.length} types; ${check ? 'verified' : 'generated'} ${output}`);
+    const target = `packages/fhir-${release.name}/src`;
+    const outputs: ReadonlyArray<readonly [string, string]> = [
+      [join(root, target, 'provider.ts'), emitProvider(template)],
+      [join(root, target, 'model-data.ts'), emitModel(rows, source)],
+    ];
+    for (const [output, text] of outputs) {
+      if (check) {
+        if (!existsSync(output) || readFileSync(output, 'utf8') !== text) {
+          throw new Error(
+            `Generated output differs: ${output}; run pnpm --filter @callis/model-gen generate`,
+          );
+        }
+      } else writeFileSync(output, text);
+    }
+    console.log(`${source}: ${rows.length} types; ${check ? 'verified' : 'generated'} ${target}`);
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }

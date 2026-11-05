@@ -27,6 +27,6 @@ jobs:
         run: |
           pnpm --filter @callis/model-gen generate --check
           pnpm --filter @callis/model-gen generate
-          git diff --exit-code -- packages/fhir-r4/src/model-data.ts packages/fhir-r5/src/model-data.ts
+          git diff --exit-code -- packages/fhir-r4/src packages/fhir-r5/src
       - name: Verify generator and both ModelProvider contracts
         run: pnpm test --project model-gen --project fhir-r4 --project fhir-r5

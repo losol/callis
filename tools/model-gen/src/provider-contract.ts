@@ -1,7 +1,7 @@
 import type { ModelProvider, SystemTypeName } from '@callis/core';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { describeModelProviderContract } from '../../../packages/core/test/support/model-provider-contract.ts';
-import type { TypeRow } from '../runtime/model-data.ts';
+import type { TypeRow } from '../runtime/provider.ts';
 
 /** Applies the existing core contract and acceptance tests to every generated root. */
 export function describeGeneratedProvider(provider: ModelProvider, rows: readonly TypeRow[]): void {
