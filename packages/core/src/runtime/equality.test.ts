@@ -127,6 +127,13 @@ describe('equality and equivalence', () => {
   });
 
   // https://hl7.org/fhirpath/N1/#datetime-equality and #datetime-equivalence
+  // Long is phase 2 (T0028); until then, Longs only equal Longs.
+  it('compares two Longs by value', () => {
+    expectEquality(1n, 1n, true, true);
+    expectEquality(1n, 2n, false, false);
+    expectEquality(1n, 'a', false, false);
+  });
+
   describe('Date, DateTime and Time', () => {
     it.each<[string, string, boolean | undefined, boolean]>([
       ['@2012-04-15', '@2012-04-15', true, true], // testEquality17, testEquivalent14
@@ -228,6 +235,7 @@ describe('equality and equivalence', () => {
       expectEquality(node({ a: 1, b: [] }), node({ a: 1 }), true, true);
       expectEquality(node({ a: 1, b: [null] }), node({ a: 1, b: [] }), true, true);
       expectEquality(node({ a: [1] }), node({ a: 1 }), true, true);
+      expectEquality(node({ a: [null, 1] }), node({ a: 1 }), true, true);
       expectEquality(node({}), node({ b: null }), true, true);
     });
 
@@ -303,7 +311,7 @@ describe('equality and equivalence', () => {
     });
   });
 
-  // https://hl7.org/fhirpath/STU3/#equals and https://hl7.org/fhirpath/N1/#equivalent
+  // https://hl7.org/fhirpath/STU3/en/index.html#-equals and https://hl7.org/fhirpath/N1/#equivalent
   describe('collections with several items', () => {
     it.each<[readonly string[], readonly string[], boolean | undefined]>([
       [['1', '2'], ['1', '2'], true], // testEquality5

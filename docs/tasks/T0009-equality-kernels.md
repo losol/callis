@@ -17,7 +17,10 @@ Item-level and collection-level `equals`, `equivalent` and `compare` for every v
   - an extension point for model-specific equivalence, which T0020 uses for `Coding`/`CodeableConcept`
   - collection-level `=` (order-sensitive) and `~` (order-insensitive)
   - the return type is `true | false | undefined`
-- `src/runtime/comparison.ts`: export the shared runtime type `Ordering = -1 | 0 | 1`, with `compare(a, b): Ordering | undefined`, and `eval/type-mismatch` for incompatible types ([#57](https://github.com/losol/callis/issues/57)). Runtime consumers, operators and later `sort()` reuse it. Value modules retain their inline unions (including `TemporalComparison`); they must not import `runtime/` or each other beyond the existing Quantity → Decimal exception ([dependency rules](../architecture.md#repository-layout)).
+  - implemented as `itemEquals()`, `itemEquivalent()`, `equals()` and `equivalent()`; the extension point is the optional `modelEquivalence` of `EquivalenceContext`
+- `src/runtime/comparison.ts`: export the shared runtime type `Ordering = -1 | 0 | 1`, with `compare(a, b, ctx): Ordering | undefined`, and `eval/type-mismatch` for incompatible types ([#57](https://github.com/losol/callis/issues/57)). Runtime consumers, operators and later `sort()` reuse it. Value modules retain their inline unions (including `TemporalComparison`); they must not import `runtime/` or each other beyond the existing Quantity → Decimal exception ([dependency rules](../architecture.md#repository-layout)).
+- The kernels take a narrow `ComparisonContext` (`model`, `units`, `timezoneOffset`) declared in `comparison.ts`. T0008's `EvalContext` has the same fields, so it is passed as it is and neither module imports the other.
+- `src/runtime/operands.ts`: the operands as System values, through T0008's `toSystemValue()` (`runtime/node-value.ts`), with the implicit conversions and the model-less date convenience.
 - Own the [model-less date convenience](#model-less-date-convenience) defined in T0003 ([#55](https://github.com/losol/callis/issues/55)).
 
 ## Design notes
@@ -55,9 +58,9 @@ The equality kernel returns `true | false | undefined` (undefined means "cannot 
 
 ## Acceptance criteria
 
-- [ ] Every row of the equality table in the [design notes](#equality-and-equivalence) has tests, including the "undetermined" cases (dates with different precision, incomparable quantities).
-- [ ] Integer and Decimal mix correctly (`1 = 1.0`, `1 ~ 1.0`), and so do Date and DateTime.
-- [ ] Equality of complex JSON objects is recursive and order-sensitive for arrays.
-- [ ] Without a model, on `{"birthDate": "1974-12-25", "t": "10:00:00"}`, `birthDate = @1974-12-25`, `@1974-12-25 = birthDate`, `birthDate ~ @1974-12-25`, `birthDate < @2000`, `@2000 > birthDate` and `t = @T10:00:00` are true. Cover DateTime, partial precision and negated comparisons through the same dispatch.
-- [ ] A literal (`'1974-12-25' = @1974-12-25`), a computed string, two input strings, invalid temporal text, a typed node, and an untyped node with a model supplied keep ordinary comparison semantics. Forwarding an input item through a projection preserves eligibility; comparing it does not change later String operations on it ([#55](https://github.com/losol/callis/issues/55)).
-- [ ] `Ordering` is exported from `runtime/comparison.ts`; the String, Integer, Decimal, temporal and Quantity comparison results are assignable to `Ordering | undefined` without value modules importing runtime types ([#57](https://github.com/losol/callis/issues/57)).
+- [x] Every row of the equality table in the [design notes](#equality-and-equivalence) has tests, including the "undetermined" cases (dates with different precision, incomparable quantities).
+- [x] Integer and Decimal mix correctly (`1 = 1.0`, `1 ~ 1.0`), and so do Date and DateTime.
+- [x] Equality of complex JSON objects is recursive and order-sensitive for arrays.
+- [x] Without a model, on `{"birthDate": "1974-12-25", "t": "10:00:00"}`, `birthDate = @1974-12-25`, `@1974-12-25 = birthDate`, `birthDate ~ @1974-12-25`, `birthDate < @2000`, `@2000 > birthDate` and `t = @T10:00:00` are true. Cover DateTime, partial precision and negated comparisons through the same dispatch.
+- [x] A literal (`'1974-12-25' = @1974-12-25`), a computed string, two input strings, invalid temporal text, a typed node, and an untyped node with a model supplied keep ordinary comparison semantics. Forwarding an input item through a projection preserves eligibility; comparing it does not change later String operations on it ([#55](https://github.com/losol/callis/issues/55)).
+- [x] `Ordering` is exported from `runtime/comparison.ts`; the String, Integer, Decimal, temporal and Quantity comparison results are assignable to `Ordering | undefined` without value modules importing runtime types ([#57](https://github.com/losol/callis/issues/57)).

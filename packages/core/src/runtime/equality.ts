@@ -3,7 +3,7 @@
  * functions that compare items (`distinct()`, `union()`, `in`, `contains`, …).
  *
  * @see https://hl7.org/fhirpath/N1/#equality
- * @see https://hl7.org/fhirpath/STU3/#equality
+ * @see https://hl7.org/fhirpath/STU3/en/index.html#equality
  */
 import { ModelNode } from '../model/model-node.ts';
 import { temporalEquals, temporalEquivalent } from '../values/datetime/compare.ts';
@@ -32,9 +32,10 @@ import {
  * Model-specific equivalence of two complex values, such as FHIR's rules for `Coding` and
  * `CodeableConcept` ([R5 §2.1.9.1.6](https://hl7.org/fhir/R5/fhirpath.html#changes), T0020).
  *
- * It is called for every pair of complex values that `~` compares, including those nested inside
- * other complex values. Return `true` or `false` to decide, or undefined to fall back to the
- * default: all child properties equivalent, recursively.
+ * It is called for every pair of input nodes holding different complex values that `~` compares,
+ * including those nested inside other complex values; two nodes holding the same JSON object are
+ * equivalent without a call. Return `true` or `false` to decide, or undefined to fall back to the
+ * default: all child properties equivalent, recursively. `=` never calls it.
  */
 export type ModelEquivalence = (
   left: ModelNode,
@@ -165,7 +166,7 @@ export function itemEquivalent(left: Item, right: Item, ctx: EquivalenceContext)
 
 /**
  * Equality (`=`) of two collections ([N1 §6.1.1](https://hl7.org/fhirpath/N1/#equals), as
- * clarified in [3.0.0](https://hl7.org/fhirpath/STU3/#equals)): the items are compared pairwise,
+ * clarified in [3.0.0](https://hl7.org/fhirpath/STU3/en/index.html#-equals)): the items are compared pairwise,
  * in order.
  *
  * @returns undefined (empty) if either collection is empty; `false` if the lengths differ or any

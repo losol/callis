@@ -186,6 +186,14 @@ describe('compare', () => {
     });
   });
 
+  // Long is phase 2 (T0028); until then, Longs only compare with Longs.
+  it('orders two Longs by value', () => {
+    expect(compare(1n, 2n, ctx)).toBe(-1);
+    expect(compare(2n, 1n, ctx)).toBe(1);
+    expect(compare(2n ** 40n, 2n ** 40n, ctx)).toBe(0);
+    expectTypeMismatch(() => compare(1n, '1', ctx));
+  });
+
   // https://github.com/losol/callis/issues/57
   it('shares the Ordering type with the ordering results of the value modules', () => {
     expectTypeOf(compare).returns.toEqualTypeOf<Ordering | undefined>();
