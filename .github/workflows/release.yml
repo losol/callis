@@ -1,0 +1,59 @@
+name: Release
+
+# Versions and publishes the packages with Changesets. See CONTRIBUTING.md, "Releases".
+on:
+  push:
+    branches: [main]
+
+# A release is never cut off halfway, and runs one at a time.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # version branch, release tags and GitHub releases
+  pull-requests: write # open the version PR
+  id-token: write # OIDC for npm trusted publishing
+
+jobs:
+  release:
+    name: Version or publish
+    # Off until the owner turns releases on by setting the repository variable RELEASE_ENABLED to
+    # `true`. Without it the job is skipped: no version PR is opened and nothing is published.
+    if: vars.RELEASE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # npm trusted publishing, so there is no NPM_TOKEN anywhere. The trusted publisher on npm names
+    # this repository, release.yml and this environment, and the environment only allows main.
+    #
+    # npm can only configure a trusted publisher for a package that exists, so each package's very
+    # first version is published by hand. A new trusted publisher expires if no publish succeeds
+    # within two days, so it is created right before the first release from this workflow.
+    environment: npm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Changesets compares against the base branch, so it needs the history.
+          fetch-depth: 0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      # No registry-url and no token: publishing uses OIDC, and npm adds provenance by itself.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      # With changesets pending, this opens or updates the "chore: version packages" PR. Merging
+      # that PR leaves nothing pending, and the same step then publishes every package whose
+      # version is not on npm yet, tags it and creates a GitHub release. `pnpm release` builds and
+      # runs the package checks first, because `changeset publish` ships what is on disk.
+      #
+      # The action pushes the version commit and the tags through the GitHub API with the
+      # github-token input (default: github.token). Events from that token start no workflows, so
+      # CI does not run on the version PR by itself; see CONTRIBUTING.md, "Releases".
+      - uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          version-script: pnpm changeset:version
+          publish-script: pnpm release
+          commit-message: "chore: version packages"
+          pr-title: "chore: version packages"
