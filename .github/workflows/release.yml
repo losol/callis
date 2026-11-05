@@ -1,9 +1,12 @@
 name: Release
 
-# Versions and publishes the packages with Changesets. See CONTRIBUTING.md, "Releases".
+# Versions and publishes the packages with Changesets. See CONTRIBUTING.md, "Releases", and the
+# owner's runbook in RELEASING.md.
 on:
   push:
     branches: [main]
+  # By hand, to publish after a pause or to retry a failed publish (RELEASING.md).
+  workflow_dispatch:
 
 # A release is never cut off halfway, and runs one at a time.
 concurrency:
@@ -19,16 +22,18 @@ jobs:
   release:
     name: Version or publish
     # Off until the owner turns releases on by setting the repository variable RELEASE_ENABLED to
-    # `true`. Without it the job is skipped: no version PR is opened and nothing is published.
-    if: vars.RELEASE_ENABLED == 'true'
+    # `true`. Without it the job is skipped: no version PR is opened and nothing is published. It
+    # never runs for another branch, even when started by hand.
+    if: vars.RELEASE_ENABLED == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # npm trusted publishing, so there is no NPM_TOKEN anywhere. The trusted publisher on npm names
     # this repository, release.yml and this environment, and the environment only allows main.
     #
-    # npm can only configure a trusted publisher for a package that exists, so each package's very
-    # first version is published by hand. A new trusted publisher expires if no publish succeeds
-    # within two days, so it is created right before the first release from this workflow.
+    # npm can only configure a trusted publisher for a package that exists, so the first version of
+    # each package is published by hand (RELEASING.md). A new trusted publisher expires if no
+    # publish succeeds within two days, so it is created right before the package's first release
+    # from this workflow.
     environment: npm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -13,6 +13,7 @@ Everything in this repository is written in English.
 | [`docs/roadmap.md`](docs/roadmap.md) | Task index, dependency graph and waves. |
 | `docs/tasks/` | One file per task: goal, scope, design notes, acceptance criteria. |
 | [`docs/guides/`](docs/guides/) | How to write code ([code style](docs/guides/code-style.md)) and tests ([testing](docs/guides/testing.md)). |
+| [`RELEASING.md`](RELEASING.md) | How the owner releases the packages. |
 | `docs/spec-notes.md` | Interpretations of the FHIRPath specification (created when first needed). |
 | GitHub issues and the *Callis roadmap* project | Task status, follow-ups and bugs ([task issues](#task-issues-and-the-project-board)). |
 
@@ -172,14 +173,14 @@ Versions and changelogs are managed with [Changesets](https://github.com/changes
 
 ## Releases
 
-The [Release workflow](.github/workflows/release.yml) versions and publishes the packages with [changesets/action](https://github.com/changesets/action). Only the owner releases.
+Only the owner releases, following the runbook in [RELEASING.md](RELEASING.md). Agents never publish.
 
-- **Off until the owner turns it on.** The workflow does nothing unless the repository variable `RELEASE_ENABLED` is `true`. It stays unset until the first release ([T0025](docs/tasks/T0025-public-api-release.md)). Any other value pauses releases.
+- **The first version of each package is published by hand.** This covers the first release, 0.1.0, and the first version of any later public package. It is published from a reviewed `chore: version packages` commit on `main`. npm only configures a trusted publisher for a package that exists, so these versions have no provenance.
+- **Every later release** goes through the [Release workflow](.github/workflows/release.yml) with [changesets/action](https://github.com/changesets/action). The workflow does nothing unless the repository variable `RELEASE_ENABLED` is `true`. The owner sets it after the first release, and any other value pauses releases.
 - **The version PR.** While changesets are pending, every push to `main` opens or updates a PR titled `chore: version packages`. It bumps the versions, writes the changelogs and deletes the changesets. Review it like any other PR.
 - **CI on the version PR.** The workflow pushes with the `GITHUB_TOKEN`, and events from that token start no workflows, so the version PR gets no checks by itself. Close and reopen it before you merge: that runs CI and the PR-title check, which the branch rules require.
-- **Publishing.** Merging the version PR leaves no changesets pending. The next run builds the packages, runs the package checks (`pnpm release`) and publishes every package whose version is not on npm yet. It tags each one, for example `@callis/core@0.1.0`, and creates a GitHub release.
-- **npm trusted publishing.** The workflow signs in to npm with OIDC, so no npm token exists anywhere, and npm adds [provenance](https://docs.npmjs.com/generating-provenance-statements) to each version. The job runs in the `npm` environment, which only allows `main`. On npm, each package has a [trusted publisher](https://docs.npmjs.com/trusted-publishers/) for this repository, `release.yml` and the `npm` environment.
-- **A new package** is published once by hand with `pnpm publish` (pnpm, unlike npm, adds the root `LICENSE`), because npm only configures a trusted publisher for a package that exists. Create the trusted publisher right before the package's first release from the workflow: npm drops a trusted publisher that has not published within two days. Allow direct `npm publish` in it: new trusted publishers only allow `npm stage publish` by default, and Changesets publishes directly.
+- **Publishing.** Merging the version PR leaves no changesets pending. The next run builds the packages, runs the package checks (`pnpm release`) and publishes every package whose version is not on npm yet. It tags each one, for example `@callis/core@0.2.0`, and creates a GitHub release.
+- **npm trusted publishing.** The workflow signs in to npm with OIDC, so no npm token exists anywhere, and npm adds [provenance](https://docs.npmjs.com/generating-provenance-statements) to each version. The job runs in the `npm` environment, which only allows `main`. On npm, each package has a [trusted publisher](https://docs.npmjs.com/trusted-publishers/) for this repository, `release.yml` and the `npm` environment, and the trusted publisher allows direct `npm publish`. New trusted publishers only allow `npm stage publish` by default, and Changesets publishes directly. A new trusted publisher expires if it has not published within two days, so it is created right before the package's first release from the workflow.
 
 ## Specification questions and decisions
 
