@@ -20,7 +20,7 @@ Use a `ModelProvider` during evaluation ([design notes](#design-notes)).
   - extension-only primitives
 - Converting FHIR primitives to System values (memoized), with `FHIR.date` → `System.Date`.
 - The root identifier as a type, with inheritance (`DomainResource.contained…`).
-- `is`, `as` and `ofType` with model types, following the FHIR rules for primitives.
+- `is`, `as` and `ofType` with model types, following the FHIR rules for primitives and [T0008 target resolution](T0008-compiler-evaluator.md#type-names-that-do-not-resolve). A supplied model disables the model-less resource-name fallback, including for nodes whose model type is unknown.
 - Model-ordered `children()` and `descendants()`.
 - `parseJson()`: a lossless JSON parser (`JsonNumber`), which navigation understands.
 - A hand-written mini FHIR model fixture (Patient, Observation, HumanName, Quantity, Extension and the primitives) so that this task does not wait for T0019.
@@ -71,4 +71,5 @@ Nodes are created lazily during navigation. Conversion to a System value (for ex
 - [ ] `Observation.value.ofType(Quantity).unit` works. `Observation.valueQuantity` is empty or a semantic error by default, and works with `lenient.choiceSuffix`.
 - [ ] `Patient.name.given` on `["a", null]` with `_given: [null, {extension}]` gives two nodes, and the second has `hasValue()` false (checked once T0020 is merged).
 - [ ] With `parseJson`, `1.50` keeps its precision end to end (`toString()` returns `'1.50'`).
+- [ ] With the mini model, unknown `string1`, `System.Patient`, `FHIR.Boolean` and `Foo.Patient` raise `eval/unknown-type` across `is`/`as`/`ofType()`; resolved mismatches remain false/empty. An object with an unrecognized `resourceType` does not bypass the provider. `testFHIRPathAsFunction23`/`24` produce execution errors. Register only R4/R5 `testType22` as the [documented suite exception](../spec-notes.md#unresolved-type-specifiers-are-execution-errors) in `tools/conformance/src/exceptions.ts` when model-aware conformance execution is wired; do not change vendored fixtures or the unknown-type semantics.
 - [ ] With the real R4 model (once T0019 is merged), conformance groups `testBasics`, `testObservations`, `polymorphics`, `testInheritance`, `testMiscellaneousAccessorTests` and the model parts of `testTypes` pass.

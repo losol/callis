@@ -30,7 +30,7 @@ Analysis runs at three levels:
    - unknown elements (`name.given1`)
    - choice elements used with a type suffix (`Observation.valueQuantity`), with the hint "use `value.ofType(Quantity)`"
    - a root type that does not match the input (`Encounter.name` on a Patient)
-   - unknown types in `is`/`as`/`ofType`
+   - unknown types in `is`/`as`/`ofType`, as `semantic/unknown-type` warnings: [T0008](T0008-compiler-evaluator.md#type-names-that-do-not-resolve) resolves targets at compile time but raises `eval/unknown-type` only when evaluated, as the phase-1 execution-error fixtures require. These warnings do not become compile errors in strict mode. Without a model, an unqualified resource-name target is valid, not an unknown type ([#58](https://github.com/losol/callis/issues/58), [#59](https://github.com/losol/callis/issues/59))
    - obvious operator type errors (`1 + 'a'`)
 3. **Strict mode** (`strict: true`, [N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation)). Warnings become errors for the unsafe uses listed in N1 §11. The main example is a singleton-only operator or function given an operand that may repeat, such as `Patient.name.given < 'X'` or `Patient.name.given.substring(1)`. Equality is only flagged in the narrower case §11 describes: one operand may repeat and the other is a single item (`Patient.name.given = 'Wouter'`). Comparing two collections, as in `Patient.name = Patient.name`, is well-defined ([T0009: equality and equivalence](T0009-equality-kernels.md#equality-and-equivalence)) and stays valid. The basic version comes in phase 1; the full version later.
 
@@ -41,3 +41,4 @@ The result is a list of `Diagnostic { severity: 'error' | 'warning'; code; messa
 - [ ] `name.given1` and `Encounter.name.given` on `inputType: 'Patient'` are semantic errors (tests `testSimpleFail`, `testSimpleWithWrongContext`), and so is `Observation.valueQuantity.unit` (`testPolymorphismB`).
 - [ ] Conformance group `isSemanticChecks` passes, as do all `invalid="semantic"` tests in phase 1.
 - [ ] Analysis without a model never produces false errors for valid expressions in the suite.
+- [ ] Unknown-type warnings leave compilation successful and produce execution errors only at evaluated use sites, even in strict mode; model-less unqualified resource-name targets produce no unknown-type diagnostic. Known nonmatching types are not unknown-type errors.
