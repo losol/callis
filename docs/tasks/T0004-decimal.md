@@ -40,11 +40,14 @@ class Decimal {                  // immutable
 
 ```ts
 // decimal.ts
+const MAX_DECIMAL_DIGITS = 10_000;                          // the size bound, see below
+function isWithinDecimalBounds(coefficient: bigint, scale: number): boolean;
+
 class Decimal {
   static readonly ZERO: Decimal;
   static readonly ONE: Decimal;
   static of(coefficient: bigint, scale?: number): Decimal;  // also for Long (phase 2) and generated tables
-  static parse(text: string): Decimal | undefined;          // (\+|-)?\d+(\.\d+)?, keeps the scale
+  static parse(text: string): Decimal | undefined;          // (\+|-)?\d+(\.\d+)?, keeps the scale; undefined beyond the bound
   static fromNumber(value: number): Decimal | undefined;    // shortest round-trip; undefined for NaN/±Infinity
   static fromInteger(value: number): Decimal;               // implicit Integer → Decimal
 
@@ -54,9 +57,9 @@ class Decimal {
   toNumber(): number;                                       // nearest number, for Math.* and plain output
   toInteger(): number | undefined;                          // whole values in the 32-bit Integer range
 
-  add(other: Decimal): Decimal;
-  subtract(other: Decimal): Decimal;
-  multiply(other: Decimal): Decimal;
+  add(other: Decimal): Decimal | undefined;                // undefined beyond the size bound
+  subtract(other: Decimal): Decimal | undefined;
+  multiply(other: Decimal): Decimal | undefined;
   divide(divisor: Decimal): Decimal | undefined;
   div(divisor: Decimal): Decimal | undefined;
   mod(divisor: Decimal): Decimal | undefined;
@@ -79,21 +82,23 @@ function log(value: Decimal, base: Decimal): Decimal | undefined;
 function power(base: Decimal, exponent: Decimal): Decimal | undefined;
 ```
 
-`of`, `fromInteger` and `round` throw `FhirPathEvaluationError` with the code `eval/invalid-argument` when an argument breaks their contract (a negative or fractional scale or precision, a fractional Integer). The function layer ([T0016](T0016-fn-math.md)) should check `round()`'s precision itself, so the error carries the expression's span.
+`of`, `fromInteger` and `round` throw `FhirPathEvaluationError` with the code `eval/invalid-argument` when an argument breaks their contract (a negative or fractional scale or precision, a fractional Integer, or for `of` a value beyond the size bound). The function layer ([T0016](T0016-fn-math.md)) should check `round()`'s precision itself, so the error carries the expression's span.
 
 **Requirements** ([N1 §4.1.4](https://hl7.org/fhirpath/N1/#decimal)): at least 28 digits with 8 decimal places, a fixed-precision representation, and **visible precision**: `1.0.toString()` is `'1.0'`, and `~` and phase 2's `precision()`/`lowBoundary()` depend on the scale. A JavaScript `number` fails all of these (`0.1 + 0.2`, losing `1.0`, the 2^53 limit).
 
+**Size bound** (owner decision on [#47](https://github.com/losol/callis/issues/47)): a Decimal's coefficient has at most 10,000 digits and its scale is at most 10,000 (`MAX_DECIMAL_DIGITS`). An operation whose exact result is beyond that is overflow or underflow and gives empty ([3.0.0 §6.6](https://hl7.org/fhirpath/STU3/#math-1)), so `+`, `-` and `*` return `Decimal | undefined` like `/`. Without the bound, repeated multiplication doubles the digits each time until the runtime throws a bare `RangeError`. `mod`, `round`, `truncate`, `floor`, `ceiling`, `abs` and `negate` cannot leave the bound. Text beyond it does not parse, which includes number literals the lexer accepts. The compiler treats such a Decimal literal as an invalid literal value, raising `eval/invalid-literal` when it is evaluated ([#69](https://github.com/losol/callis/issues/69), [T0008](T0008-compiler-evaluator.md#invalid-literal-values)). `Decimal.of` throws ([spec notes](../spec-notes.md#size-of-a-decimal)).
+
 **Semantics**
 
-- `+` and `-` are exact, with scale `max(a.scale, b.scale)`. `*` is exact, with scale `a.scale + b.scale`.
-- `/` always returns a Decimal ([N1 §6.6.2](https://hl7.org/fhirpath/N1/#division)). The quotient is computed to 28 significant digits (at least 8 fractional digits), rounded half away from zero, and trailing zeros are removed (`4 / 2` is `2`). Division by zero returns empty.
+- `+` and `-` are exact, with scale `max(a.scale, b.scale)`. `*` is exact, with scale `a.scale + b.scale`. Each is empty beyond the size bound: `1e9999 + 1e-10000` would need 20,000 digits.
+- `/` always returns a Decimal ([N1 §6.6.2](https://hl7.org/fhirpath/N1/#division)). The quotient is computed to 28 significant digits (at least 8 fractional digits), rounded half away from zero, and trailing zeros are removed (`4 / 2` is `2`). Division by zero returns empty, and so does a quotient whose 28 significant digits or 8 digits after the point do not fit the size bound (`1 / 3e9980`, `1e9995 / 3`).
 - `div`, `mod`, `round`, `truncate`, `floor`, `ceiling` and `abs` are exact. `div` truncates towards zero and has scale 0; `mod` has the sign of the dividend and scale `max(a.scale, b.scale)` (`-5.5 div 2 = -2`, `-5.5 mod 2 = -1.5`, as in the test suite).
 - `round()` rounds half away from zero (`0.5 → 1`, `-0.5 → -1`), as clarified in [3.0.0](https://hl7.org/fhirpath/STU3/#fn-round). It never adds digits: `1.5.round(3)` is `1.5` ([spec notes](../spec-notes.md#round-never-adds-digits)).
 - `sqrt`, `exp`, and `power` with a non-integer exponent go through `number` and `Math.*`: the input is rounded to the nearest `number`, and the result is rounded to 15 significant digits, with trailing zeros removed. This precision loss is documented.
-- `ln` and `log` also use `Math.*` and round the result to 15 significant digits, but they never round `x` itself to a number, which would lose most of the digits near 1 and everything beyond the `number` range. Within 1e-20 of 1 they use `ln(1 + d) = d`; within 0.5 of 1, `Math.log1p` on the exact `d = x − 1`; beyond the `number` range, `ln(m) + k × ln(10)` for `x = m × 10^k`. So they keep 15 significant digits over the whole Decimal range.
+- `ln` and `log` also use `Math.*` and round the result to 15 significant digits, but they never round `x` itself to a number, which would lose most of the digits near 1 and everything beyond the `number` range. Within 1e-20 of 1 they use `ln(1 + d) = d`; within 0.5 of 1, `Math.log1p` on the exact `d = x − 1`; beyond the `number` range, `ln(m) + k × ln(10)` for `x = m × 10^k`. So they keep 15 significant digits over the whole Decimal range. A result beyond the size bound (`log(10, 1 − 1e-10000)`) is empty and is rejected before its power of ten is built.
 - For all five, `NaN`, infinite results and underflow to zero give empty ([spec notes](../spec-notes.md#results-that-cannot-be-represented-are-empty)).
 - `power` with an integer exponent (an exponent such as `2.0` counts as an integer):
-  - With a **non-negative** exponent the result is exact (repeated multiplication on `BigInt`). If the exact power `|x|^|n|` would have a coefficient of more than 10,000 digits or a scale above 10,000 (`0.1.power(10001)`), it is treated as overflow and is empty; for a negative exponent these bounds apply to the denominator.
+  - With a **non-negative** exponent the result is exact (repeated multiplication on `BigInt`). If the exact power `|x|^|n|` is beyond the size bound (`10.power(10000)`, or `0.1.power(10001)` by its scale), it is empty; for a negative exponent the bound applies to that denominator. A cheap estimate rejects huge powers before they are computed.
   - With a **negative** exponent the result cannot always be exact (`3.power(-1)` is 1/3). It is computed as the reciprocal `1 / x^|n|` using Decimal division: 28 significant digits, trailing zeros removed, and an empty result when `x` is zero (`0.power(-1)` is empty, like division by zero).
 - Comparison aligns scales. Literals and parsed values keep their scale.
 - Equivalence rounds both values half away from zero to the precision of the less precise one, ignoring trailing zeros ([spec notes](../spec-notes.md#rounding-in-decimal-equivalence)).

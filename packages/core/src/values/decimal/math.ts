@@ -15,20 +15,10 @@
  * Where the spec asks for an error instead, such as `log()` of a negative number in 3.0.0, the
  * function layer raises it.
  */
-import { Decimal } from './decimal.ts';
+import { Decimal, isWithinDecimalBounds, MAX_DECIMAL_DIGITS } from './decimal.ts';
 
 /** Significant digits kept from results computed with JavaScript numbers. */
 const NUMBER_SIGNIFICANT_DIGITS = 15;
-
-/**
- * An exact power whose coefficient has more digits than this, or whose scale is larger than this,
- * is treated as overflow (empty). The spec asks for at least 28 digits; this bound keeps `BigInt`
- * work small (well under a millisecond).
- */
-const MAX_EXACT_POWER_DIGITS = 10_000;
-
-/** The smallest coefficient with more than `MAX_EXACT_POWER_DIGITS` digits. */
-const EXACT_POWER_LIMIT = 10n ** BigInt(MAX_EXACT_POWER_DIGITS);
 
 /** `significand × 10^exponent`, for numbers whose power of ten does not fit in a `number`. */
 interface ScaledNumber {
@@ -84,8 +74,8 @@ export function ln(value: Decimal): Decimal | undefined {
  * The logarithm to the given base, rounded to 15 significant digits: `16.log(2)` is `4`. Like
  * {@link ln}, it keeps that precision near 1 and beyond the `number` range.
  *
- * @returns the logarithm, or `undefined` (empty) for non-positive input, a non-positive base, or
- *   base 1.
+ * @returns the logarithm, or `undefined` (empty) for non-positive input, a non-positive base,
+ *   base 1, or a result beyond the {@link MAX_DECIMAL_DIGITS} bound (`log(10, 1 − 1e-10000)`).
  * @see https://hl7.org/fhirpath/N1/#logbase-decimal-decimal
  */
 export function log(value: Decimal, base: Decimal): Decimal | undefined {
@@ -112,11 +102,11 @@ export function log(value: Decimal, base: Decimal): Decimal | undefined {
  *
  * A whole exponent may have a fractional part of zeros (`2.0`).
  *
- * The exact power `|base|^|exponent|` is bounded in two ways, or the result is empty: its
- * coefficient may have at most 10,000 digits, and its scale (the digits after the decimal point)
- * may be at most 10,000. For a negative exponent the bounds apply to that denominator, so
- * `2.power(-40000)` is empty although 28 digits of it would fit. The scale bound alone makes
- * `0.1.power(10001)`, `1.0.power(100000)` and `0.0.power(100000)` empty.
+ * The exact power `|base|^|exponent|` must fit the Decimal size bound ({@link MAX_DECIMAL_DIGITS}:
+ * a coefficient of at most 10,000 digits and a scale of at most 10,000), or the result is empty.
+ * For a negative exponent the bound applies to that denominator, so `2.power(-40000)` is empty
+ * although 28 digits of it would fit. The scale counts, so `0.1.power(10001)`,
+ * `1.0.power(100000)` and `0.0.power(100000)` are empty.
  *
  * @returns the power, or `undefined` (empty) if it cannot be represented: a negative base with a
  *   fractional exponent (`(-1).power(0.5)`), a zero base with a negative exponent, or an exact
@@ -154,10 +144,10 @@ function exactPower(base: Decimal, count: bigint): Decimal | undefined {
   const magnitude = base.coefficient < 0n ? -base.coefficient : base.coefficient;
   const scale = base.scale === 0 ? 0 : base.scale * times;
   // A cheap preflight on log10 of the result, so a huge power is never computed. A result just
-  // above the limit can pass it (log10 is one less than the digit count), so the exact check
+  // above the bound can pass it (log10 is one less than the digit count), so the exact check
   // below decides.
   const estimatedLog10 = magnitude <= 1n ? 0 : times * log10(magnitude);
-  if (estimatedLog10 > MAX_EXACT_POWER_DIGITS || scale > MAX_EXACT_POWER_DIGITS) {
+  if (estimatedLog10 > MAX_DECIMAL_DIGITS || scale > MAX_DECIMAL_DIGITS) {
     return undefined;
   }
   if (magnitude <= 1n) {
@@ -166,10 +156,7 @@ function exactPower(base: Decimal, count: bigint): Decimal | undefined {
     return Decimal.of(negative ? -magnitude : magnitude, scale);
   }
   const coefficient = base.coefficient ** count;
-  if (coefficient >= EXACT_POWER_LIMIT || -coefficient >= EXACT_POWER_LIMIT) {
-    return undefined;
-  }
-  return Decimal.of(coefficient, scale);
+  return isWithinDecimalBounds(coefficient, scale) ? Decimal.of(coefficient, scale) : undefined;
 }
 
 /** An estimate of `log10(value)` for a positive `value` of any size. */
@@ -210,6 +197,10 @@ function naturalLogarithm(value: Decimal): ScaledNumber | undefined {
     return undefined;
   }
   const difference = value.subtract(Decimal.ONE);
+  if (difference === undefined) {
+    // Cannot happen: for a positive value within the bound, value − 1 is within it too.
+    return undefined;
+  }
   const distance = difference.abs();
   if (distance.compare(LOG1P_RANGE) >= 0) {
     const { significand, exponent } = toScientific(value);
@@ -244,10 +235,18 @@ function fromScaledResult({ significand, exponent }: ScaledNumber): Decimal | un
   if (rounded === undefined) {
     return undefined;
   }
+  if (rounded.sign() === 0) {
+    // log(1, b) is 0 whatever power of ten b's logarithm carries.
+    return Decimal.ZERO;
+  }
   let coefficient = rounded.coefficient;
   let scale = rounded.scale - exponent;
   if (scale < 0) {
-    return Decimal.of(coefficient * 10n ** BigInt(-scale), 0);
+    // Checked before the power of ten is built: log(10, 1 + 1e-10000) would need 10,001 digits.
+    const digits = rounded.coefficient.toString().replace('-', '').length - scale;
+    return digits > MAX_DECIMAL_DIGITS
+      ? undefined
+      : Decimal.of(coefficient * 10n ** BigInt(-scale), 0);
   }
   // Rounding can carry the significand to 10 (9.999999999999999 → 10), whose zero would land
   // after the decimal point once the power of ten is applied.
@@ -255,5 +254,5 @@ function fromScaledResult({ significand, exponent }: ScaledNumber): Decimal | un
     coefficient /= 10n;
     scale -= 1;
   }
-  return Decimal.of(coefficient, scale);
+  return isWithinDecimalBounds(coefficient, scale) ? Decimal.of(coefficient, scale) : undefined;
 }

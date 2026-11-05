@@ -167,6 +167,24 @@ describe('log', () => {
       expect(show(log(value, base))).toBe(expected);
     },
   );
+
+  describe('within the Decimal size bound', () => {
+    // 1 − 1e-10000 and 1 + 1e-9999 are the closest values to 1 within the bound.
+    const belowOne = Decimal.of(10n ** 10_000n - 1n, 10_000);
+    const aboveOne = Decimal.of(10n ** 9_999n + 1n, 9_999);
+
+    it('keeps results at the bound', () => {
+      expect(show(ln(belowOne))).toBe(Decimal.of(-1n, 10_000).toString());
+      // Checked with Python's decimal module at 20,100 digits: 6.93147180559945e+9998.
+      expect(show(log(d('2'), aboveOne))).toBe(`693147180559945${'0'.repeat(9_984)}`);
+      expect(show(log(d('1'), belowOne))).toBe('0');
+    });
+
+    it('is empty for results beyond it', () => {
+      expect(log(d('10'), belowOne)).toBeUndefined(); // -2.3e10000 overflows
+      expect(log(aboveOne, Decimal.of(10n ** 9_999n))).toBeUndefined(); // 4.3e-10004 underflows
+    });
+  });
 });
 
 describe('power', () => {
@@ -226,8 +244,11 @@ describe('power', () => {
     expect(power(d('-10'), d('9999'))?.toString()).toHaveLength(10_001); // with the sign
     // 10^10000 has 10,001 digits, although its log10 is exactly 10,000.
     expect(power(d('10'), d('10000'))).toBeUndefined();
-    expect(power(Decimal.of(10n ** 10_000n), d('1'))).toBeUndefined();
-    expect(power(Decimal.of(-(10n ** 10_000n)), d('1'))).toBeUndefined();
+    // The largest Decimal (10,000 nines) raised to 1 stays; squared it overflows.
+    const largest = Decimal.of(10n ** 10_000n - 1n);
+    expect(power(largest, d('1'))?.equals(largest)).toBe(true);
+    expect(power(largest.negate(), d('1'))?.equals(largest.negate())).toBe(true);
+    expect(power(largest, d('2'))).toBeUndefined();
     expect(power(d('10'), d('10001'))).toBeUndefined();
     expect(power(d('2'), Decimal.of(10n ** 400n))).toBeUndefined();
     expect(power(d('0.1'), d('10001'))).toBeUndefined();
@@ -244,7 +265,7 @@ describe('power', () => {
     const huge = Decimal.of(10n ** 400n);
     expect(show(power(d('1'), huge))).toBe('1');
     expect(show(power(d('-1'), huge))).toBe('1');
-    expect(show(power(d('-1'), huge.add(Decimal.ONE)))).toBe('-1');
+    expect(show(power(d('-1'), Decimal.of(10n ** 400n + 1n)))).toBe('-1');
     expect(show(power(d('0'), huge))).toBe('0');
     expect(show(power(d('-1'), huge.negate()))).toBe('1');
   });

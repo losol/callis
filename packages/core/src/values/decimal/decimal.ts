@@ -18,6 +18,33 @@ const DECIMAL_TEXT = /^([+-]?)([0-9]+)(?:\.([0-9]+))?$/;
 const NUMBER_TEXT = /^(-?)([0-9]+)(?:\.([0-9]+))?(?:e([+-][0-9]+))?$/;
 
 /**
+ * The size bound of a Decimal: its coefficient has at most this many digits, and its scale is at
+ * most this. So every Decimal is below 10^10000 in magnitude, with steps of 10^-10000.
+ *
+ * N1 asks for at least 28 digits with 8 decimal places and allows more
+ * ([N1 §4.1.4](https://hl7.org/fhirpath/N1/#decimal)). The bound keeps `BigInt` work small: without
+ * it, repeated multiplication doubles the digits each time until the runtime gives up. A result
+ * outside the bound is overflow or underflow, which is empty
+ * ([3.0.0 §6.6](https://hl7.org/fhirpath/STU3/#math-1)).
+ */
+export const MAX_DECIMAL_DIGITS = 10_000;
+
+/** The smallest coefficient magnitude with more than `MAX_DECIMAL_DIGITS` digits. */
+const COEFFICIENT_LIMIT = 10n ** BigInt(MAX_DECIMAL_DIGITS);
+
+/**
+ * Whether `coefficient × 10^-scale` is within the {@link MAX_DECIMAL_DIGITS} bound, for a
+ * non-negative integer `scale`.
+ */
+export function isWithinDecimalBounds(coefficient: bigint, scale: number): boolean {
+  return (
+    scale <= MAX_DECIMAL_DIGITS &&
+    coefficient < COEFFICIENT_LIMIT &&
+    -coefficient < COEFFICIENT_LIMIT
+  );
+}
+
+/**
  * An exact decimal number that keeps its precision: `value = coefficient × 10^-scale`.
  *
  * The scale is the number of digits after the decimal point and is never negative. It is part of
@@ -25,8 +52,9 @@ const NUMBER_TEXT = /^(-?)([0-9]+)(?:\.([0-9]+))?(?:e([+-][0-9]+))?$/;
  * scale 0) are different instances that are equal (`equals`) but print differently.
  *
  * Instances are immutable; every operation returns a new instance. Operations whose result is
- * empty in FHIRPath, such as division by zero, return `undefined`. The design is recorded in
- * ADR-0005 (`docs/adr/0005-bigint-decimal.md`).
+ * empty in FHIRPath, such as division by zero, return `undefined`. So do operations whose exact
+ * result would leave the {@link MAX_DECIMAL_DIGITS} bound (overflow and underflow). The design is
+ * recorded in ADR-0005 (`docs/adr/0005-bigint-decimal.md`).
  *
  * @see https://hl7.org/fhirpath/N1/#decimal
  */
@@ -49,14 +77,25 @@ export class Decimal {
   /**
    * Creates `coefficient × 10^-scale`.
    *
-   * @throws FhirPathEvaluationError `eval/invalid-argument` if `scale` is not a non-negative integer.
+   * @throws FhirPathEvaluationError `eval/invalid-argument` if `scale` is not a non-negative integer,
+   *   or if the value is outside the {@link MAX_DECIMAL_DIGITS} bound.
    * @example `Decimal.of(254n, 2).toString()` is `'2.54'`.
    */
   static of(coefficient: bigint, scale = 0): Decimal {
     if (!Number.isSafeInteger(scale) || scale < 0) {
       throw invalidArgument('A Decimal scale must be a non-negative integer');
     }
+    if (!isWithinDecimalBounds(coefficient, scale)) {
+      throw invalidArgument(
+        `A Decimal has at most ${MAX_DECIMAL_DIGITS} digits and a scale of at most ${MAX_DECIMAL_DIGITS}`,
+      );
+    }
     return new Decimal(coefficient, scale);
+  }
+
+  /** The value, or `undefined` (overflow or underflow) if it is outside the bound. */
+  private static bounded(coefficient: bigint, scale: number): Decimal | undefined {
+    return isWithinDecimalBounds(coefficient, scale) ? new Decimal(coefficient, scale) : undefined;
   }
 
   /**
@@ -64,7 +103,9 @@ export class Decimal {
    * This covers FHIRPath number literals and the strings `toDecimal()` accepts. Exponents,
    * whitespace and other forms are rejected.
    *
-   * @returns the value, or `undefined` if the text is not in that form.
+   * @returns the value, or `undefined` if the text is not in that form or the value is outside the
+   *   {@link MAX_DECIMAL_DIGITS} bound (leading zeros do not count). So a number literal that the
+   *   lexer accepts, such as `1` followed by 10,000 zeros, can still give `undefined`.
    * @see https://hl7.org/fhirpath/N1/#todecimal-decimal
    */
   static parse(text: string): Decimal | undefined {
@@ -73,7 +114,14 @@ export class Decimal {
       return undefined;
     }
     const [, sign = '', integer = '', fraction = ''] = match;
-    const digits = BigInt(integer + fraction);
+    const allDigits = integer + fraction;
+    const firstSignificant = allDigits.search(/[1-9]/);
+    const significantDigits = firstSignificant === -1 ? 0 : allDigits.length - firstSignificant;
+    // Checked on the text, so an oversized input never becomes a BigInt.
+    if (fraction.length > MAX_DECIMAL_DIGITS || significantDigits > MAX_DECIMAL_DIGITS) {
+      return undefined;
+    }
+    const digits = BigInt(allDigits);
     return new Decimal(sign === '-' ? -digits : digits, fraction.length);
   }
 
@@ -161,30 +209,37 @@ export class Decimal {
   /**
    * Exact sum, with the larger of the two scales: `0.1 + 0.2` is `0.3`.
    *
+   * @returns the sum, or `undefined` (empty) if it is outside the {@link MAX_DECIMAL_DIGITS} bound,
+   *   for example `1e9999 + 1e-10000`, which needs 20,000 digits.
    * @see https://hl7.org/fhirpath/N1/#addition
    */
-  add(other: Decimal): Decimal {
+  add(other: Decimal): Decimal | undefined {
     const scale = Math.max(this.scale, other.scale);
-    return new Decimal(rescale(this, scale) + rescale(other, scale), scale);
+    return Decimal.bounded(rescale(this, scale) + rescale(other, scale), scale);
   }
 
   /**
    * Exact difference, with the larger of the two scales.
    *
+   * @returns the difference, or `undefined` (empty) if it is outside the
+   *   {@link MAX_DECIMAL_DIGITS} bound.
    * @see https://hl7.org/fhirpath/N1/#subtraction
    */
-  subtract(other: Decimal): Decimal {
+  subtract(other: Decimal): Decimal | undefined {
     const scale = Math.max(this.scale, other.scale);
-    return new Decimal(rescale(this, scale) - rescale(other, scale), scale);
+    return Decimal.bounded(rescale(this, scale) - rescale(other, scale), scale);
   }
 
   /**
    * Exact product, with the sum of the two scales: `1.2 * 1.8` is `2.16`.
    *
+   * @returns the product, or `undefined` (empty) if its coefficient or its scale is outside the
+   *   {@link MAX_DECIMAL_DIGITS} bound. The scale counts even for zero: `0` with scale 6,000 times
+   *   `0` with scale 6,000 has scale 12,000 and is empty.
    * @see https://hl7.org/fhirpath/N1/#multiplication
    */
-  multiply(other: Decimal): Decimal {
-    return new Decimal(this.coefficient * other.coefficient, this.scale + other.scale);
+  multiply(other: Decimal): Decimal | undefined {
+    return Decimal.bounded(this.coefficient * other.coefficient, this.scale + other.scale);
   }
 
   /**
@@ -192,7 +247,11 @@ export class Decimal {
    * after the decimal point if that keeps more, and then trailing zeros are removed: `1 / 2` is
    * `0.5`, `4 / 2` is `2`, and `1 / 3` is `0.3333333333333333333333333333`.
    *
-   * @returns the quotient, or `undefined` (empty) when dividing by zero.
+   * @returns the quotient, or `undefined` (empty) when dividing by zero or when the rounded
+   *   quotient is outside the {@link MAX_DECIMAL_DIGITS} bound. That happens on the small side
+   *   (`1e-9999 / 1e9999` underflows), and also from about `1e9992` up: there the 8 digits after
+   *   the point no longer fit next to the integer part, so `1e9995 / 3` is empty unless the
+   *   quotient is exact within fewer digits.
    * @see https://hl7.org/fhirpath/N1/#division
    */
   divide(divisor: Decimal): Decimal | undefined {
@@ -207,20 +266,29 @@ export class Decimal {
       leadingDigitExponent(abs(this.coefficient), abs(divisor.coefficient)) +
       divisor.scale -
       this.scale;
+    // Reject quotients that cannot fit before the large intermediate numbers are built. One whose
+    // first digit is at 10^10000 or above has too many integer digits, and rounding cannot make
+    // it smaller. One whose first digit is at 10^-10001 can still round up to the smallest step,
+    // 10^-10000 ((1 − 1e-29) × 1e-10000 does), so only those below that are rejected here.
+    if (exponent >= MAX_DECIMAL_DIGITS || -exponent > MAX_DECIMAL_DIGITS + 1) {
+      return undefined;
+    }
     const scale = Math.max(DIVISION_MIN_SCALE, DIVISION_SIGNIFICANT_DIGITS - 1 - exponent);
     const shift = scale + divisor.scale - this.scale;
-    const coefficient =
+    const rounded =
       shift >= 0
         ? divideRounded(this.coefficient * pow10(shift), divisor.coefficient)
         : divideRounded(this.coefficient, divisor.coefficient * pow10(-shift));
-    return stripTrailingZeros(coefficient, scale);
+    const stripped = stripTrailingZeros(rounded, scale);
+    return Decimal.bounded(stripped.coefficient, stripped.scale);
   }
 
   /**
    * Truncated division: the quotient without its fractional part, with scale 0.
    * `5.5 div 0.7` is `7` and `-5.5 div 2` is `-2`.
    *
-   * @returns the quotient, or `undefined` (empty) when dividing by zero.
+   * @returns the quotient, or `undefined` (empty) when dividing by zero or when the quotient has
+   *   more than {@link MAX_DECIMAL_DIGITS} digits.
    * @see https://hl7.org/fhirpath/N1/#div
    */
   div(divisor: Decimal): Decimal | undefined {
@@ -228,7 +296,7 @@ export class Decimal {
       return undefined;
     }
     const scale = Math.max(this.scale, divisor.scale);
-    return new Decimal(rescale(this, scale) / rescale(divisor, scale), 0);
+    return Decimal.bounded(rescale(this, scale) / rescale(divisor, scale), 0);
   }
 
   /**
@@ -385,14 +453,17 @@ function leadingDigitExponent(a: bigint, b: bigint): number {
 }
 
 /** Removes trailing zeros after the decimal point. */
-function stripTrailingZeros(coefficient: bigint, scale: number): Decimal {
+function stripTrailingZeros(
+  coefficient: bigint,
+  scale: number,
+): { coefficient: bigint; scale: number } {
   let digits = coefficient;
   let digitsScale = scale;
   while (digitsScale > 0 && digits % 10n === 0n) {
     digits /= 10n;
     digitsScale -= 1;
   }
-  return Decimal.of(digits, digitsScale);
+  return { coefficient: digits, scale: digitsScale };
 }
 
 /** The scale without trailing zeros: the precision that `~` compares at. Zero has precision 0. */
