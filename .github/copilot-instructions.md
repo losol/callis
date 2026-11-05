@@ -15,7 +15,7 @@ Callis is a FHIRPath engine for TypeScript (`@callis/core`). The general agent i
 - **Errors.** Library code throws `FhirPathError` subclasses with stable codes. Spec cases that say "empty" return an empty collection instead of throwing.
 - **Async.** Promises are detected structurally (`isThenable`), not with `instanceof Promise`. Lambda and host functions are tested in sync and async mode.
 - **Tests.** Tests cite spec anchors or HL7 test names, assert on error codes rather than messages, and use no real clock, timezone or network. The conformance baseline does not go down.
-- **Public API.** Changes have TSDoc and a changeset.
+- **Public API.** Changes have TSDoc and a changeset. New API leaves room for later tasks (optional members, options objects, extensible unions). A breaking change has `!` in the title and states its reason and the alternatives considered under *Interface changes* (`CONTRIBUTING.md`, "API changes").
 - **PR title.** It follows Conventional Commits with the types and scopes listed in `CONTRIBUTING.md`. Package changes need a package scope; repository-wide `docs`, `build`, `ci` and `chore` changes may omit it (for example `docs: add contributing guidelines`).
 
 ## Do not flag

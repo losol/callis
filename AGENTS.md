@@ -23,6 +23,13 @@ Instructions for AI coding agents working on Callis. This file follows the [AGEN
 - When the owner asks you to change the plan, do it in a separate `docs` PR with `Task: none`, as described in [Changing the plan](CONTRIBUTING.md#changing-the-plan). Change only what you were asked to. The roadmap is the source of truth for titles, waves, sizes and dependencies; do not edit those on GitHub, because the [roadmap sync](CONTRIBUTING.md#roadmap-sync) overwrites them.
 - Do not change an architecture decision on your own. Decisions that would change an ADR need the owner: ask.
 
+## Public API
+
+Design public API to last. Breaking it is a last resort, also before 1.0 ([API changes](CONTRIBUTING.md#api-changes)).
+
+- Design new public API with later tasks in mind: read the task files that will build on it, and prefer optional members, options objects and extensible unions over positional parameters and closed shapes.
+- A breaking change needs a reason. State it under *Interface changes* in the PR description, with the alternatives you considered, and add `!` to the PR title.
+
 ## Hard rules
 
 - No runtime dependencies in `@callis/core`.

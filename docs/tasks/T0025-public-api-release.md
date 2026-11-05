@@ -112,7 +112,7 @@ interface CompiledExpression {
 
 **Compile cache:** calling `evaluate()` with a string uses a bounded LRU cache of compiled expressions. The key is the expression plus the identity of its compile options. Its size is configurable, and it can be turned off.
 
-**Stability:** 0.1.0 does not freeze the API. Until 1.0, any public API may change in a minor version, including breaking changes, and that includes the interfaces other packages implement, such as `ModelProvider`. Every breaking change is called out in its changeset and under *Interface changes* in its PR. Deciding what is frozen for 1.0 is a separate item in the [roadmap backlog](../roadmap.md#backlog-not-scheduled).
+**Stability:** 0.1.0 does not freeze the API. Until 1.0, any public API may change in a minor version, including breaking changes, and that includes the interfaces other packages implement, such as `ModelProvider`. Breaking is a last resort: public API is designed with later tasks in mind, and every breaking change states its reason and the alternatives considered under *Interface changes* in its PR, and is called out in its changeset ([API changes](../../CONTRIBUTING.md#api-changes)). Deciding what is frozen for 1.0 is a separate item in the [roadmap backlog](../roadmap.md#backlog-not-scheduled).
 
 ## Acceptance criteria
 

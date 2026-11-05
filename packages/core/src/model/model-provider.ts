@@ -121,8 +121,8 @@ export function choiceJsonName(name: string, typeName: string): string {
  * `namespace`, `getType`, `isSubtypeOf` and `getSystemType` are also what the type system uses
  * to resolve type specifiers and to run `is`, `as` and `ofType()`.
  *
- * Until 1.0 this interface may change, including breaking changes; each one is called out in the
- * changelog.
+ * Until 1.0 this interface may still change, including breaking changes, but only as a last
+ * resort; each one is called out in the changelog.
  */
 export interface ModelProvider {
   /**
