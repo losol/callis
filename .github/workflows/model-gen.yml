@@ -21,10 +21,12 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Verify pinned model regeneration twice
+      # --check compares a fresh generation with the committed files and never writes. The second
+      # command writes, so the diff proves the committed output is what the generator produces.
+      - name: Verify pinned model regeneration
         run: |
           pnpm --filter @callis/model-gen generate --check
-          pnpm --filter @callis/model-gen generate --check
+          pnpm --filter @callis/model-gen generate
           git diff --exit-code -- packages/fhir-r4/src/model-data.ts packages/fhir-r5/src/model-data.ts
       - name: Verify generator and both ModelProvider contracts
         run: pnpm test --project model-gen --project fhir-r4 --project fhir-r5

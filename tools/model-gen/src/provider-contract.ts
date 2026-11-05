@@ -69,6 +69,8 @@ export function describeGeneratedProvider(provider: ModelProvider, rows: readonl
       expectTypeOf(provider).toEqualTypeOf<ModelProvider>();
     });
     it('covers every generated root and backbone', () => {
+      // Resource and datatype roots in hl7.fhir.r4.core@4.0.1 and hl7.fhir.r5.core@5.0.0.
+      // Update the numbers together with the pins in cli.ts.
       expect(rows.filter((row) => row[1] !== 'backbone')).toHaveLength(r5 ? 231 : 209);
       for (const [name] of rows) expect(provider.getType(name), name).toBeDefined();
     });

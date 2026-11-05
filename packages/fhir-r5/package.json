@@ -1,6 +1,6 @@
 {
   "name": "@callis/fhir-r5",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "description": "Generated FHIR R5 ModelProvider for Callis",
   "keywords": [
     "fhirpath",

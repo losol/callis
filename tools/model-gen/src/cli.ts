@@ -29,17 +29,21 @@ const releases = [
   },
 ];
 const check = process.argv.includes('--check');
+
+async function download(url: string, source: string): Promise<Uint8Array> {
+  const response = await fetch(url, { signal: AbortSignal.timeout(120_000) });
+  if (!response.ok) {
+    throw new Error(`Download failed for ${source}: HTTP ${response.status} from ${url}`);
+  }
+  return new Uint8Array(await response.arrayBuffer());
+}
 mkdirSync(cache, { recursive: true });
 for (const release of releases) {
   const packageName = `hl7.fhir.${release.name}.core`;
   const source = `${packageName}@${release.version}`;
   const archive = join(cache, `${source}.tgz`);
   const url = `https://packages.fhir.org/${packageName}/${release.version}`;
-  const bytes = existsSync(archive)
-    ? readFileSync(archive)
-    : new Uint8Array(
-        await (await fetch(url, { signal: AbortSignal.timeout(120_000) })).arrayBuffer(),
-      );
+  const bytes = existsSync(archive) ? readFileSync(archive) : await download(url, source);
   if (createHash('sha256').update(bytes).digest('hex') !== release.sha256) {
     throw new Error(`Archive integrity mismatch for ${source}; remove ${archive} and retry`);
   }
