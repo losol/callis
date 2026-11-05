@@ -5,6 +5,7 @@ export default defineConfig({
     projects: [
       'packages/*',
       'tools/*',
+      'apps/*',
       {
         test: {
           name: 'scripts',

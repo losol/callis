@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "types": ["node", "vite/client"],
+    "jsx": "react-jsx",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "isolatedDeclarations": false,
+    "declaration": false,
+    "rootDirs": [".", "./.react-router/types"]
+  },
+  "include": [
+    "app",
+    "progress",
+    "scripts",
+    "*.ts",
+    "../../scripts/roadmap.ts",
+    ".react-router/types/**/*"
+  ]
+}

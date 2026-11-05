@@ -99,3 +99,33 @@ jobs:
             conformance-results.json
             conformance-summary.json
           if-no-files-found: ignore
+
+  # The documentation site (T0035). It is built on pull requests only, so a change that breaks the
+  # site fails its PR; deploy.yml builds it again on main. It reads the whole git history.
+  site:
+    name: Site build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build the site
+        run: pnpm site:build
+      # A build that produced an empty site, or only the fallback page, must not pass.
+      - name: Check the build output
+        working-directory: apps/site/build/client
+        run: |
+          test -f index.html
+          test -f architecture/index.html
+          test -f progress/index.html
+          test -f search-index.json
+          grep -q "Callis" index.html

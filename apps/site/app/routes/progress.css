@@ -1,0 +1,529 @@
+/*
+ * The progress page. It uses ratio-ui's theme variables, so it follows the
+ * theme toggle of the site.
+ */
+
+.pg-page {
+  --pg-pink: oklch(0.8 0.1 330);
+  /* The body is a flex column and the margin is auto, so without a width the
+     page would size to its widest content (the roadmap board). */
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+:root[data-theme="light"] .pg-page {
+  --pg-pink: oklch(0.5 0.15 330);
+}
+
+.pg-page h1 {
+  margin: 0;
+  font-size: 1.9rem;
+  line-height: 1.2;
+}
+
+.pg-page h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.pg-lede {
+  max-width: 46rem;
+  margin: 0.6rem 0 0;
+  color: var(--text-muted);
+}
+
+.pg-page code {
+  color: var(--primary);
+  font-size: 0.9em;
+}
+
+/* The cards */
+.pg-card {
+  background: var(--card);
+  border: 1px solid var(--border-1);
+  border-radius: 0.75rem;
+  padding: 1.1rem 1.2rem;
+}
+
+.pg-page > section {
+  margin-bottom: 1rem;
+}
+
+.pg-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.pg-sub {
+  margin: 0.25rem 0 0.6rem;
+  color: var(--text-subtle);
+  font-size: 0.85rem;
+}
+
+/* The player */
+.pg-player {
+  position: sticky;
+  top: 56px;
+  z-index: 5;
+  margin: 1.5rem 0 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--border-2);
+  border-radius: 0.75rem;
+}
+
+.pg-player-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.pg-player-row input[type="range"] {
+  flex: 1;
+  min-width: 4rem;
+  accent-color: var(--primary);
+}
+
+.pg-player-row button,
+.pg-seg button {
+  cursor: pointer;
+  border: 1px solid var(--border-2);
+  border-radius: 0.5rem;
+  background: var(--card);
+  color: var(--text-muted);
+  padding: 0.25rem 0.7rem;
+  font: inherit;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.pg-player-row button:hover,
+.pg-seg button:hover {
+  background: var(--card-hover);
+  color: var(--text);
+}
+
+.pg-player-row button:focus-visible,
+.pg-seg button:focus-visible,
+.pg-table button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.pg-pos {
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pg-now {
+  margin-top: 0.5rem;
+  min-height: 2.9rem;
+}
+
+.pg-subject {
+  font-weight: 600;
+}
+
+.pg-meta {
+  color: var(--text-subtle);
+  font-size: 0.82rem;
+}
+
+.pg-tag {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0 0.45rem;
+  border: 1px solid var(--success-border);
+  border-radius: 9999px;
+  background: var(--success-bg);
+  color: var(--success-text);
+  font-size: 0.75rem;
+}
+
+/* The numbers */
+.pg-stats {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr));
+}
+
+.pg-label {
+  color: var(--text-subtle);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.pg-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-value small {
+  color: var(--text-subtle);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.pg-hint {
+  color: var(--text-subtle);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.pg-bar {
+  color: var(--success-solid);
+  letter-spacing: -0.04em;
+}
+
+.pg-bar i {
+  color: var(--border-2);
+  font-style: normal;
+}
+
+.pg-notice {
+  margin: 0 0 1rem;
+  padding: 0.6rem 1rem;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: 0.5rem;
+  color: var(--warning-text);
+  font-size: 0.85rem;
+}
+
+/* The charts */
+.pg-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  margin-bottom: 1rem;
+}
+
+.pg-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.pg-chart text {
+  fill: var(--text-subtle);
+  font-size: 10px;
+}
+
+.pg-chart .pg-end-label {
+  fill: var(--pg-color);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pg-chart .pg-axis {
+  stroke: var(--border-2);
+  stroke-width: 1.5;
+}
+
+.pg-chart .pg-grid {
+  stroke: var(--border-1);
+  stroke-dasharray: 2 4;
+}
+
+.pg-chart .pg-gap {
+  fill: var(--border-1);
+  opacity: 0.6;
+}
+
+.pg-chart .pg-line {
+  fill: none;
+  stroke: var(--pg-color);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.pg-chart .pg-area {
+  fill: var(--pg-color);
+  opacity: 0.12;
+}
+
+.pg-chart .pg-dot {
+  fill: var(--pg-color);
+  stroke: var(--card);
+  stroke-width: 1.5;
+}
+
+.pg-chart .pg-guide {
+  stroke: var(--text-subtle);
+  stroke-dasharray: 3 3;
+}
+
+.pg-chart .pg-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.pg-seg {
+  display: inline-flex;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pg-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.pg-seg button {
+  border-radius: 0;
+  padding: 0.15rem 0.8rem;
+}
+
+.pg-seg button:first-child {
+  border-radius: 0.5rem 0 0 0.5rem;
+}
+
+.pg-seg button:last-child {
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.pg-seg button[aria-pressed="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--text-on-primary);
+  font-weight: 600;
+}
+
+/* The roadmap board */
+.pg-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  color: var(--text-subtle);
+  font-size: 0.78rem;
+}
+
+.pg-board-wrap {
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.pg-board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 11.5rem;
+  gap: 0.6rem;
+  width: max-content;
+}
+
+.pg-col h3,
+.pg-group h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.pg-tile {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 0.4rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border-1);
+  border-radius: 0.5rem;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.pg-tile .pg-id {
+  font-weight: 700;
+}
+
+.pg-tile .pg-mark {
+  float: right;
+  color: var(--text-subtle);
+}
+
+.pg-tile .pg-title {
+  display: block;
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pg-tile.blocked {
+  border-style: dashed;
+  color: var(--text-subtle);
+  opacity: 0.75;
+}
+
+.pg-tile.ready {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+}
+
+.pg-tile.ready .pg-id,
+.pg-tile.ready .pg-mark {
+  color: var(--warning-text);
+}
+
+.pg-tile.done {
+  border-color: var(--success-border);
+  background: var(--success-bg);
+}
+
+.pg-tile.done .pg-id,
+.pg-tile.done .pg-mark {
+  color: var(--success-text);
+}
+
+.pg-tile.dep {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.pg-tile.new {
+  animation: pg-pop 0.9s ease-out;
+}
+
+@keyframes pg-pop {
+  0% {
+    transform: scale(1.08);
+    box-shadow: 0 0 22px var(--success-solid);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Functions and operators */
+.pg-groups {
+  display: grid;
+  gap: 0.9rem 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+}
+
+.pg-group h3 {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.pg-group h3 em {
+  color: var(--text-subtle);
+  font-style: normal;
+  font-weight: 400;
+}
+
+.pg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.pg-chip {
+  padding: 0.05rem 0.45rem;
+  border: 1px dashed var(--border-2);
+  border-radius: 0.35rem;
+  color: var(--text-subtle);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.76rem;
+}
+
+.pg-chip.ready {
+  border-style: solid;
+  border-color: var(--warning-border);
+  color: var(--warning-text);
+}
+
+.pg-chip.done {
+  border-style: solid;
+  border-color: var(--success-border);
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+/* The commit log */
+.pg-table-wrap {
+  overflow-x: auto;
+}
+
+.pg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-table th,
+.pg-table td {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--border-1);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.pg-table th {
+  color: var(--text-subtle);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pg-table .left {
+  text-align: left;
+}
+
+.pg-table .sha {
+  color: var(--warning-text);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.pg-table td.subject {
+  min-width: 14rem;
+  white-space: normal;
+}
+
+.pg-table button {
+  all: unset;
+  cursor: pointer;
+  color: inherit;
+}
+
+.pg-table button:hover {
+  color: var(--primary);
+}
+
+.pg-table tr.active td {
+  background: color-mix(in oklch, var(--primary) 20%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-tile.new {
+    animation: none;
+  }
+}

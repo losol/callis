@@ -8,6 +8,8 @@
   },
   "scripts": {
     "build": "pnpm --filter \"./packages/*\" run build",
+    "site:dev": "pnpm --filter @callis/site run dev",
+    "site:build": "pnpm --filter @callis/site run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:conformance": "vitest run --config tools/conformance/vitest.suite.config.ts",
