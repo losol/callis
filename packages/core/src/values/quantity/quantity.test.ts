@@ -129,10 +129,11 @@ describe('quantity arithmetic and conversion', () => {
     expect(minimalUnitSystem.convert(value, 's', 'ms')?.scale).toBe(value.scale);
   });
 
-  it('retains identity precision and rejects calendar conversions by default', () => {
+  it('retains identity precision and distinguishes implicit from explicit conversion', () => {
     const value = Decimal.of(100n, 2);
     expect(minimalUnitSystem.convert(value, 'days', 'day')).toBe(value);
-    expect(convertQuantity(quantity(1, 'year'), 'a')).toBeUndefined();
+    expect(convertQuantity(quantity(1, 'year'), 'a')?.toString()).toBe("1 'a'");
+    expect(minimalUnitSystem.convert(Decimal.ONE, 'year', 'a')).toBeUndefined();
     expect(compareQuantity(quantity(1, 'year'), quantity(1, 'd'))).toBeUndefined();
   });
 
@@ -146,7 +147,7 @@ describe('quantity arithmetic and conversion', () => {
     expect(multiplyQuantity(huge, quantity(2, '1'))).toBeUndefined();
     expect(divideQuantity(tiny, quantity(10, '1'))).toBeUndefined();
     expect(convertQuantity(huge, 'ms')).toBeUndefined();
-    expect(compareQuantity(quantity(1, 'ms'), huge)).toBeUndefined();
+    expect(compareQuantity(quantity(1, 'ms'), huge)).toBe(-1);
     expect(quantityEquivalent(quantity(1, 'ms'), huge)).toBe(false);
     expect(addQuantity(quantity(1, 'ms'), huge)).toBeUndefined();
     expect(subtractQuantity(quantity(1, 'ms'), huge)).toBeUndefined();
@@ -208,5 +209,70 @@ describe('FHIR Quantity mapping', () => {
       if (key !== field) Object.defineProperty(json, key, { value: valid[key] });
     }
     expect(fromFhirQuantity(json)).toBeUndefined();
+  });
+});
+
+// Native review regressions: https://hl7.org/fhirpath/STU3/en/index.html#quantity-equality
+describe('time comparison and explicit conversion boundaries', () => {
+  it.each([
+    [36525n, 2, 'days', 'a'],
+    [304375n, 4, 'days', 'mo'],
+    [365n, 0, 'day', 'a'],
+    [30n, 0, 'day', 'mo'],
+    [8766n, 0, 'hours', 'a'],
+    [7305n, 1, 'hours', 'mo'],
+  ] as const)(
+    'keeps calendar %s at scale %s %s distinct from %s',
+    (coefficient, scale, calendar, ucum) => {
+      const a = new Quantity(Decimal.of(coefficient, scale), calendar);
+      const b = quantity(1, ucum);
+      expect(quantityEquals(a, b)).toBeUndefined();
+      expect(quantityEquals(b, a)).toBeUndefined();
+      expect(compareQuantity(a, b)).toBeUndefined();
+      expect(compareQuantity(b, a)).toBeUndefined();
+    },
+  );
+
+  // https://hl7.org/fhirpath/STU3/en/index.html#time-valued-unit-conversions
+  it.each([
+    [1n, 0, 'year', 'a', '1'],
+    [1n, 0, 'a', 'year', '1'],
+    [1825n, 1, 'days', 'a', '0.5'],
+    [1n, 0, 'year', 'd', '365'],
+    [1n, 0, 'a', 'day', '365.25'],
+    [30n, 0, 'days', 'mo', '1'],
+    [1n, 0, 'month', 'mo', '1'],
+    [1n, 0, 'mo', 'month', '1'],
+  ] as const)(
+    'explicitly converts %s at scale %s %s to %s',
+    (coefficient, scale, source, target, expected) => {
+      const converted = convertQuantity(
+        new Quantity(Decimal.of(coefficient, scale), source),
+        target,
+      );
+      expect(converted?.unit).toBe(target);
+      const value = Decimal.parse(expected);
+      expect(value).toBeDefined();
+      expect(value !== undefined && converted?.value.equals(value)).toBe(true);
+    },
+  );
+
+  it('does not round terminating conversions or make equality depend on operand order', () => {
+    const coefficient = 10n ** 28n + 1n;
+    const milliseconds = new Quantity(Decimal.of(coefficient, 28), 'ms');
+    const seconds = new Quantity(Decimal.of(1n, 3), 's');
+    const converted = convertQuantity(milliseconds, 's');
+    expect(converted?.value.coefficient).toBe(coefficient);
+    expect(converted?.value.scale).toBe(31);
+    expect(quantityEquals(seconds, milliseconds)).toBe(false);
+    expect(quantityEquals(milliseconds, seconds)).toBe(false);
+    expect(compareQuantity(seconds, milliseconds)).toBe(-1);
+    expect(compareQuantity(milliseconds, seconds)).toBe(1);
+    expect(converted !== undefined && quantityEquals(converted, milliseconds)).toBe(true);
+    const months = new Quantity(Decimal.of(coefficient * 12n, 28), 'month');
+    expect(convertQuantity(months, 'year')?.value.coefficient).toBe(coefficient);
+    expect(convertQuantity(months, 'year')?.value.scale).toBe(28);
+    const negative = new Quantity(milliseconds.value.negate(), 'ms');
+    expect(convertQuantity(negative, 's')?.value.coefficient).toBe(-coefficient);
   });
 });

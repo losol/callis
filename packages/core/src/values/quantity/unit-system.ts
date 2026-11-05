@@ -1,5 +1,12 @@
-import { Decimal } from '../decimal/decimal.ts';
-import { CALENDAR_UNITS, definiteUnit, normalizeCalendarUnit } from './calendar-units.ts';
+import { Decimal, isWithinDecimalBounds } from '../decimal/decimal.ts';
+import {
+  CALENDAR_UCUM,
+  CALENDAR_UNITS,
+  definiteUnit,
+  isCalendarUnit,
+  normalizeCalendarUnit,
+  timeUnitMagnitude,
+} from './calendar-units.ts';
 
 /** Validated unit spelling. Implementations may attach private metadata. */
 export interface ParsedUnit {
@@ -10,6 +17,10 @@ export interface ParsedUnit {
 export interface UnitConversionOptions {
   /** Allows calendar year/month to match their UCUM counterparts. Default false. */
   readonly equivalence?: boolean;
+  /** Explicit toQuantity conversion: convert within the source system, then relabel.
+   * Takes precedence over equivalence. Default false; equality/ordering never enable this.
+   */
+  readonly explicit?: boolean;
 }
 
 /** A canonical product/quotient and the factor to apply to its numeric value. */
@@ -27,8 +38,11 @@ export interface UnitProduct {
 /**
  * Pure, synchronous unit provider; unknown, incompatible or overflowing results are undefined.
  * `parse` validates units known to the provider, but identical opaque units may still convert.
- * `convert` preserves input precision on identity. Calendar year/month remain distinct from
- * definite durations unless equivalence is requested. Providers must honor that distinction.
+ * `convert` preserves identity precision and all representable digits on terminating ratios.
+ * Calendar year/month remain distinct from
+ * definite durations unless equivalence or explicit conversion is requested. Providers must honor
+ * that distinction. Explicit conversion stays within the source system before relabeling to the
+ * target counterpart; equivalence instead uses the counterparts to compare without relabeling.
  * Algebra's factor/divisor scales the raw numeric product/quotient into the returned unit; this permits
  * canonicalizing scaled units (e.g. cm/m to '1') without losing a factor of 0.01.
  * Scale components must be strictly positive. Kernels return undefined for invalid components.
@@ -76,9 +90,19 @@ function convert(
   const source = normalizeCalendarUnit(from);
   const target = normalizeCalendarUnit(to);
   if (source === target) return value;
+  if (options?.explicit) {
+    const magnitude = timeUnitMagnitude(target);
+    if (
+      timeUnitMagnitude(source) !== undefined &&
+      magnitude !== undefined &&
+      isCalendarUnit(source) !== isCalendarUnit(target)
+    ) {
+      return convert(value, source, isCalendarUnit(source) ? magnitude : CALENDAR_UCUM[magnitude]);
+    }
+  }
   // Calendar year/month use the specified 12:1 relation before the approximate day factors.
-  if (source === 'year' && target === 'month') return value.multiply(Decimal.of(12n));
-  if (source === 'month' && target === 'year') return value.divide(Decimal.of(12n));
+  if (source === 'year' && target === 'month') return scale(value, 12n, 1n);
+  if (source === 'month' && target === 'year') return scale(value, 1n, 12n);
   if (
     CALENDAR_UNITS.some((unit) => unit === source) &&
     CALENDAR_UNITS.some((unit) => unit === target)
@@ -107,8 +131,31 @@ function convert(
 function scale(value: Decimal, numerator: bigint, denominator: bigint): Decimal | undefined {
   if (numerator === denominator) return value;
   const divisor = gcd(numerator, denominator);
-  const scaled = value.multiply(Decimal.of(numerator / divisor));
-  return denominator === divisor ? scaled : scaled?.divide(Decimal.of(denominator / divisor));
+  let coefficient = value.coefficient * (numerator / divisor);
+  let remaining = denominator / divisor;
+  const cancellation = gcd(coefficient < 0n ? -coefficient : coefficient, remaining);
+  coefficient /= cancellation;
+  remaining /= cancellation;
+  let twos = 0;
+  let fives = 0;
+  let recurring = remaining;
+  while (recurring % 2n === 0n) {
+    recurring /= 2n;
+    twos++;
+  }
+  while (recurring % 5n === 0n) {
+    recurring /= 5n;
+    fives++;
+  }
+  if (recurring === 1n) {
+    const places = Math.max(twos, fives);
+    coefficient *= 2n ** BigInt(places - twos) * 5n ** BigInt(places - fives);
+    const scale = value.scale + places;
+    return isWithinDecimalBounds(coefficient, scale) ? Decimal.of(coefficient, scale) : undefined;
+  }
+  // Only recurring conversions use arithmetic division's 28-significant-digit rounding.
+  if (!isWithinDecimalBounds(coefficient, value.scale)) return undefined;
+  return Decimal.of(coefficient, value.scale).divide(Decimal.of(remaining));
 }
 
 function gcd(a: bigint, b: bigint): bigint {

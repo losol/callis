@@ -1,9 +1,15 @@
 import { Decimal } from '../decimal/decimal.ts';
-import { CALENDAR_UCUM, CALENDAR_UNITS, normalizeCalendarUnit } from './calendar-units.ts';
+import {
+  CALENDAR_UCUM,
+  CALENDAR_UNITS,
+  isCalendarUnit,
+  normalizeCalendarUnit,
+  timeUnitMagnitude,
+} from './calendar-units.ts';
 import { Quantity } from './quantity.ts';
 import { minimalUnitSystem, type UnitSystem } from './unit-system.ts';
 
-/** Compare quantities after converting the right value into the left unit.
+/** Compare quantities in a common unit; time comparisons retain each operand's code system.
  * @see https://hl7.org/fhirpath/STU3/#quantity-equality
  */
 export function compareQuantity(
@@ -11,6 +17,30 @@ export function compareQuantity(
   b: Quantity,
   units: UnitSystem = minimalUnitSystem,
 ): -1 | 0 | 1 | undefined {
+  const aMagnitude = timeUnitMagnitude(a.unit);
+  const bMagnitude = timeUnitMagnitude(b.unit);
+  if (aMagnitude !== undefined && bMagnitude !== undefined) {
+    // Compare at the coarser magnitude, retaining each operand's original code system.
+    // https://hl7.org/fhirpath/STU3/en/index.html#quantity-equality
+    const magnitude =
+      CALENDAR_UNITS[
+        Math.min(CALENDAR_UNITS.indexOf(aMagnitude), CALENDAR_UNITS.indexOf(bMagnitude))
+      ];
+    if (magnitude === undefined) return undefined;
+    const mixed = isCalendarUnit(a.unit) !== isCalendarUnit(b.unit);
+    if (mixed && (magnitude === 'year' || magnitude === 'month')) return undefined;
+    const left = units.convert(
+      a.value,
+      a.unit,
+      isCalendarUnit(a.unit) ? magnitude : CALENDAR_UCUM[magnitude],
+    );
+    const right = units.convert(
+      b.value,
+      b.unit,
+      isCalendarUnit(b.unit) ? magnitude : CALENDAR_UCUM[magnitude],
+    );
+    return left === undefined || right === undefined ? undefined : left.compare(right);
+  }
   const value = units.convert(b.value, b.unit, a.unit);
   return value === undefined ? undefined : a.value.compare(value);
 }
@@ -42,13 +72,13 @@ export function quantityEquivalent(
   return left === undefined || right === undefined ? undefined : left.equivalent(right);
 }
 
-/** Converts to a requested unit with equality semantics, retaining the requested spelling. */
+/** Explicitly converts within the source system, then relabels with the requested unit. */
 export function convertQuantity(
   value: Quantity,
   unit: string,
   units: UnitSystem = minimalUnitSystem,
 ): Quantity | undefined {
-  return wrap(units.convert(value.value, value.unit, unit), unit);
+  return wrap(units.convert(value.value, value.unit, unit, { explicit: true }), unit);
 }
 
 /** Adds compatible quantities in the most granular unit; overflow gives empty.

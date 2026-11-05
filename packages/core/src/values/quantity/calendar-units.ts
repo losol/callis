@@ -53,3 +53,17 @@ export function definiteUnit(unit: string, equivalence = false): string | undefi
   }
   return undefined;
 }
+
+/** Calendar magnitude of a keyword or a supported UCUM time code. */
+export function timeUnitMagnitude(unit: string): CalendarUnit | undefined {
+  const normalized = normalizeCalendarUnit(unit);
+  return CALENDAR_UNITS.find(
+    (keyword) => keyword === normalized || CALENDAR_UCUM[keyword] === normalized,
+  );
+}
+
+/** Whether a spelling denotes the calendar code system (rather than UCUM). */
+export function isCalendarUnit(unit: string): boolean {
+  const normalized = normalizeCalendarUnit(unit);
+  return CALENDAR_UNITS.some((keyword) => keyword === normalized);
+}

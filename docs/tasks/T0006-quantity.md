@@ -43,7 +43,7 @@ These operations need unit knowledge:
 
 ```ts
 interface UnitProduct { readonly unit: string; readonly factor: Decimal; readonly divisor?: Decimal; }
-interface UnitConversionOptions { readonly equivalence?: boolean; }
+interface UnitConversionOptions { readonly equivalence?: boolean; readonly explicit?: boolean; }
 interface ParsedUnit { readonly unit: string; }
 interface UnitSystem {
   /** Parse and validate a unit, or return undefined if it is unknown. */
@@ -63,7 +63,13 @@ The UCUM tables are derived from data under the [UCUM license](https://github.co
 The value and kernels remain internal imports until T0025 selects package exports.
 `UnitSystem.convert` takes an optional options object with an `equivalence` flag;
 calendar years/months must not silently become definite durations for equality,
-ordering or addition. Providers return `undefined` for unsupported conversions
+ordering or addition. Explicit conversion uses `explicit: true` (taking precedence
+over equivalence): convert within the source code system and then relabel using the
+target counterpart. Implicit time comparison first selects the least granular
+magnitude and retains each operand's system; a calendar/UCUM year or month pair
+remains incomparable even when one input originally used days or smaller units.
+Terminating conversion ratios preserve every supported Decimal digit; only
+recurring ratios use arithmetic division rounding. Providers return `undefined` for unsupported conversions
 and Decimal overflow. Unit algebra returns a unit and a Decimal factor, so a
 future UCUM provider can canonicalize scaled compound units without losing value.
 The initial string-only algebra sketch cannot describe a scaled cancellation such
