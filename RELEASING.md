@@ -6,6 +6,7 @@ For the owner. Agents never publish or change anything on npm ([AGENTS.md](AGENT
 | --- | --- | --- |
 | A placeholder `0.0.1` of each package, which only reserves the name | By hand, from an empty directory, and deprecated at once ([1](#1-reserve-the-name-with-a-placeholder)) | No, and it contains no code |
 | Every real release, from 0.1.0 on | The Release workflow, when the owner merges the version PR ([2](#2-the-version-pr), [3](#3-every-release)) | Yes |
+| Prereleases, such as `0.1.0-next.0`, under the npm dist-tag `next` | The same, while Changesets is in prerelease mode ([5](#5-prereleases)) | Yes |
 
 npm only configures a [trusted publisher](https://docs.npmjs.com/trusted-publishers/) for a package that exists. The placeholder makes the package exist, so that 0.1.0 can already come from the workflow, with provenance.
 
@@ -67,7 +68,7 @@ If `npm view` returns 404 after a successful publish, check how the package was 
 
 Once the Release workflow is on `main`, every push to `main` with pending changesets opens or updates the PR `chore: version packages`. It stays open until the owner releases.
 
-> **Do not merge the version PR before 0.1.0 is ready.** Merging it publishes every package it lists to npm, and npm never takes a version back.
+> **Do not merge the version PR before 0.1.0 is ready.** Merging it publishes every package it lists to npm, and npm never takes a version back. In prerelease mode ([5](#5-prereleases)) it publishes a prerelease under `next` instead, which is how to try out the release before 0.1.0.
 
 Safeguards that make an accidental release unlikely:
 
@@ -89,7 +90,7 @@ gh api -X POST repos/losol/callis/environments/npm/deployment-branch-policies -f
 
 This covers 0.1.0 and every release after it.
 
-1. **Review the version PR** like any other. Every bumped `package.json` has the version you expect: 0.1.0 for a package's first release, never 0.0.1 (the placeholder's), and never 1.0.0 before 1.0. Every `CHANGELOG.md` entry reads well for users.
+1. **Review the version PR** like any other. Every bumped `package.json` has the version you expect: 0.1.0 for a package's first release (or `0.1.0-next.N` in prerelease mode), never 0.0.1 (the placeholder's), and never 1.0.0 before 1.0. Every `CHANGELOG.md` entry reads well for users.
 2. **Check that every package it bumps has a working trusted publisher on npm.** For a package's first release from the workflow, which is 0.1.0 for the first packages, create one now. A new trusted publisher expires if no publish succeeds within two days. On npmjs.com, open the package settings, then *Trusted publisher*, then *GitHub Actions*:
    - organization or user `losol`, repository `callis`, workflow `release.yml`, environment `npm`
    - **allow direct `npm publish`**. Trusted publishers created after 2026-09-03 only allow `npm stage publish` by default, and Changesets publishes directly.
@@ -120,6 +121,24 @@ This covers `@callis/fhir-r4`, `@callis/fhir-r5` and `@callis/ucum` (only after 
 3. **Create its trusted publisher** right before you merge that version PR ([3](#3-every-release), step 2), and release as usual.
 
 For the first release, do steps 2 and 3 for every package that 0.1.0 includes.
+
+## 5. Prereleases
+
+While `.changeset/pre.json` exists with `"mode": "pre"`, Changesets is in prerelease mode, with the tag in that file (`next`):
+
+- The version PR is titled `chore: version packages (next)`, and its versions are prereleases: first `0.1.0-next.0`, then `0.1.0-next.1`, and so on.
+- Merging it publishes them under the npm dist-tag `next`. `latest` does not move: `npm install @callis/core` still gets the placeholder, and `npm install @callis/core@next` gets the prerelease. The GitHub release is marked as a prerelease.
+- Changesets moves the changesets it has used into `.changeset/pre/` instead of deleting them, so the stable release still lists them.
+- A prerelease is published like any release, with provenance. Its first publish also validates the trusted publisher, which then no longer expires.
+
+Release as in [3](#3-every-release), but check `next` instead of `latest`:
+
+```sh
+npm view @callis/core dist-tags                         # { latest: '0.0.1', next: '0.1.0-next.0' }
+npm view @callis/core@0.1.0-next.0 dist.attestations    # names a SLSA provenance
+```
+
+**To end prereleases** before 0.1.0, run `pnpm changeset pre exit` in a PR and merge it. The next version PR, `chore: version packages`, then releases `0.1.0` under `latest`, and its changelog entry lists every change from the prereleases. The `next` tag still points to the last prerelease after that. Move it with `npm dist-tag add @callis/core@0.1.0 next --otp <code>`, or remove it with `npm dist-tag rm @callis/core next --otp <code>`.
 
 ## When something goes wrong
 
