@@ -31,6 +31,31 @@ describe('substitutable UnitSystem', () => {
     expect(compareQuantity(q(1, 'year'), q(1, 'a'), stubUnitSystem)).toBeUndefined();
   });
 
+  it('preserves exact length conversion digits and comparison symmetry', () => {
+    const coefficient = 10n ** 28n + 1n;
+    const centimeters = new Quantity(Decimal.of(coefficient, 26), 'cm');
+    const meters = q(1, 'm');
+    expect(convertQuantity(centimeters, 'm', stubUnitSystem)?.value.coefficient).toBe(coefficient);
+    expect(convertQuantity(centimeters, 'm', stubUnitSystem)?.value.scale).toBe(28);
+    expect(quantityEquals(centimeters, meters, stubUnitSystem)).toBe(false);
+    expect(quantityEquals(meters, centimeters, stubUnitSystem)).toBe(false);
+    expect(compareQuantity(centimeters, meters, stubUnitSystem)).toBe(1);
+    expect(compareQuantity(meters, centimeters, stubUnitSystem)).toBe(-1);
+  });
+
+  it('cancels zeros before applying the conversion scale bound', () => {
+    const canceling = new Quantity(Decimal.of(100n, MAX_DECIMAL_DIGITS), 'cm');
+    expect(convertQuantity(canceling, 'm', stubUnitSystem)?.value.coefficient).toBe(1n);
+    expect(convertQuantity(canceling, 'm', stubUnitSystem)?.value.scale).toBe(MAX_DECIMAL_DIGITS);
+    const underflow = new Quantity(Decimal.of(1n, MAX_DECIMAL_DIGITS), 'cm');
+    expect(convertQuantity(underflow, 'm', stubUnitSystem)).toBeUndefined();
+    const large = new Quantity(
+      Decimal.of(10n ** BigInt(MAX_DECIMAL_DIGITS) - 1n, MAX_DECIMAL_DIGITS),
+      'm',
+    );
+    expect(convertQuantity(large, 'cm', stubUnitSystem)?.value.scale).toBe(MAX_DECIMAL_DIGITS - 2);
+  });
+
   it('applies factors to compound units as well as dimensionless quotients', () => {
     expect(
       multiplyQuantity(q(10, 'cm'), q(20, 'cm'), stubUnitSystem)?.value.equals(Decimal.of(2n, 2)),

@@ -1,4 +1,8 @@
-import { Decimal } from '../../src/values/decimal/decimal.ts';
+import {
+  Decimal,
+  isWithinDecimalBounds,
+  MAX_DECIMAL_DIGITS,
+} from '../../src/values/decimal/decimal.ts';
 import {
   minimalUnitSystem,
   type UnitConversionOptions,
@@ -20,8 +24,8 @@ export const stubUnitSystem: UnitSystem = {
     to: string,
     options?: UnitConversionOptions,
   ): Decimal | undefined {
-    if (from === 'cm' && to === 'm') return value.divide(Decimal.of(100n));
-    if (from === 'm' && to === 'cm') return value.multiply(Decimal.of(100n));
+    if (from === 'cm' && to === 'm') return rescale(value, 2);
+    if (from === 'm' && to === 'cm') return rescale(value, -2);
     return minimalUnitSystem.convert(value, from, to, options);
   },
   multiply(a: string, b: string): UnitProduct | undefined {
@@ -34,3 +38,19 @@ export const stubUnitSystem: UnitSystem = {
     return minimalUnitSystem.divide(a, b);
   },
 };
+
+// Unit conversion preserves supported digits; arithmetic division may round even finite ratios.
+function rescale(value: Decimal, places: number): Decimal | undefined {
+  let coefficient = value.coefficient;
+  let scale = value.scale + places;
+  if (scale < 0) {
+    coefficient *= 10n ** BigInt(-scale);
+    scale = 0;
+  }
+  // A coefficient zero can be canceled before rejecting a representable scale-limit value.
+  while (scale > MAX_DECIMAL_DIGITS && coefficient % 10n === 0n) {
+    coefficient /= 10n;
+    scale--;
+  }
+  return isWithinDecimalBounds(coefficient, scale) ? Decimal.of(coefficient, scale) : undefined;
+}
