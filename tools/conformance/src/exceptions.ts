@@ -21,21 +21,8 @@ export const SUITE_EXCEPTIONS: readonly SuiteException[] = [
   {
     suites: ['r4', 'r5'],
     tests: ['testLessThan29', 'testGreaterThan29', 'testLessOrEqual28'],
-    reason:
-      '3.0.0 permits calendar year/month ordering after conversion; legacy suite expects empty',
+    reason: '3.0.0 permits calendar year/month ordering after conversion; the suite expects empty',
     note: 'ordering-calendar-years-and-months',
-  },
-  {
-    suites: ['r4'],
-    tests: ['testEquivalent28', 'testEquivalent29'],
-    reason: '3.0.0 quantity equivalence is empty for unsupported units; legacy suite expects false',
-    note: 'equivalence-of-unsupported-or-incompatible-quantities',
-  },
-  {
-    suites: ['r5'],
-    tests: ['testEquivalent29', 'testEquivalent30'],
-    reason: '3.0.0 quantity equivalence is empty for unsupported units; legacy suite expects false',
-    note: 'equivalence-of-unsupported-or-incompatible-quantities',
   },
   {
     // Owner decision in #50: keep ADR-0012 (UTC) rather than an "unknown offset" policy.

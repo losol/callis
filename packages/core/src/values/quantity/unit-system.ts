@@ -54,20 +54,25 @@ export interface UnitProduct {
  * @see https://hl7.org/fhirpath/STU3/#quantity
  */
 export interface UnitSystem {
+  /** Parses and validates a unit, or returns undefined when the provider does not know it. */
   parse(unit: string): ParsedUnit | undefined;
   /** Optional lossless comparison for providers whose conversions can recur.
    * Compare original values without rounding conversion intermediates; undefined means
    * incompatible or unsupported. Implementations may use exact ratios or affine transforms.
-   * Providers without this method use the kernels' conversion fallback.
+   * Providers without this method, and units for which it returns undefined, use the kernels'
+   * conversion fallback.
    */
   compare?(a: Decimal, from: string, b: Decimal, to: string): -1 | 0 | 1 | undefined;
+  /** Converts a value between units, or returns undefined when they cannot be related. */
   convert(
     value: Decimal,
     from: string,
     to: string,
     options?: UnitConversionOptions,
   ): Decimal | undefined;
+  /** The canonical unit of `a * b` and the scale to apply, for example 'cm' * 'cm' → 'cm2'. */
   multiply(a: string, b: string): UnitProduct | undefined;
+  /** The canonical unit of `a / b` and the scale to apply, for example 'cm2' / 'cm' → 'cm'. */
   divide(a: string, b: string): UnitProduct | undefined;
 }
 
@@ -203,8 +208,8 @@ export const minimalUnitSystem: UnitSystem = Object.freeze({
 });
 
 function compareExact(a: Decimal, from: string, b: Decimal, to: string): -1 | 0 | 1 | undefined {
-  const source = normalizeCalendarUnit(to);
-  const target = normalizeCalendarUnit(from);
+  const source = normalizeCalendarUnit(from);
+  const target = normalizeCalendarUnit(to);
   const sourceMagnitude = timeUnitMagnitude(source);
   const targetMagnitude = timeUnitMagnitude(target);
   if (
@@ -234,12 +239,13 @@ function compareExact(a: Decimal, from: string, b: Decimal, to: string): -1 | 0 
     denominator = factor(definiteUnit(target) ?? '');
   }
   if (numerator === undefined || denominator === undefined) return undefined;
-  // Cross-products are comparison intermediates, not new Decimal values. Their maximum size
-  // is bounded by the two input limits plus the small built-in time factors.
+  // Compare a * factor(source) with b * factor(target). Cross-products are comparison
+  // intermediates, not new Decimal values. Their maximum size is bounded by the two input limits
+  // plus the small built-in time factors.
   // https://hl7.org/fhirpath/STU3/en/index.html#quantity-equality
   const scale = Math.max(a.scale, b.scale);
-  const left = a.coefficient * denominator * 10n ** BigInt(scale - a.scale);
-  const right = b.coefficient * numerator * 10n ** BigInt(scale - b.scale);
+  const left = a.coefficient * numerator * 10n ** BigInt(scale - a.scale);
+  const right = b.coefficient * denominator * 10n ** BigInt(scale - b.scale);
   return left < right ? -1 : left > right ? 1 : 0;
 }
 

@@ -29,7 +29,8 @@ export function compareQuantity(
     if (magnitude === undefined) return undefined;
     const mixed = isCalendarUnit(a.unit) !== isCalendarUnit(b.unit);
     if (mixed && (magnitude === 'year' || magnitude === 'month')) return undefined;
-    if (units.compare !== undefined) return units.compare(a.value, a.unit, b.value, b.unit);
+    const exact = units.compare?.(a.value, a.unit, b.value, b.unit);
+    if (exact !== undefined) return exact;
     const left = units.convert(
       a.value,
       a.unit,
@@ -42,7 +43,9 @@ export function compareQuantity(
     );
     return left === undefined || right === undefined ? undefined : left.compare(right);
   }
-  if (units.compare !== undefined) return units.compare(a.value, a.unit, b.value, b.unit);
+  // A provider may implement compare() for some units only; conversion remains the fallback.
+  const exact = units.compare?.(a.value, a.unit, b.value, b.unit);
+  if (exact !== undefined) return exact;
   const value = units.convert(b.value, b.unit, a.unit);
   return value === undefined ? undefined : a.value.compare(value);
 }
@@ -59,19 +62,23 @@ export function quantityEquals(
   return result === undefined ? undefined : result === 0;
 }
 
-/** Quantity equivalence additionally relates calendar year/month and a/mo.
+/**
+ * Quantity equivalence additionally relates calendar year/month and a/mo. Units that cannot be
+ * related, and conversions that overflow, give `false`, never empty: N1 and the HL7 suite say so,
+ * and FHIR-59626 restores that wording in the spec (see spec notes).
+ * @see https://hl7.org/fhirpath/N1/#equivalent
  * @see https://hl7.org/fhirpath/STU3/#quantity-equivalence
  */
 export function quantityEquivalent(
   a: Quantity,
   b: Quantity,
   units: UnitSystem = minimalUnitSystem,
-): boolean | undefined {
+): boolean {
   const unit = selectUnit(a.unit, b.unit, units, false, true);
-  if (unit === undefined) return undefined;
+  if (unit === undefined) return false;
   const left = units.convert(a.value, a.unit, unit, { equivalence: true });
   const right = units.convert(b.value, b.unit, unit, { equivalence: true });
-  return left === undefined || right === undefined ? undefined : left.equivalent(right);
+  return left !== undefined && right !== undefined && left.equivalent(right);
 }
 
 /** Explicitly converts within the source system, then relabels with the requested unit. */

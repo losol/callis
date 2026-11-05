@@ -34,8 +34,8 @@ describe('quantity time table', () => {
     [1, 'wk', 7, 'days', true, true, 0],
     [1, 'a', 365, 'd', false, true, 1],
     [1, 'mo', 30, 'd', false, true, 1],
-    [1, 'g', 1000, 'mg', undefined, undefined, undefined],
-    [1, 'kg', 1, 's', undefined, undefined, undefined],
+    [1, 'g', 1000, 'mg', undefined, false, undefined],
+    [1, 'kg', 1, 's', undefined, false, undefined],
     [1, 'opaque', 1, 'opaque', true, true, 0],
   ] as const)('%s %s compared with %s %s', (av, au, bv, bu, equal, equivalent, order) => {
     const a = quantity(av, au);
@@ -316,13 +316,15 @@ describe('current time comparison semantics', () => {
     expect(compareQuantity(quantity(b, bu), quantity(a, au))).toBe(-order);
   });
 
+  // https://hl7.org/fhirpath/N1/#equivalent ("invalid units will result in false")
   // https://hl7.org/fhirpath/STU3/en/index.html#quantity-equivalence
   it.each([
-    ['x', 'year'],
-    ['year', 'kg'],
-  ])('returns empty for unsupported/incompatible equivalence %s/%s', (a, b) => {
-    expect(quantityEquivalent(quantity(1, a), quantity(1, b))).toBeUndefined();
-    expect(quantityEquivalent(quantity(1, b), quantity(1, a))).toBeUndefined();
+    ['x', 'year'], // testEquivalent28 (R4), testEquivalent29 (R5)
+    ['year', 'kg'], // testEquivalent29 (R4), testEquivalent30 (R5)
+    ['x', 'x2'],
+  ])('returns false for unsupported/incompatible equivalence %s/%s', (a, b) => {
+    expect(quantityEquivalent(quantity(1, a), quantity(1, b))).toBe(false);
+    expect(quantityEquivalent(quantity(1, b), quantity(1, a))).toBe(false);
   });
 
   // https://hl7.org/fhirpath/STU3/en/index.html#quantity-equality

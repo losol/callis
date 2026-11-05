@@ -270,13 +270,13 @@ How the conformance runner ([T0022](tasks/T0022-conformance-runner.md), [`tools/
 
 - **Spec:** [3.0.0 comparison](https://hl7.org/fhirpath/STU3/en/index.html#comparison) explicitly gives `6 months > 1 year` as `false` after converting to years. [Quantity equality](https://hl7.org/fhirpath/STU3/en/index.html#quantity-equality) requires time comparison in the least granular unit while retaining each code system.
 - **Pinned suites:** FHIR/fhir-test-cases commit `cb4eac4` (see `tools/conformance/fixtures/source.json`), both R4 and R5: `testLessThan29` (`1 year < 2 months`), `testGreaterThan29` (`1 year > 2 months`) and `testLessOrEqual28` (`1 year <= 2 days`) all expect empty.
-- **Decision:** follow 3.0.0 and T0006's unit conversion model, as confirmed by the owner during review of #88: those expressions return `false`, `true` and `false`, respectively. Calendar-to-calendar year/month ordering is supported; calendar year/month against definite UCUM counterparts remains empty. The six legacy cases are narrowly enumerated conformance exceptions. Direct kernel tests cover these results and reverse operand orders. (T0006)
+- **Decision:** follow 3.0.0 ([ADR-0001](adr/0001-spec-baseline.md)): its comparison section gives `6 months > 1 year` as `false` after converting to years, so those expressions return `false`, `true` and `false`, respectively. Calendar-to-calendar year/month ordering is supported; calendar year/month against definite UCUM counterparts remains empty. The six suite cases are narrowly enumerated conformance exceptions (#88). Direct kernel tests cover these results and reverse operand orders. (T0006)
 
 ### Equivalence of unsupported or incompatible quantities
 
-- **Spec:** [3.0.0 Quantity Equivalence](https://hl7.org/fhirpath/STU3/en/index.html#quantity-equivalence) says that failed conversion for invalid or noncommensurable units gives empty.
-- **Pinned suites:** FHIR/fhir-test-cases commit `cb4eac4`, R4 `testEquivalent28` and R5 `testEquivalent29` (`1 'x' ~ 1 year`); R4 `testEquivalent29` and R5 `testEquivalent30` (`1 year ~ 1 'kg'`) all expect `false`.
-- **Decision:** follow 3.0.0 and the T0006 acceptance criterion: return empty for each expression, as confirmed by the owner during review of #88. Keep numeric overflow empty as well. Only those four legacy cases are conformance exceptions. Direct kernel tests cover unsupported/incompatible equivalence in both operand orders. (T0006)
+- **Spec:** [N1 equivalence](https://hl7.org/fhirpath/N1/#equivalent) says "Attempting to operate on quantities with invalid units will result in `false`". [3.0.0 Quantity Equivalence](https://hl7.org/fhirpath/STU3/en/index.html#quantity-equivalence) is inconsistent here and says empty; [FHIR-59626](https://jira.hl7.org/browse/FHIR-59626) ("Quantity equivalence returns false rather than empty for invalid or incomparable units") corrects it in the next release.
+- **Tests:** R4 `testEquivalent28` and R5 `testEquivalent29` (`1 'x' ~ 1 year`); R4 `testEquivalent29` and R5 `testEquivalent30` (`1 year ~ 1 'kg'`) all expect `false`.
+- **Decision:** `~` returns `false` when the units cannot be related or the conversion overflows, following N1, the suite and the FHIR-59626 resolution. Equality and ordering keep returning empty for such units (T0006 acceptance criterion). No conformance exception is needed. Direct kernel tests cover both operand orders. (T0006)
 
 ### Recurring time conversion precision
 

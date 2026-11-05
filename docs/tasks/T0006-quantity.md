@@ -113,5 +113,5 @@ date/time arithmetic while FHIR mapping produces calendar year/month.
   - `1 second = 1 's'` is `true`
   - `10 seconds > 1 's'` is `true`
   - `1 year > 1 'a'` is empty
-- [x] With the minimal unit system, units it does not know compare as empty, and no error is thrown.
+- [x] With the minimal unit system, units it does not know compare as empty for `=`, `<`, `>`, `<=` and `>=`, and as `false` for `~` ([spec notes](../spec-notes.md#equivalence-of-unsupported-or-incompatible-quantities)); no error is thrown.
 - [x] The `UnitSystem` interface is documented and has a test double for other tasks to use.
