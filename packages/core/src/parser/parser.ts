@@ -99,7 +99,7 @@ class Parser {
   }
 
   #expect(kind: TokenKind): Token {
-    if (this.#peek().kind !== kind) this.#error(`'${kind}'`);
+    if (this.#peek().kind !== kind) this.#error(kind === 'EOF' ? 'end of input' : `'${kind}'`);
     return this.#take();
   }
 
@@ -255,6 +255,7 @@ class Parser {
         this.#take();
         return {
           kind: token.kind === '$this' ? 'This' : token.kind === '$index' ? 'Index' : 'Total',
+          target: null,
           span,
         };
       case 'Identifier':

@@ -6,6 +6,9 @@ import { parse } from '../../../packages/core/src/parser/parser.ts';
 import { loadSuite } from './fixtures.ts';
 import { allTests, SUITE_IDS, type SuiteTest } from './suite.ts';
 
+// Parse-only acceptance of the vendored suites. Unlike the runner, which only talks to an
+// EvaluatorAdapter (see adapter.ts), this test deliberately imports the engine's internal parser:
+// it checks grammar coverage, not evaluation, and there is no public parse entry point before T0025.
 // Syntax only: do not skip tests for missing converted inputs or unimplemented functions.
 // https://hl7.org/fhirpath/N1/grammar.html
 // https://hl7.org/fhirpath/N1/#operator-precedence
@@ -107,6 +110,8 @@ it.each([
   expect(exclusion({ group: 'testLiterals', expression })).toBe(expected);
 });
 
+// The counts pin the vendored fixture versions in tools/conformance/fixtures. When the fixtures are
+// refreshed, review the new exclusions and update the numbers here in the same PR.
 it('keeps the pinned suite exceptions explicit', () => {
   const r4 = allTests(loadSuite('r4'));
   const r5 = allTests(loadSuite('r5'));

@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { printAst } from '../../test/support/ast-printer.ts';
 import { FhirPathSyntaxError } from '../errors/fhirpath-error.ts';
-import { printAst } from './ast-printer.test-support.ts';
 import { parse } from './parser.ts';
 
 // https://hl7.org/fhirpath/N1/#operator-precedence
@@ -97,7 +97,7 @@ describe('terms and invocations', () => {
   it.each(['this', 'index', 'total'])(
     'preserves bare and targeted $%s syntax without assigning semantics',
     (name) => {
-      expect(parse(`$${name}`)).not.toHaveProperty('target');
+      expect(parse(`$${name}`)).toMatchObject({ target: null });
       expect(printAst(parse(`a.$${name}[0].b`))).toBe(`(. ([] (. a $${name}) 0) b)`);
       expect(printAst(parse(`-a.$${name}`))).toBe(`(- (. a $${name}))`);
     },
@@ -266,6 +266,15 @@ describe('syntax errors and limits', () => {
     'a `in` b',
   ])('rejects %j', (source) => {
     expect(() => parse(source)).toThrow(FhirPathSyntaxError);
+  });
+
+  it('describes the end of input in words', () => {
+    expect(() => parse('1 2')).toThrowError(
+      expect.objectContaining({
+        code: 'syntax/unexpected-token',
+        message: expect.stringContaining('Expected end of input'),
+      }),
+    );
   });
 
   it('names the expected delimiter and reports its exact multiline location', () => {

@@ -1,6 +1,6 @@
-import type { ExpressionNode } from './ast.ts';
+import type { ExpressionNode } from '../../src/parser/ast.ts';
 
-/** Test-only compact structural rendering; deliberately not a package export. */
+/** Compact structural rendering of an AST for test assertions. Not a package export. */
 export function printAst(node: ExpressionNode): string {
   switch (node.kind) {
     case 'Identifier':
@@ -26,7 +26,7 @@ export function printAst(node: ExpressionNode): string {
     case 'This':
     case 'Index':
     case 'Total':
-      return node.target === undefined
+      return node.target === null
         ? `$${node.kind.toLowerCase()}`
         : `(. ${printAst(node.target)} $${node.kind.toLowerCase()})`;
     default: {

@@ -80,7 +80,7 @@ type ExpressionNode =
 
 Literal nodes keep the **raw source text**. The compiler converts it with the value modules. This keeps the parser independent of the `Decimal` and date/time implementations, so they can be built in parallel, and it preserves decimal precision (`1.0` vs `1`). Literal values that are well-formed but invalid (`@2015-02-30`, `@T14:34:28Z`) are handled by the compiler at evaluation time; see [T0008: invalid literal values](T0008-compiler-evaluator.md#invalid-literal-values).
 
-The official [N1 grammar invocation rule](https://hl7.org/fhirpath/N1/grammar.html) also permits `expr.$this`, `expr.$index` and `expr.$total`. Those nodes have an optional `target?: ExpressionNode`; bare forms omit the property. This represents syntax only; T0008/T0018 decide evaluation semantics.
+The official [N1 grammar invocation rule](https://hl7.org/fhirpath/N1/grammar.html) also permits `expr.$this`, `expr.$index` and `expr.$total`. Those nodes have `target: ExpressionNode | null`, like `FunctionCallNode`; the bare forms have a null target. This represents syntax only; T0008/T0018 decide evaluation semantics.
 
 `parse(expression, { maxDepth? })` stays internal until T0025. Depth counts recursive expression calls including the root; the default and maximum permitted setting is 1,000, and callers may lower it. Invalid settings and excess nesting raise `syntax/nesting-limit`. Flat member, binary and index chains do not consume recursive nesting depth.
 

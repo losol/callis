@@ -123,20 +123,20 @@ export interface VariableNode extends AstNode {
   readonly name: string;
 }
 
-/** The current iteration item. */
+/** The current iteration item; a null target is the bare `$this` form. */
 export interface ThisNode extends AstNode {
   readonly kind: 'This';
-  readonly target?: ExpressionNode;
+  readonly target: ExpressionNode | null;
 }
-/** The current iteration index. */
+/** The current iteration index; a null target is the bare `$index` form. */
 export interface IndexNode extends AstNode {
   readonly kind: 'Index';
-  readonly target?: ExpressionNode;
+  readonly target: ExpressionNode | null;
 }
-/** The aggregate accumulator; its valid context is checked later. */
+/** The aggregate accumulator; a null target is the bare `$total` form. Its valid context is checked later. */
 export interface TotalNode extends AstNode {
   readonly kind: 'Total';
-  readonly target?: ExpressionNode;
+  readonly target: ExpressionNode | null;
 }
 
 /** Syntax-only expression tree. Grouping widens the enclosed node's span. */
