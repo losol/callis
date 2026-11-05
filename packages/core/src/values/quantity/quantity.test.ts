@@ -90,6 +90,9 @@ describe('quantity arithmetic and conversion', () => {
     expect(divideQuantity(quantity(12, 'kg'), quantity(3, '1'))?.toString()).toBe("4 'kg'");
     expect(divideQuantity(quantity(1, 'min'), quantity(30, 's'))?.toString()).toBe("2 '1'");
     expect(divideQuantity(quantity(60, 's'), quantity(1, 'min'))?.toString()).toBe("1 '1'");
+    expect(divideQuantity(quantity(1, 'min'), quantity(60, 's'))?.toString()).toBe("1 '1'");
+    expect(convertQuantity(quantity(60, 's'), 'min')?.value.toString()).toBe('1');
+    expect(convertQuantity(quantity(1, 'min'), 's')?.value.toString()).toBe('60');
     expect(divideQuantity(quantity(3, 'kg'), quantity(3, 'kg'))?.toString()).toBe("1 '1'");
     expect(multiplyQuantity(quantity(1, 'kg'), quantity(1, 'kg'))).toBeUndefined();
     expect(divideQuantity(quantity(1, 'kg'), quantity(1, 's'))).toBeUndefined();

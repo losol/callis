@@ -15,8 +15,12 @@ export interface UnitConversionOptions {
 /** A canonical product/quotient and the factor to apply to its numeric value. */
 export interface UnitProduct {
   readonly unit: string;
+  /** Strictly positive multiplier; zero and negative scales are unsupported. */
   readonly factor: Decimal;
-  /** Exact rational scale is factor/divisor; omit divisor for terminating factors. */
+  /** Strictly positive denominator; default Decimal.ONE. Never zero or negative.
+   * Scale is factor/divisor. Kernels multiply exact numerators/denominators before one final
+   * Decimal division, rather than rounding a recurring factor such as 1/60 first.
+   */
   readonly divisor?: Decimal;
 }
 
@@ -27,6 +31,8 @@ export interface UnitProduct {
  * definite durations unless equivalence is requested. Providers must honor that distinction.
  * Algebra's factor/divisor scales the raw numeric product/quotient into the returned unit; this permits
  * canonicalizing scaled units (e.g. cm/m to '1') without losing a factor of 0.01.
+ * Scale components must be strictly positive. Kernels return undefined for invalid components.
+ * Every intermediate uses bounded Decimal kernels; intermediate overflow also gives undefined.
  * Affine units must be rejected by algebra when a ratio calculation would be invalid.
  * Consumers must not inspect provider-specific parsed metadata. New capabilities should be
  * optional; a provider implementing these four methods remains valid.

@@ -82,7 +82,12 @@ export function multiplyQuantity(
   units: UnitSystem = minimalUnitSystem,
 ): Quantity | undefined {
   const product = units.multiply(a.unit, b.unit);
-  if (product === undefined) return undefined;
+  if (
+    product === undefined ||
+    product.factor.sign() <= 0 ||
+    (product.divisor !== undefined && product.divisor.sign() <= 0)
+  )
+    return undefined;
   const scaled = a.value.multiply(b.value)?.multiply(product.factor);
   return wrap(
     product.divisor === undefined ? scaled : scaled?.divide(product.divisor),
@@ -99,7 +104,12 @@ export function divideQuantity(
   units: UnitSystem = minimalUnitSystem,
 ): Quantity | undefined {
   const product = units.divide(a.unit, b.unit);
-  if (product === undefined) return undefined;
+  if (
+    product === undefined ||
+    product.factor.sign() <= 0 ||
+    (product.divisor !== undefined && product.divisor.sign() <= 0)
+  )
+    return undefined;
   const denominator = product.divisor === undefined ? b.value : b.value.multiply(product.divisor);
   return wrap(
     denominator === undefined ? undefined : a.value.multiply(product.factor)?.divide(denominator),

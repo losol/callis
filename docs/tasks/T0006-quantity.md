@@ -72,6 +72,11 @@ as `cm / m → 0.01 '1'`; returning only `'1'` would lose the factor. Returning
 provider exists, and lets T0007 canonicalize compound units without a later break.
 An optional Decimal `divisor` represents rational factors exactly (`s/min` is
 `1/60`), so `60 's' / 1 'min'` remains exactly 1; ordinary providers omit it.
+The divisor defaults to one; both scale components
+must be strictly positive. Kernels apply exact multiplications before one final
+division, and return empty for invalid scales or any Decimal intermediate overflow.
+Affine conversions retain their offsets for values; granularity uses only the
+interval delta. Providers must reject affine unit products/quotients.
 The alternative of retaining every input spelling in an unsimplified unit string
 would force every consumer to parse composite units.
 
