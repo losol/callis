@@ -283,11 +283,29 @@ importers:
         specifier: 4.10.2
         version: 4.10.2
 
+  packages/fhir-r4:
+    devDependencies:
+      '@callis/core':
+        specifier: workspace:^
+        version: link:../core
+
+  packages/fhir-r5:
+    devDependencies:
+      '@callis/core':
+        specifier: workspace:^
+        version: link:../core
+
   tools/conformance:
     devDependencies:
       fast-xml-parser:
         specifier: 5.12.0
         version: 5.12.0
+
+  tools/model-gen:
+    devDependencies:
+      '@callis/core':
+        specifier: workspace:^
+        version: link:../../packages/core
 
 packages:
 

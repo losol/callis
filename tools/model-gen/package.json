@@ -1,0 +1,14 @@
+{
+  "name": "@callis/model-gen",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "generate": "node src/cli.ts",
+    "typecheck": "tsc -p ."
+  },
+  "devDependencies": {
+    "@callis/core": "workspace:^"
+  }
+}

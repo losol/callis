@@ -10,6 +10,8 @@ import { listPackages } from './packages.ts';
 /** Gzip budgets in bytes. Packages without a budget are only reported. */
 const BUDGETS: Readonly<Record<string, number>> = {
   '@callis/core': 40 * 1024,
+  '@callis/fhir-r4': 60 * 1024,
+  '@callis/fhir-r5': 60 * 1024,
 };
 
 function javaScriptFiles(dir: string): string[] {

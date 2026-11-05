@@ -1,0 +1,50 @@
+{
+  "name": "@callis/fhir-r4",
+  "version": "0.0.1",
+  "description": "Generated FHIR R4 ModelProvider for Callis",
+  "keywords": [
+    "fhirpath",
+    "fhir",
+    "hl7",
+    "healthcare",
+    "typescript"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/losol/callis.git",
+    "directory": "packages/fhir-r4"
+  },
+  "homepage": "https://github.com/losol/callis/tree/main/packages/fhir-r4#readme",
+  "bugs": "https://github.com/losol/callis/issues",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "SOURCE.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p .",
+    "check:package": "publint --strict && attw --pack . --profile esm-only"
+  },
+  "peerDependencies": {
+    "@callis/core": "^0.1.0-0"
+  },
+  "devDependencies": {
+    "@callis/core": "workspace:^"
+  }
+}
