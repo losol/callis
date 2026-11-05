@@ -5,7 +5,7 @@ For the owner. Agents never publish or change anything on npm ([AGENTS.md](AGENT
 | What | How | Provenance |
 | --- | --- | --- |
 | A placeholder `0.0.1` of each package, which only reserves the name | By hand, from an empty directory, and deprecated at once ([1](#1-reserve-the-name-with-a-placeholder)) | No, and it contains no code |
-| Every real release, from 0.1.0 on | The Release workflow, through the version PR ([2](#2-turn-on-the-workflow), [3](#3-every-release)) | Yes |
+| Every real release, from 0.1.0 on | The Release workflow, when the owner merges the version PR ([2](#2-the-version-pr), [3](#3-every-release)) | Yes |
 
 npm only configures a [trusted publisher](https://docs.npmjs.com/trusted-publishers/) for a package that exists. The placeholder makes the package exist, so that 0.1.0 can already come from the workflow, with provenance.
 
@@ -56,26 +56,34 @@ npm view "$PKG" versions dist-tags     # [ '0.0.1' ] and { latest: '0.0.1' }
 npm view "$PKG@0.0.1" deprecated       # the deprecation message
 ```
 
+If `npm view` returns 404 after a successful publish, check how the package was published. A scoped package published without `--access public` is restricted (private): it is hidden from anonymous `npm view`, and npm adds no provenance to it. `npm access get status "$PKG"` shows how it is published, and `npm access set status=public "$PKG" --otp <code>` makes it public. A new package can also take a few minutes to show up.
+
 **Dist-tags.** The first publish makes 0.0.1 `latest`. Until 0.1.0 is out, `npm install @callis/core` therefore installs the placeholder, with a deprecation warning, and there is nothing to import. The workflow publishes 0.1.0 under `latest` (the Changesets default), which replaces it. 0.0.1 stays deprecated.
 
 - **Never unpublish the placeholder.** npm never accepts a version number twice, and unpublishing a package's last version blocks the name for 24 hours.
 - **The first real version must be 0.1.0, not 0.0.1.** The packages in the repository stay at 0.0.0 until their first version PR. A `minor` changeset takes 0.0.0 to 0.1.0. A package with only `patch` changesets would become 0.0.1, which the placeholder already holds, and its publish would fail.
 
-## 2. Turn on the workflow
+## 2. The version PR
 
-Once, when 0.1.0 is ready, in this order:
+Once the Release workflow is on `main`, every push to `main` with pending changesets opens or updates the PR `chore: version packages`. It stays open until the owner releases.
 
-1. **Create the `npm` environment**, with `main` as its only deployment branch. Do this before step 3: a workflow that names an environment that does not exist creates it without any branch rule.
+> **Do not merge the version PR before 0.1.0 is ready.** Merging it publishes every package it lists to npm, and npm never takes a version back.
 
-   ```sh
-   gh api -X PUT repos/losol/callis/environments/npm --input - <<'JSON'
-   { "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true } }
-   JSON
-   gh api -X POST repos/losol/callis/environments/npm/deployment-branch-policies -f name=main -f type=branch
-   ```
+Safeguards that make an accidental release unlikely:
 
-2. **Check that changesets are pending** on `main`: `pnpm changeset status` lists the bumps, and every package goes to 0.1.0. With changesets pending, the workflow's first run opens the version PR. With nothing pending it would publish what is on `main`, for example `@callis/core@0.0.0`, as `pnpm exec changeset publish-plan` shows. So never turn releases on while nothing is pending.
-3. **Turn releases on:** `gh variable set RELEASE_ENABLED --body true`. The next push to `main` opens the PR `chore: version packages`. To open it right away, run `gh workflow run release.yml --ref main`.
+- **The PR is a draft,** and every update turns it back into one. A draft cannot be merged, so releasing takes a deliberate *Ready for review* first.
+- **Its body lists each package with the version it will publish,** for example `@callis/core@0.1.0`, followed by its changelog entry.
+- **It gets no CI by itself,** because the workflow's token starts no workflows, and the branch rules require CI. So it must also be closed and reopened before it can be merged.
+- **Nothing is published while changesets are pending.** The workflow then only updates the version PR, and only merging it consumes the changesets. Never delete pending changesets by hand: with nothing pending, the next push to `main` would publish what is on `main`, for example `@callis/core@0.0.0`. `pnpm exec changeset publish-plan` shows what that would be.
+
+Once, before the first release, give the `npm` environment `main` as its only deployment branch:
+
+```sh
+gh api -X PUT repos/losol/callis/environments/npm --input - <<'JSON'
+{ "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true } }
+JSON
+gh api -X POST repos/losol/callis/environments/npm/deployment-branch-policies -f name=main -f type=branch
+```
 
 ## 3. Every release
 
@@ -85,7 +93,8 @@ This covers 0.1.0 and every release after it.
 2. **Check that every package it bumps has a working trusted publisher on npm.** For a package's first release from the workflow, which is 0.1.0 for the first packages, create one now. A new trusted publisher expires if no publish succeeds within two days. On npmjs.com, open the package settings, then *Trusted publisher*, then *GitHub Actions*:
    - organization or user `losol`, repository `callis`, workflow `release.yml`, environment `npm`
    - **allow direct `npm publish`**. Trusted publishers created after 2026-09-03 only allow `npm stage publish` by default, and Changesets publishes directly.
-3. **Close and reopen the PR,** so that CI and the PR-title check run. The workflow's token starts no workflows by itself. Merge the PR once both pass.
+   - If you created a trusted publisher earlier, check that it is still valid. One that has not published within two days of its creation has expired and cannot be used or edited. Delete it and create it again.
+3. **Mark the PR ready for review, then close and reopen it,** so that CI and the PR-title check run. The workflow's token starts no workflows by itself. Merge the PR once both pass. If `main` gets a push in the meantime, the workflow updates the PR and turns it back into a draft: start this step again.
 4. **The Release run on `main`** publishes every bumped package with provenance, tags it (for example `@callis/core@0.1.0`) and creates a GitHub release. Check the run in *Actions*.
 5. **Check the result:**
 
@@ -114,6 +123,6 @@ For the first release, do steps 2 and 3 for every package that 0.1.0 includes.
 
 ## When something goes wrong
 
-- **Pause releases** with `gh variable set RELEASE_ENABLED --body false`. The workflow is then skipped: nothing is versioned or published.
+- **Pause releases** with `gh workflow disable release.yml`, and resume them with `gh workflow enable release.yml`. While the workflow is disabled, the version PR is not updated and nothing is published.
 - **A publish fails with an authentication error** (E401, E403, E404 or ENEEDAUTH). Check the trusted publisher: it may be missing, expired, stage-only, or have a field that does not match. The workflow name is case-sensitive. Fix it on npm, then re-run the failed job, or run `gh workflow run release.yml --ref main`.
 - **A publish fails because the version exists.** npm never accepts the same version twice, even after an unpublish. Add a changeset that bumps past it; this is also how to fix a bad release.

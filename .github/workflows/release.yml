@@ -5,7 +5,7 @@ name: Release
 on:
   push:
     branches: [main]
-  # By hand, to publish after a pause or to retry a failed publish (RELEASING.md).
+  # By hand, for example to retry a failed publish (RELEASING.md).
   workflow_dispatch:
 
 # A release is never cut off halfway, and runs one at a time.
@@ -21,10 +21,9 @@ permissions:
 jobs:
   release:
     name: Version or publish
-    # Off until the owner turns releases on by setting the repository variable RELEASE_ENABLED to
-    # `true`. Without it the job is skipped: no version PR is opened and nothing is published. It
-    # never runs for another branch, even when started by hand.
-    if: vars.RELEASE_ENABLED == 'true' && github.ref == 'refs/heads/main'
+    # Only for main of this repository, also when started by hand, and never in a fork. Nothing is
+    # published until the owner merges the version PR (RELEASING.md).
+    if: github.repository == 'losol/callis' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # npm trusted publishing, so there is no NPM_TOKEN anywhere. The trusted publisher on npm names
@@ -58,9 +57,14 @@ jobs:
       # The action pushes the version commit and the tags through the GitHub API with the
       # github-token input (default: github.token). Events from that token start no workflows, so
       # CI does not run on the version PR by itself; see CONTRIBUTING.md, "Releases".
+      #
+      # The version PR is a draft, and every update turns it back into one, so it cannot be merged
+      # by accident: the owner marks it ready for review right before releasing. Its body lists
+      # each package with the version it will publish.
       - uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
           version-script: pnpm changeset:version
           publish-script: pnpm release
           commit-message: "chore: version packages"
           pr-title: "chore: version packages"
+          pr-draft: always
