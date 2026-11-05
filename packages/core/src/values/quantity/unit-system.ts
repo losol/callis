@@ -54,6 +54,12 @@ export interface UnitProduct {
  */
 export interface UnitSystem {
   parse(unit: string): ParsedUnit | undefined;
+  /** Optional lossless comparison for providers whose conversions can recur.
+   * Compare original values without rounding conversion intermediates; undefined means
+   * incompatible or unsupported. Implementations may use exact ratios or affine transforms.
+   * Providers without this method use the kernels' conversion fallback.
+   */
+  compare?(a: Decimal, from: string, b: Decimal, to: string): -1 | 0 | 1 | undefined;
   convert(
     value: Decimal,
     from: string,
@@ -107,12 +113,6 @@ function convert(
     CALENDAR_UNITS.some((unit) => unit === source) &&
     CALENDAR_UNITS.some((unit) => unit === target)
   ) {
-    const calendarFactor = (unit: string): bigint | undefined =>
-      unit === 'year'
-        ? 31536000000n
-        : unit === 'month'
-          ? 2592000000n
-          : factor(definiteUnit(unit) ?? '');
     const numerator = calendarFactor(source);
     const denominator = calendarFactor(target);
     if (numerator === undefined || denominator === undefined) return undefined;
@@ -175,6 +175,7 @@ export const minimalUnitSystem: UnitSystem = Object.freeze({
       : undefined;
   },
   convert,
+  compare: compareExact,
   multiply(a: string, b: string): UnitProduct | undefined {
     if (a === '1') return { unit: normalizeCalendarUnit(b), factor: Decimal.ONE };
     if (b === '1') return { unit: normalizeCalendarUnit(a), factor: Decimal.ONE };
@@ -196,3 +197,52 @@ export const minimalUnitSystem: UnitSystem = Object.freeze({
     };
   },
 });
+
+function compareExact(a: Decimal, from: string, b: Decimal, to: string): -1 | 0 | 1 | undefined {
+  const source = normalizeCalendarUnit(to);
+  const target = normalizeCalendarUnit(from);
+  const sourceMagnitude = timeUnitMagnitude(source);
+  const targetMagnitude = timeUnitMagnitude(target);
+  if (
+    isCalendarUnit(source) !== isCalendarUnit(target) &&
+    (sourceMagnitude === 'year' ||
+      sourceMagnitude === 'month' ||
+      targetMagnitude === 'year' ||
+      targetMagnitude === 'month')
+  )
+    return undefined;
+  let numerator: bigint | undefined;
+  let denominator: bigint | undefined;
+  if (source === target) {
+    numerator = 1n;
+    denominator = 1n;
+  } else if (source === 'year' && target === 'month') {
+    numerator = 12n;
+    denominator = 1n;
+  } else if (source === 'month' && target === 'year') {
+    numerator = 1n;
+    denominator = 12n;
+  } else if (isCalendarUnit(source) && isCalendarUnit(target)) {
+    numerator = calendarFactor(source);
+    denominator = calendarFactor(target);
+  } else {
+    numerator = factor(definiteUnit(source) ?? '');
+    denominator = factor(definiteUnit(target) ?? '');
+  }
+  if (numerator === undefined || denominator === undefined) return undefined;
+  // Cross-products are comparison intermediates, not new Decimal values. Their maximum size
+  // is bounded by the two input limits plus the small built-in time factors.
+  // https://hl7.org/fhirpath/STU3/en/index.html#quantity-equality
+  const scale = Math.max(a.scale, b.scale);
+  const left = a.coefficient * denominator * 10n ** BigInt(scale - a.scale);
+  const right = b.coefficient * numerator * 10n ** BigInt(scale - b.scale);
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function calendarFactor(unit: string): bigint | undefined {
+  return unit === 'year'
+    ? 31536000000n
+    : unit === 'month'
+      ? 2592000000n
+      : factor(definiteUnit(unit) ?? '');
+}

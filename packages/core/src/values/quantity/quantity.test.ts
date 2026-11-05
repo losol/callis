@@ -276,3 +276,41 @@ describe('time comparison and explicit conversion boundaries', () => {
     expect(convertQuantity(negative, 's')?.value.coefficient).toBe(-coefficient);
   });
 });
+
+// 3.0.0 clarifications versus legacy fixtures are documented in docs/spec-notes.md.
+describe('current time comparison semantics', () => {
+  // https://hl7.org/fhirpath/STU3/en/index.html#comparison
+  it.each([
+    [1, 'year', 2, 'months', 1], // testLessThan29/testGreaterThan29
+    [1, 'year', 2, 'days', 1], // testLessOrEqual28
+    [6, 'months', 1, 'year', -1], // published 3.0.0 example
+  ] as const)('orders %s %s against %s %s after calendar conversion', (a, au, b, bu, order) => {
+    expect(compareQuantity(quantity(a, au), quantity(b, bu))).toBe(order);
+    expect(compareQuantity(quantity(b, bu), quantity(a, au))).toBe(-order);
+  });
+
+  // https://hl7.org/fhirpath/STU3/en/index.html#quantity-equivalence
+  it.each([
+    ['x', 'year'],
+    ['year', 'kg'],
+  ])('returns empty for unsupported/incompatible equivalence %s/%s', (a, b) => {
+    expect(quantityEquivalent(quantity(1, a), quantity(1, b))).toBeUndefined();
+    expect(quantityEquivalent(quantity(1, b), quantity(1, a))).toBeUndefined();
+  });
+
+  // https://hl7.org/fhirpath/STU3/en/index.html#quantity-equality
+  it('compares recurring time ratios without rounding distinct values to equality', () => {
+    const minutes = new Quantity(Decimal.of(1666666666666666666666666667n, 29), 'min');
+    const seconds = quantity(1, 's');
+    expect(quantityEquals(minutes, seconds)).toBe(false);
+    expect(quantityEquals(seconds, minutes)).toBe(false);
+    expect(compareQuantity(minutes, seconds)).toBe(1);
+    expect(compareQuantity(seconds, minutes)).toBe(-1);
+    const wholeMinute = quantity(1, 'min');
+    const slightlyMore = new Quantity(Decimal.of(60n * 10n ** 28n + 1n, 28), 's');
+    expect(quantityEquals(wholeMinute, slightlyMore)).toBe(false);
+    expect(quantityEquals(slightlyMore, wholeMinute)).toBe(false);
+    expect(compareQuantity(wholeMinute, slightlyMore)).toBe(-1);
+    expect(compareQuantity(slightlyMore, wholeMinute)).toBe(1);
+  });
+});

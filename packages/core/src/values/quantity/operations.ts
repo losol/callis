@@ -29,6 +29,7 @@ export function compareQuantity(
     if (magnitude === undefined) return undefined;
     const mixed = isCalendarUnit(a.unit) !== isCalendarUnit(b.unit);
     if (mixed && (magnitude === 'year' || magnitude === 'month')) return undefined;
+    if (units.compare !== undefined) return units.compare(a.value, a.unit, b.value, b.unit);
     const left = units.convert(
       a.value,
       a.unit,
@@ -41,6 +42,7 @@ export function compareQuantity(
     );
     return left === undefined || right === undefined ? undefined : left.compare(right);
   }
+  if (units.compare !== undefined) return units.compare(a.value, a.unit, b.value, b.unit);
   const value = units.convert(b.value, b.unit, a.unit);
   return value === undefined ? undefined : a.value.compare(value);
 }

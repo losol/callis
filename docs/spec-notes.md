@@ -265,3 +265,21 @@ How the conformance runner ([T0022](tasks/T0022-conformance-runner.md), [`tools/
 - **Spec:** [3.0.0 time-valued conversions](https://hl7.org/fhirpath/STU3/en/index.html#time-valued-unit-conversions) gives calendar month = 30 days, definite UCUM `mo` = 30.4375 days, and `a` = 365.25 days. The older [FHIR R5 mapping discussion](https://hl7.org/fhir/R5/fhirpath.html#quantity) calls `mo` 30 days.
 - **Tests:** `quantity time table`, `uses calendar factors explicitly and requires explicit conversion before addition`, and `quantity and datetime calendar consistency`.
 - **Decision:** use the 3.0.0 definite factors. Calendar year/month stay distinct from definite durations for equality and ordering; equivalence permits the specified counterparts. Calendar-to-calendar conversion uses 12 months/year, 365 days/year or 30 days/month directly, not a transitive chain through UCUM. Addition/subtraction require explicit conversion when calendar year/month units differ. FHIR mapping follows R5's six-code table; `wk`/`ms` remain UCUM spellings. (T0006)
+
+### Ordering calendar years and months
+
+- **Spec:** [3.0.0 comparison](https://hl7.org/fhirpath/STU3/en/index.html#comparison) explicitly gives `6 months > 1 year` as `false` after converting to years. [Quantity equality](https://hl7.org/fhirpath/STU3/en/index.html#quantity-equality) requires time comparison in the least granular unit while retaining each code system.
+- **Pinned suites:** FHIR/fhir-test-cases commit `cb4eac4` (see `tools/conformance/fixtures/source.json`), both R4 and R5: `testLessThan29` (`1 year < 2 months`), `testGreaterThan29` (`1 year > 2 months`) and `testLessOrEqual28` (`1 year <= 2 days`) all expect empty.
+- **Decision:** follow 3.0.0 and T0006's unit conversion model, as confirmed by the owner during review of #88: those expressions return `false`, `true` and `false`, respectively. Calendar-to-calendar year/month ordering is supported; calendar year/month against definite UCUM counterparts remains empty. The six legacy cases are narrowly enumerated conformance exceptions. Direct kernel tests cover these results and reverse operand orders. (T0006)
+
+### Equivalence of unsupported or incompatible quantities
+
+- **Spec:** [3.0.0 Quantity Equivalence](https://hl7.org/fhirpath/STU3/en/index.html#quantity-equivalence) says that failed conversion for invalid or noncommensurable units gives empty.
+- **Pinned suites:** FHIR/fhir-test-cases commit `cb4eac4`, R4 `testEquivalent28` and R5 `testEquivalent29` (`1 'x' ~ 1 year`); R4 `testEquivalent29` and R5 `testEquivalent30` (`1 year ~ 1 'kg'`) all expect `false`.
+- **Decision:** follow 3.0.0 and the T0006 acceptance criterion: return empty for each expression, as confirmed by the owner during review of #88. Keep numeric overflow empty as well. Only those four legacy cases are conformance exceptions. Direct kernel tests cover unsupported/incompatible equivalence in both operand orders. (T0006)
+
+### Recurring time conversion precision
+
+- **Spec:** [3.0.0 Quantity Equality](https://hl7.org/fhirpath/STU3/en/index.html#quantity-equality) requires the least granular time unit, preserving each operand's code system. [Unit conversions](https://hl7.org/fhirpath/STU3/en/index.html#unit-conversions) warns against premature rounding; a recurring fraction cannot be represented exactly by a finite Decimal.
+- **Tests:** direct regression `compares recurring time ratios without rounding distinct values to equality`, using `0.01666666666666666666666666667 'min'` versus `1 's'` in both operand orders; no pinned-suite counterpart.
+- **Decision:** terminating conversion ratios preserve all representable digits; recurring ratios use the Decimal kernel's 28-significant-digit division. Exact equality and ordering must not consume rounded conversion intermediates. The optional provider comparison capability uses exact ratio cross-products; the minimal provider implements it. Both operand orders distinguish the slightly different values in this regression, as well as `1 'min'` versus `(60 + 10^-28) 's'`. Explicit conversions and equivalence still use the Decimal conversion result. (T0006)

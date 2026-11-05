@@ -48,6 +48,8 @@ interface ParsedUnit { readonly unit: string; }
 interface UnitSystem {
   /** Parse and validate a unit, or return undefined if it is unknown. */
   parse(unit: string): ParsedUnit | undefined;
+  /** Optional exact comparison avoids rounding recurring conversion intermediates. */
+  compare?(a: Decimal, from: string, b: Decimal, to: string): -1 | 0 | 1 | undefined;
   /** Convert a value between units, or return undefined if the dimensions differ. */
   convert(value: Decimal, from: string, to: string, options?: UnitConversionOptions): Decimal | undefined;
   /** Canonical form and numeric factor used by * and /, for example 'cm2' / 'cm' → 'cm'. */
@@ -69,7 +71,11 @@ target counterpart. Implicit time comparison first selects the least granular
 magnitude and retains each operand's system; a calendar/UCUM year or month pair
 remains incomparable even when one input originally used days or smaller units.
 Terminating conversion ratios preserve every supported Decimal digit; only
-recurring ratios use arithmetic division rounding. Providers return `undefined` for unsupported conversions
+recurring ratios use arithmetic division rounding for conversion results. Exact
+comparison can use the optional `UnitSystem.compare` capability; the minimal
+provider uses bounded rational cross-products without creating a rounded Decimal
+intermediate. Providers with recurring conversions should implement this optional
+capability; existing providers retain the conversion fallback. Providers return `undefined` for unsupported conversions
 and Decimal overflow. Unit algebra returns a unit and a Decimal factor, so a
 future UCUM provider can canonicalize scaled compound units without losing value.
 The initial string-only algebra sketch cannot describe a scaled cancellation such
