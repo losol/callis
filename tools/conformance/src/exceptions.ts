@@ -19,6 +19,12 @@ export interface SuiteException {
 /** The exceptions in force. Add one together with its `docs/spec-notes.md` entry. */
 export const SUITE_EXCEPTIONS: readonly SuiteException[] = [
   {
+    suites: ['r4', 'r5'],
+    tests: ['testLessThan29', 'testGreaterThan29', 'testLessOrEqual28'],
+    reason: '3.0.0 permits calendar year/month ordering after conversion; the suite expects empty',
+    note: 'ordering-calendar-years-and-months',
+  },
+  {
     // Owner decision in #50: keep ADR-0012 (UTC) rather than an "unknown offset" policy.
     suites: ['r4', 'r5'],
     tests: ['testEquality23', 'testNEquality17'],
