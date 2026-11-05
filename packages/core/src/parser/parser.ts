@@ -338,6 +338,16 @@ class Parser {
     // Greedy by grammar: x as Quantity.unit names a type, not a member access.
     // https://hl7.org/fhirpath/N1/grammar.html
     while (this.#peek().kind === '.') {
+      const nameToken = this.#tokens[this.#position + 1];
+      // A function call or frame-variable invocation cannot be part of a type name.
+      // Leave its dot to the outer invocation expression, even after a type operation.
+      if (
+        nameToken?.kind === '$this' ||
+        nameToken?.kind === '$index' ||
+        nameToken?.kind === '$total' ||
+        this.#tokens[this.#position + 2]?.kind === '('
+      )
+        break;
       this.#take();
       const name = this.#identifier();
       identifiers.push(name.value);

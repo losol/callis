@@ -103,6 +103,35 @@ describe('terms and invocations', () => {
     },
   );
 
+  it.each(['is', 'as'])('leaves invocation suffixes after %s for the expression parser', (op) => {
+    expect(printAst(parse(`x ${op} T.f()`))).toBe(`(call (${op} x T) f)`);
+    expect(printAst(parse(`x ${op} FHIR.Patient.f(a)[0].b`))).toBe(
+      `(. ([] (call (${op} x FHIR.Patient) f a) 0) b)`,
+    );
+    expect(printAst(parse(`x ${op} T.\`f\`() + y`))).toBe(`(+ (call (${op} x T) f) y)`);
+    expect(printAst(parse(`x ${op} T.unit`))).toBe(`(${op} x T.unit)`);
+    for (const name of ['this', 'index', 'total']) {
+      const source = `x ${op} FHIR.Patient.$${name}[0].b`;
+      expect(printAst(parse(source))).toBe(`(. ([] (. (${op} x FHIR.Patient) $${name}) 0) b)`);
+      const bareSuffix = `x ${op} T.$${name}`;
+      expect(parse(bareSuffix)).toMatchObject({
+        kind: name === 'this' ? 'This' : name === 'index' ? 'Index' : 'Total',
+        span: { start: 0, end: bareSuffix.length },
+        target: {
+          kind: 'TypeOperation',
+          op,
+          span: { start: 0, end: 6 },
+          type: { identifiers: ['T'], span: { start: 5, end: 6 } },
+        },
+      });
+    }
+    expect(parse(`x ${op} T.f()`)).toMatchObject({
+      kind: 'FunctionCall',
+      span: { start: 0, end: 10 },
+      target: { kind: 'TypeOperation', type: { identifiers: ['T'], span: { start: 5, end: 6 } } },
+    });
+  });
+
   it('keeps type identifiers as written and separately spans the greedy type', () => {
     expect(parse('x as `fHiR`.`Patient.contact`')).toEqual({
       kind: 'TypeOperation',

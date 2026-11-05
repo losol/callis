@@ -52,7 +52,7 @@ These follow [N1 §6.8](https://hl7.org/fhirpath/N1/#operator-precedence) and th
 Rules worth calling out:
 
 - **Unary minus binds looser than `.`**, so `-1.convertsToInteger()` parses as `-(1.convertsToInteger())`, as in the N1 §6.8 example. The AST stays faithful to this; the compiler folds `-<number literal>` into a negative literal.
-- **`is` / `as` read a qualified identifier greedily.** `x as Quantity.unit` names the type `Quantity.unit`, so authors must write `(x as Quantity).unit`. This matches the ANTLR grammar.
+- **`is` / `as` read a qualified identifier greedily.** `x as Quantity.unit` names the type `Quantity.unit`, so authors must write `(x as Quantity).unit`. This matches the ANTLR grammar. A dot before a function call or `$this`/`$index`/`$total` cannot belong to the type name and starts an invocation on the type-operation expression: `x as T.f()` calls `f` on `x as T`, and `x as T.$this` targets `x as T`.
 - The function forms `is(T)`, `as(T)` and `ofType(T)` parse their argument as an expression. The compiler then reads it as a type specifier: an identifier or a chain of member accesses.
 - `NUMBER` followed by a `STRING` or a calendar keyword becomes a `Quantity` literal. `{}` is the empty literal.
 - `as`, `contains`, `in` and `is` are accepted where an identifier is expected, as in `'abc'.contains('b')`.
