@@ -77,7 +77,6 @@ describe('parseSuite', () => {
       ],
       predicate: false,
       ordered: undefined,
-      checkOrderedFunctions: false,
     });
   });
 
@@ -107,9 +106,11 @@ describe('parseSuite', () => {
     });
   });
 
-  it('treats ordered="true" (R5) like checkOrderedFunctions="true" (R4)', () => {
-    expect(byId('orderedR5')).toMatchObject({ ordered: true, checkOrderedFunctions: true });
-    expect(byId('orderedR4')).toMatchObject({ ordered: undefined, checkOrderedFunctions: true });
+  // testDollarOrderNotAllowed: R5 writes ordered="true", R4 checkOrderedFunctions="true".
+  it('reads ordered="true" as ordered comparison and ignores checkOrderedFunctions', () => {
+    expect(byId('orderedR5')).toMatchObject({ ordered: true });
+    expect(byId('orderedR4')).toMatchObject({ ordered: undefined });
+    expect(byId('orderedR4')).not.toHaveProperty('checkOrderedFunctions');
   });
 
   it('makes duplicate names unique with a counter suffix', () => {

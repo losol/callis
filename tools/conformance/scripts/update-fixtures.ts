@@ -12,6 +12,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { FIXTURES_DIR, type FixtureSource, type VendoredFile } from '../src/fixtures.ts';
+import { compareOrdinal } from '../src/ordinal.ts';
 import { parseSuite } from '../src/parse-suite.ts';
 import { allTests, SUITE_FILE_NAMES, SUITE_IDS } from '../src/suite.ts';
 
@@ -58,7 +59,7 @@ for (const stale of Object.keys(previous?.files ?? {})) {
   }
 }
 
-const sorted = Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b)));
+const sorted = Object.fromEntries(Object.entries(files).sort(([a], [b]) => compareOrdinal(a, b)));
 const source: FixtureSource = { repository: REPOSITORY, commit, commitDate, files: sorted };
 writeFileSync(join(FIXTURES_DIR, 'source.json'), `${JSON.stringify(source, null, 2)}\n`);
 writeFileSync(join(FIXTURES_DIR, 'SOURCE.md'), renderSourceMarkdown(source));

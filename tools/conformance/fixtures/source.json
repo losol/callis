@@ -147,13 +147,13 @@
       "upstream": "r5/questionnaire-example.xml",
       "sha256": "2394428e574905eceaf7f580c0b2faf1c3bf5cdac42fdabc99e3b266065709a6"
     },
-    "r5/tests-fhir-r5.xml": {
-      "upstream": "r5/fhirpath/tests-fhir-r5.xml",
-      "sha256": "c554e715b12246909cc8d713876255b5c2a726f3a40f274ab5d1b7cebe2fb3d0"
-    },
     "r5/testSchema.xsd": {
       "upstream": "r5/fhirpath/testSchema.xsd",
       "sha256": "585bd6264158e0605fbd8e8ac0980e407b8e78b124c24b9f8ab3242a4c2ce227"
+    },
+    "r5/tests-fhir-r5.xml": {
+      "upstream": "r5/fhirpath/tests-fhir-r5.xml",
+      "sha256": "c554e715b12246909cc8d713876255b5c2a726f3a40f274ab5d1b7cebe2fb3d0"
     },
     "r5/valueset-example-expansion.xml": {
       "upstream": "r5/valueset-example-expansion.xml",

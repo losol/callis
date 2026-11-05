@@ -1,8 +1,9 @@
 /**
  * Renders the conformance reports: the Markdown reports in `docs/conformance/`, the JSON summary
- * and the CI job summary. Output is deterministic (no dates), so committed reports can be checked.
+ * (a CI artifact) and the CI job summary. Output is deterministic (no dates), so committed reports
+ * can be compared with a fresh run.
  */
-import type { RatchetResult } from './baseline.ts';
+import type { RatchetMode, RatchetResult } from './baseline.ts';
 import { formatRefs } from './baseline.ts';
 import { PHASE_LABELS, PHASES } from './classify.ts';
 import type { FixtureSource } from './fixtures.ts';
@@ -57,7 +58,7 @@ export function renderSuiteReport(
   if (summary.skipReasons.length > 0) {
     lines.push('', '## Skipped tests', '', '| Reason | Tests |', '| --- | ---: |');
     for (const { reason, count } of summary.skipReasons) {
-      lines.push(`| ${cell(reason)} | ${count} |`);
+      lines.push(`| ${linkSpecNotes(cell(reason))} | ${count} |`);
     }
   }
 
@@ -102,7 +103,7 @@ export function renderSuiteReport(
   return `${lines.join('\n').trimEnd()}\n`;
 }
 
-/** The JSON summary of all suites, for `docs/conformance/summary.json`. */
+/** The JSON summary of all suites, for the CI artifact (`--summary <file>`). */
 export function renderJsonSummary(
   summaries: readonly SuiteSummary[],
   context: ReportContext,
@@ -150,12 +151,24 @@ export function renderJobSummary(
       lines.push(`| ${label} ${countsRow(PHASE_LABELS[phase], summary.phases[phase])}`);
     }
   }
-  lines.push('', ...ratchetMessages(ratchet, staleReports).map((message) => `- ${message}`), '');
+  lines.push(
+    '',
+    ...ratchetMessages(ratchet, staleReports, 'check').map((message) => `- ${message}`),
+    '',
+  );
   return lines.join('\n');
 }
 
-/** Human-readable lines about the ratchet and stale reports. */
-export function ratchetMessages(ratchet: RatchetResult, staleReports: readonly string[]): string[] {
+/**
+ * Human-readable lines about the ratchet and stale reports. Baseline changes the run has not
+ * recorded yet fail only in `check` mode, so they are marked ❌ there and ℹ️ otherwise. Stale
+ * reports never fail a run and are marked ⚠️.
+ */
+export function ratchetMessages(
+  ratchet: RatchetResult,
+  staleReports: readonly string[],
+  mode: RatchetMode,
+): string[] {
   const messages: string[] = [];
   if (ratchet.regressions.length > 0) {
     messages.push(
@@ -164,19 +177,26 @@ export function ratchetMessages(ratchet: RatchetResult, staleReports: readonly s
   } else {
     messages.push('✅ No regressions: every test in the baseline still passes.');
   }
+  const mark = mode === 'check' ? '❌' : 'ℹ️';
+  const update = 'Run `pnpm conformance --update-baseline` and commit the result.';
   if (ratchet.vanished.length > 0) {
     messages.push(
-      `❌ ${ratchet.vanished.length} baseline test(s) are no longer in the suite: ${formatRefs(ratchet.vanished)}. Run \`pnpm conformance --update-baseline\`.`,
+      `${mark} ${ratchet.vanished.length} baseline test(s) are no longer in the suite: ${formatRefs(ratchet.vanished)}. ${update}`,
+    );
+  }
+  if (ratchet.excluded.length > 0) {
+    messages.push(
+      `${mark} ${ratchet.excluded.length} baseline test(s) are now skipped as exceptions or unsupported: ${formatRefs(ratchet.excluded)}. ${update}`,
     );
   }
   if (ratchet.newPasses.length > 0) {
     messages.push(
-      `❌ ${ratchet.newPasses.length} test(s) pass but are not in the baseline yet: ${formatRefs(ratchet.newPasses)}. Run \`pnpm conformance --update-baseline\` and commit the result.`,
+      `${mark} ${ratchet.newPasses.length} test(s) pass but are not in the baseline yet: ${formatRefs(ratchet.newPasses)}. ${update}`,
     );
   }
   for (const report of staleReports) {
     messages.push(
-      `❌ \`${report}\` is out of date. Run \`pnpm conformance\` and commit the result.`,
+      `⚠️ \`${report}\` is out of date. Run \`pnpm conformance\` and commit the result.`,
     );
   }
   return messages;
@@ -189,7 +209,7 @@ function failureRow(result: TestResult, suiteLink: string): string {
     classification.task === undefined
       ? PHASE_LABELS[classification.phase]
       : `${PHASE_LABELS[classification.phase]} (${classification.task})`;
-  const problem = result.failure === undefined ? '' : truncate(result.failure.message, MAX_PROBLEM);
+  const problem = result.failure === undefined ? '' : truncate(result.failure.summary, MAX_PROBLEM);
   return `| ${name} | ${phase} | ${code(truncate(test.expression, MAX_EXPRESSION))} | ${cell(problem)} |`;
 }
 
@@ -200,6 +220,11 @@ function countsRow(label: string, counts: Counts): string {
 function sourceLink(source: FixtureSource): string {
   const url = `https://github.com/${source.repository}/tree/${source.commit}`;
   return `[${source.repository}@${source.commit.slice(0, 7)}](${url})`;
+}
+
+/** Turns the `spec-notes#anchor` of an exception's skip reason into a link to that note. */
+function linkSpecNotes(text: string): string {
+  return text.replace(/spec-notes#([\w-]+)/g, '[spec notes](../spec-notes.md#$1)');
 }
 
 /** A table cell: one line, pipes escaped. */

@@ -42,12 +42,24 @@ export type FailureKind =
 /** Details of a failed test. */
 export interface Failure {
   readonly kind: FailureKind;
+  /** The full explanation, including the engine's error message. */
   readonly message: string;
+  /**
+   * One line for the committed reports: the failure without the engine's message text or file
+   * paths (error kinds and codes only), so reports change only when an outcome changes.
+   */
+  readonly summary: string;
   /** For `wrong-output`: the expected outputs, formatted for diffs. */
   readonly expected?: readonly string[];
   /** For `wrong-output`: the actual result, formatted like `expected`. */
   readonly actual?: readonly string[];
 }
+
+/**
+ * Why a test was skipped: it is out of scope (`unsupported`), it is a documented suite exception
+ * (`exception`), or its input is not available (`input`, for example an XML input before T0023).
+ */
+export type SkipCause = 'unsupported' | 'exception' | 'input';
 
 /** The result of one test. */
 export interface TestResult {
@@ -55,8 +67,10 @@ export interface TestResult {
   readonly test: SuiteTest;
   readonly classification: Classification;
   readonly status: TestStatus;
-  /** Why the test was skipped. */
+  /** Why the test was skipped, for people. */
   readonly skipReason: string | undefined;
+  /** Why the test was skipped, for the ratchet. */
+  readonly skipCause: SkipCause | undefined;
   readonly failure: Failure | undefined;
   /**
    * An `invalid="semantic"` test that passed because evaluation raised an evaluation error. N1 §11
@@ -83,7 +97,12 @@ export type TestPlan =
       readonly inputText: string | undefined;
       readonly inputPath: string | undefined;
     }
-  | { readonly kind: 'skip'; readonly classification: Classification; readonly reason: string };
+  | {
+      readonly kind: 'skip';
+      readonly classification: Classification;
+      readonly reason: string;
+      readonly cause: SkipCause;
+    };
 
 /** How to run tests. */
 export interface RunnerOptions {
@@ -135,17 +154,18 @@ export function createRunner(options: RunnerOptions): Runner {
     const exception = findException(exceptions, suite, test.id);
     if (exception !== undefined) {
       const reason = `exception: ${exception.reason} (spec-notes#${exception.note})`;
-      return { kind: 'skip', classification, reason };
+      return { kind: 'skip', classification, reason, cause: 'exception' };
     }
     if (classification.phase === 'unsupported') {
-      return { kind: 'skip', classification, reason: classification.reason ?? 'unsupported' };
+      const reason = classification.reason ?? 'unsupported';
+      return { kind: 'skip', classification, reason, cause: 'unsupported' };
     }
     if (test.inputFile === undefined) {
       return { kind: 'run', classification, inputText: undefined, inputPath: undefined };
     }
     const lookup = lookupInput(suite, test.inputFile);
     if (lookup.kind === 'skip') {
-      return { kind: 'skip', classification, reason: lookup.reason };
+      return { kind: 'skip', classification, reason: lookup.reason, cause: 'input' };
     }
     return { kind: 'run', classification, inputText: lookup.text, inputPath: lookup.path };
   };
@@ -173,6 +193,7 @@ export function createRunner(options: RunnerOptions): Runner {
         ...base,
         status: 'skip',
         skipReason: testPlan.reason,
+        skipCause: testPlan.cause,
         failure: undefined,
         detectedLate: false,
       };
@@ -181,6 +202,7 @@ export function createRunner(options: RunnerOptions): Runner {
       ...base,
       status: 'fail',
       skipReason: undefined,
+      skipCause: undefined,
       failure,
       detectedLate: false,
     });
@@ -188,6 +210,7 @@ export function createRunner(options: RunnerOptions): Runner {
       ...base,
       status: 'pass',
       skipReason: undefined,
+      skipCause: undefined,
       failure: undefined,
       detectedLate,
     });
@@ -196,7 +219,11 @@ export function createRunner(options: RunnerOptions): Runner {
     if (testPlan.inputPath !== undefined && testPlan.inputText !== undefined) {
       const parsed = parseInput(testPlan.inputPath, testPlan.inputText);
       if ('error' in parsed) {
-        return fail({ kind: 'runner-error', message: parsed.error });
+        return fail({
+          kind: 'runner-error',
+          message: parsed.error,
+          summary: `could not parse input ${test.inputFile ?? ''}`,
+        });
       }
       input = parsed.value;
     }
@@ -211,19 +238,22 @@ export function createRunner(options: RunnerOptions): Runner {
     }
 
     if (!Array.isArray(raw)) {
-      return fail({ kind: 'runner-error', message: 'the adapter did not return an array' });
+      const message = 'the adapter did not return an array';
+      return fail({ kind: 'runner-error', message, summary: message });
     }
     if (test.invalid !== undefined) {
-      return fail({
-        kind: 'missing-error',
-        message: `expected ${errorName(test.invalid)}, got a result with ${raw.length} item(s)`,
-      });
+      const message = `expected ${errorName(test.invalid)}, got a result with ${raw.length} item(s)`;
+      return fail({ kind: 'missing-error', message, summary: message });
     }
     let items: ResultItem[];
     try {
       items = raw.map((value: unknown) => adapter.describeValue(value));
     } catch (error) {
-      return fail({ kind: 'runner-error', message: `describeValue failed: ${messageOf(error)}` });
+      return fail({
+        kind: 'runner-error',
+        message: `describeValue failed: ${messageOf(error)}`,
+        summary: 'describeValue failed',
+      });
     }
     const actual = test.predicate ? toPredicate(items) : items;
     if (outputsMatch(test.outputs, actual, test.ordered !== false)) {
@@ -231,9 +261,11 @@ export function createRunner(options: RunnerOptions): Runner {
     }
     const expected = test.outputs.map(formatExpected);
     const formatted = actual.map(formatActual);
+    const message = `expected [${expected.join(', ')}], got [${formatted.join(', ')}]`;
     return fail({
       kind: 'wrong-output',
-      message: `expected [${expected.join(', ')}], got [${formatted.join(', ')}]`,
+      message,
+      summary: message,
       expected,
       actual: formatted,
     });
@@ -261,7 +293,6 @@ export function evaluationOptions(suite: SuiteId, test: SuiteTest): EvaluationOp
     mode: test.mode,
     strict: test.mode === 'strict',
     lenientChoiceSuffix: test.mode === 'lenient' || test.mode === 'lenient/polymorphics',
-    checkOrderedFunctions: test.checkOrderedFunctions,
     skipStaticCheck: test.skipStaticCheck,
   };
 }
@@ -271,15 +302,29 @@ function judgeError(
   invalid: InvalidKind | undefined,
   error: ClassifiedError,
 ): 'pass' | 'late' | Failure {
-  const description = describeError(error);
+  const label = errorLabel(error);
+  const detail = `${label}: ${error.message}`;
   if (error.kind === 'not-implemented') {
-    return { kind: 'not-implemented', message: `not implemented: ${error.message}` };
+    return {
+      kind: 'not-implemented',
+      message: `not implemented: ${error.message}`,
+      summary: 'not implemented',
+    };
   }
   if (invalid === undefined) {
-    return { kind: 'unexpected-error', message: `unexpected ${description}` };
+    return {
+      kind: 'unexpected-error',
+      message: `unexpected ${detail}`,
+      summary: `unexpected ${label}`,
+    };
   }
   if (!ACCEPTED_ERRORS[invalid].includes(error.kind)) {
-    return { kind: 'wrong-error', message: `expected ${errorName(invalid)}, got ${description}` };
+    const expected = `expected ${errorName(invalid)}, got`;
+    return {
+      kind: 'wrong-error',
+      message: `${expected} ${detail}`,
+      summary: `${expected} ${label}`,
+    };
   }
   return invalid === 'semantic' && error.kind === 'execution' ? 'late' : 'pass';
 }
@@ -292,10 +337,11 @@ function classify(adapter: EvaluatorAdapter, thrown: unknown): ClassifiedError {
   }
 }
 
-function describeError(error: ClassifiedError): string {
+/** The kind and code of an error, without its message: `execution error [eval/type-mismatch]`. */
+function errorLabel(error: ClassifiedError): string {
   const name = error.kind === 'other' ? 'non-FHIRPath error' : `${error.kind} error`;
   const code = error.code === undefined ? '' : ` [${error.code}]`;
-  return `${name}${code}: ${error.message}`;
+  return `${name}${code}`;
 }
 
 function errorName(invalid: InvalidKind): string {

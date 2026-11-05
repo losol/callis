@@ -1,4 +1,5 @@
 import { PHASES, type Phase } from './classify.ts';
+import { compareOrdinal } from './ordinal.ts';
 import type { SuiteRun, TestResult } from './run-suite.ts';
 import type { SuiteId } from './suite.ts';
 
@@ -57,7 +58,7 @@ export function summarize(run: SuiteRun): SuiteSummary {
   }
   const skipReasons = [...reasons]
     .map(([reason, n]) => ({ reason, count: n }))
-    .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
+    .sort((a, b) => b.count - a.count || compareOrdinal(a.reason, b.reason));
   return {
     suite: run.suite.id,
     file: run.suite.fileName,

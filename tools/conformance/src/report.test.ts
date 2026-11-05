@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { FixtureSource } from './fixtures.ts';
-import { renderJobSummary, renderJsonSummary, renderSuiteReport, slug } from './report.ts';
+import {
+  ratchetMessages,
+  renderJobSummary,
+  renderJsonSummary,
+  renderSuiteReport,
+  slug,
+} from './report.ts';
 import type { SuiteRun, TestResult } from './run-suite.ts';
 import { summarize } from './summary.ts';
 import { makeTest } from './test-helpers.ts';
@@ -39,6 +45,7 @@ const result = (test: typeof union, rest: Partial<TestResult>): TestResult => ({
   classification: { phase: 'phase1', reason: undefined, task: undefined },
   status: 'pass',
   skipReason: undefined,
+  skipCause: undefined,
   failure: undefined,
   detectedLate: false,
   ...rest,
@@ -57,13 +64,25 @@ const run: SuiteRun = {
   results: [
     result(union, {
       status: 'fail',
-      failure: { kind: 'wrong-output', message: 'expected [integer 2], got [integer 1]' },
+      failure: {
+        kind: 'wrong-output',
+        message: 'expected [integer 2], got [integer 1]',
+        summary: 'expected [integer 2], got [integer 1]',
+      },
     }),
-    result(delimited, { status: 'skip', skipReason: 'fixture not converted' }),
+    result(delimited, {
+      status: 'skip',
+      skipReason: 'exception: wrong label (spec-notes#some-note)',
+      skipCause: 'exception',
+    }),
     result(sorted, {
       classification: { phase: 'stu', reason: 'sort() (T0027)', task: 'T0027' },
       status: 'fail',
-      failure: { kind: 'not-implemented', message: 'not implemented: no engine yet' },
+      failure: {
+        kind: 'not-implemented',
+        message: 'not implemented: no engine yet',
+        summary: 'not implemented',
+      },
     }),
     result(late, { detectedLate: true }),
   ],
@@ -93,7 +112,7 @@ describe('renderSuiteReport', () => {
 
       | Reason | Tests |
       | --- | ---: |
-      | fixture not converted | 1 |
+      | exception: wrong label ([spec notes](../spec-notes.md#some-note)) | 1 |
 
       ## Groups
 
@@ -114,7 +133,7 @@ describe('renderSuiteReport', () => {
 
       | Test | Phase | Expression | Problem |
       | --- | --- | --- | --- |
-      | [\`testSort1\`](../../tools/conformance/fixtures/r5/tests-fhir-r5.xml#L20) | STU (T0027) | \`(2\\|1).sort()\` | not implemented: no engine yet |
+      | [\`testSort1\`](../../tools/conformance/fixtures/r5/tests-fhir-r5.xml#L20) | STU (T0027) | \`(2\\|1).sort()\` | not implemented |
       "
     `);
   });
@@ -146,13 +165,33 @@ describe('renderJobSummary', () => {
   it('shows counts and the ratchet result', () => {
     const markdown = renderJobSummary(
       [summarize(run)],
-      { regressions: [{ suite: 'r5', id: 'testX' }], newPasses: [], vanished: [] },
+      { regressions: [{ suite: 'r5', id: 'testX' }], newPasses: [], vanished: [], excluded: [] },
       ['docs/conformance/r5.md'],
       context,
     );
     expect(markdown).toContain('| R5 | Phase 1 | 3 | 1 | 1 | 1 |');
     expect(markdown).toContain('❌ 1 test(s) in the baseline no longer pass: r5/testX.');
-    expect(markdown).toContain('❌ `docs/conformance/r5.md` is out of date.');
+    // Owner decision on #65: stale reports only warn.
+    expect(markdown).toContain('⚠️ `docs/conformance/r5.md` is out of date.');
+  });
+});
+
+describe('ratchetMessages', () => {
+  it('marks unrecorded changes as failures only in check mode', () => {
+    const ratchet = {
+      regressions: [],
+      newPasses: [{ suite: 'r5' as const, id: 'testA' }],
+      vanished: [],
+      excluded: [{ suite: 'r4' as const, id: 'testB' }],
+    };
+    expect(ratchetMessages(ratchet, [], 'report')).toEqual([
+      '✅ No regressions: every test in the baseline still passes.',
+      'ℹ️ 1 baseline test(s) are now skipped as exceptions or unsupported: r4/testB. Run `pnpm conformance --update-baseline` and commit the result.',
+      'ℹ️ 1 test(s) pass but are not in the baseline yet: r5/testA. Run `pnpm conformance --update-baseline` and commit the result.',
+    ]);
+    const check = ratchetMessages(ratchet, [], 'check').slice(1);
+    expect(check).toHaveLength(2);
+    expect(check.every((message) => message.startsWith('❌ '))).toBe(true);
   });
 });
 
@@ -171,7 +210,10 @@ it('escapes backticks in expressions', () => {
     {
       ...run,
       results: [
-        result(delimited, { status: 'fail', failure: { kind: 'runner-error', message: 'x' } }),
+        result(delimited, {
+          status: 'fail',
+          failure: { kind: 'runner-error', message: 'x', summary: 'x' },
+        }),
       ],
     },
     summarize(run),

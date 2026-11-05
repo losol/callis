@@ -36,8 +36,6 @@ export interface EvaluationOptions {
    * (`mode="lenient/polymorphics"`; ADR-0012).
    */
   readonly lenientChoiceSuffix: boolean;
-  /** Report ordered functions such as `skip()` on unordered input (strict mode only). */
-  readonly checkOrderedFunctions: boolean;
   /** Evaluate without static analysis (`skipStaticCheck="true"`). */
   readonly skipStaticCheck: boolean;
 }
@@ -64,7 +62,11 @@ export interface ResultItem {
    * `@` or `T` prefixes. Undefined for other values.
    */
   readonly value?: string;
-  /** For quantities, the unit: a UCUM code or a calendar duration word such as `days`. */
+  /**
+   * For quantities, the unit as a quantity literal writes it, without quotes: a UCUM code such as
+   * `cm`, or a calendar duration word such as `days`. A `FHIR.Quantity` reports its UCUM `code`,
+   * not its free-text `unit`. The runner compares it exactly with the unit in the expected output.
+   */
   readonly unit?: string;
 }
 

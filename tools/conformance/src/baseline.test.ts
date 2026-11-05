@@ -4,6 +4,9 @@ import {
   checkRatchet,
   formatRefs,
   parseBaseline,
+  type RatchetMode,
+  type RatchetResult,
+  ratchetFails,
   serializeBaseline,
   updateBaseline,
 } from './baseline.ts';
@@ -23,21 +26,33 @@ describe('checkRatchet', () => {
       regressions: [{ suite: 'r5', id: 'b' }],
       newPasses: [{ suite: 'r5', id: 'c' }],
       vanished: [{ suite: 'r5', id: 'gone' }],
+      excluded: [],
     });
   });
 
-  it('counts a skipped baseline test as a regression', () => {
-    const skipped = makeRun('r5', [['a', 'skip']]);
+  it('counts a baseline test skipped for a missing input as a regression', () => {
+    const skipped = makeRun('r5', [['a', 'skip', { skipCause: 'input' }]]);
     expect(checkRatchet({ r4: [], r5: ['a'] }, [skipped]).regressions).toEqual([
       { suite: 'r5', id: 'a' },
     ]);
   });
+
+  it.each(['exception', 'unsupported'] as const)(
+    'counts a baseline test skipped as %s as excluded, not as a regression',
+    (skipCause) => {
+      const skipped = makeRun('r5', [['a', 'skip', { skipCause }]]);
+      const ratchet = checkRatchet({ r4: [], r5: ['a'] }, [skipped]);
+      expect(ratchet.regressions).toEqual([]);
+      expect(ratchet.excluded).toEqual([{ suite: 'r5', id: 'a' }]);
+    },
+  );
 
   it('ignores suites that were not run', () => {
     expect(checkRatchet({ r4: ['x'], r5: [] }, [makeRun('r5', [])])).toEqual({
       regressions: [],
       newPasses: [],
       vanished: [],
+      excluded: [],
     });
   });
 });
@@ -58,6 +73,39 @@ describe('updateBaseline', () => {
       ]),
     ]);
     expect(next).toEqual({ r4: ['keep'], r5: ['a', 'c'] });
+  });
+
+  it('drops baseline tests that are now an exception', () => {
+    const excepted = makeRun('r5', [
+      ['a', 'pass'],
+      ['b', 'skip', { skipCause: 'exception' }],
+    ]);
+    expect(updateBaseline({ r4: [], r5: ['a', 'b'] }, [excepted])).toEqual({ r4: [], r5: ['a'] });
+  });
+});
+
+describe('ratchetFails', () => {
+  const ref = [{ suite: 'r5' as const, id: 't' }];
+  const clean: RatchetResult = { regressions: [], newPasses: [], vanished: [], excluded: [] };
+  const cases: readonly (readonly [string, RatchetResult])[] = [
+    ['nothing to record', clean],
+    ['a regression', { ...clean, regressions: ref }],
+    ['a test that left the suite', { ...clean, vanished: ref }],
+    ['a test that is now excluded', { ...clean, excluded: ref }],
+    ['an unrecorded pass', { ...clean, newPasses: ref }],
+  ];
+  // Expected exit status per mode: [report, update, check].
+  const expected: Readonly<Record<string, readonly [boolean, boolean, boolean]>> = {
+    'nothing to record': [false, false, false],
+    'a regression': [true, true, true],
+    'a test that left the suite': [false, false, true],
+    'a test that is now excluded': [false, false, true],
+    'an unrecorded pass': [false, false, true],
+  };
+  const modes: readonly RatchetMode[] = ['report', 'update', 'check'];
+
+  it.each(cases)('with %s', (name, ratchet) => {
+    expect(modes.map((mode) => ratchetFails(mode, ratchet))).toEqual(expected[name]);
   });
 });
 
