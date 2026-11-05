@@ -8,6 +8,7 @@
 /** Raised while lexing and parsing an expression. */
 export type SyntaxErrorCode =
   | 'syntax/unexpected-token'
+  | 'syntax/nesting-limit'
   | 'syntax/unexpected-character'
   | 'syntax/unterminated-string'
   | 'syntax/unterminated-comment'
