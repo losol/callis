@@ -568,6 +568,17 @@ describe('the size bound', () => {
     expect(Decimal.of(10n ** 9_999n).div(d('0.1'))).toBeUndefined();
   });
 
+  it('keeps a quotient that rounds up to the smallest step', () => {
+    // (1 − 1e-29) × 1e-10000 has its first digit at 1e-10001, but 28 significant digits round
+    // it up to exactly 1e-10000, which fits.
+    const nearlySmallest = Decimal.of(10n ** 29n - 1n, 10_000);
+    const divisor = Decimal.of(10n ** 29n);
+    expect(show(nearlySmallest.divide(divisor))).toBe(smallest.toString());
+    expect(show(nearlySmallest.negate().divide(divisor))).toBe(smallest.negate().toString());
+    // Without the carry it stays below the step: 28 nines need a scale of 10,028.
+    expect(Decimal.of(10n ** 28n - 1n, 10_000).divide(Decimal.of(10n ** 28n))).toBeUndefined();
+  });
+
   it('gives empty for a large quotient whose 8 digits after the point do not fit', () => {
     // 1e9992 / 3 has 9,992 integer digits and 8 after the point: exactly 10,000 digits.
     const fits = Decimal.of(10n ** 9_992n).divide(d('3'));

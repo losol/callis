@@ -266,10 +266,11 @@ export class Decimal {
       leadingDigitExponent(abs(this.coefficient), abs(divisor.coefficient)) +
       divisor.scale -
       this.scale;
-    // A quotient whose first digit is at 10^10000 or above has too many integer digits, and one
-    // whose first digit is below 10^-10000 is smaller than the smallest step. Neither can fit, so
-    // they are rejected before the large intermediate numbers are built.
-    if (exponent >= MAX_DECIMAL_DIGITS || -exponent > MAX_DECIMAL_DIGITS) {
+    // Reject quotients that cannot fit before the large intermediate numbers are built. One whose
+    // first digit is at 10^10000 or above has too many integer digits, and rounding cannot make
+    // it smaller. One whose first digit is at 10^-10001 can still round up to the smallest step,
+    // 10^-10000 ((1 − 1e-29) × 1e-10000 does), so only those below that are rejected here.
+    if (exponent >= MAX_DECIMAL_DIGITS || -exponent > MAX_DECIMAL_DIGITS + 1) {
       return undefined;
     }
     const scale = Math.max(DIVISION_MIN_SCALE, DIVISION_SIGNIFICANT_DIGITS - 1 - exponent);
