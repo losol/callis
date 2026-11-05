@@ -198,7 +198,7 @@ Versions and changelogs are managed with [Changesets](https://github.com/changes
 For maintainers. These settings make the rules above hold:
 
 - **Merging:** squash merge only. The squash commit takes the PR title as its subject and the PR description as its body. Branches are deleted automatically after merge.
-- **Required checks** (once T0000 has added them): CI, and a PR-title check for Conventional Commits.
+- **Required checks:** `CI result` and `Conventional Commits`. `CI result` is the last job in the CI workflow and fails when any other CI job fails, so CI jobs can change without changing this setting. `Conventional Commits` is the PR-title check.
 - **Approval:** the owner's approval is required.
 - **Secrets:** `ROADMAP_SYNC_TOKEN` for the [roadmap sync](#roadmap-sync). A fine-grained token owned by `losol` with read and write access to issues in this repository and to the organization's projects, or a classic token with the `repo` and `project` scopes.
 - **Documentation site:** the [deploy workflow](#documentation-site) needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, as organization secrets that include this repository or as repository secrets, and a `site` environment whose only deployment branch is `main`. The Worker is named `callis`, and the custom domain `callis.losol.no` is attached to it in Cloudflare; the deploy adds no route, domain or DNS configuration. GitHub Pages stays off: the site is served from Cloudflare.

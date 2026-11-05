@@ -5,9 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+# A new push to a pull request cancels the run for its old head. Every push to main gets a group of
+# its own, so each commit on main is checked in full: a later merge neither cancels its run nor
+# replaces it while it waits in the queue.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -17,6 +20,7 @@ jobs:
   check:
     name: Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -41,11 +45,13 @@ jobs:
       - name: Package checks
         run: pnpm check:packages
 
-  # Tests on the oldest and newest supported Node versions. Lint, typecheck, build and package
-  # checks give the same result on every version, so they only run in the job above.
+  # Tests on the oldest and newest supported Node versions; the job above covers the one in
+  # .node-version. Lint, typecheck, build and package checks give the same result on every version,
+  # so they only run in the job above.
   test:
     name: Test (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -134,3 +140,25 @@ jobs:
           test -f progress/index.html
           test -f search-index.json
           grep -q "Callis" index.html
+
+  # The one check that branch protection requires, so the jobs above can be renamed, added or split
+  # (for example a new Node version in the matrix) without changing the repository settings. It
+  # fails when any job it needs failed or was cancelled. A skipped job counts as passed, so a job
+  # that only runs on pull requests can be listed here too. Add every new job to `needs`.
+  result:
+    name: CI result
+    if: always()
+    needs: [check, test, conformance, site]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the job results
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          FAILED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: |
+          echo "$RESULTS"
+          if [ "$FAILED" = true ]; then
+            echo "::error title=CI result::A required job failed or was cancelled."
+            exit 1
+          fi
