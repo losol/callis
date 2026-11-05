@@ -21,7 +21,7 @@ The `Quantity` value and the minimal built-in `UnitSystem` that core ships with 
   - identical units
   - the UCUM time units `ms`, `s`, `min`, `h`, `d`, `wk`, `mo`, `a`
   - the calendar ↔ definite duration table as refined in [3.0.0](https://hl7.org/fhirpath/STU3/): `week`…`millisecond` are equal to `'wk'`…`'ms'`, while `year`/`month` are only equivalent to `'a'`/`'mo'` ([N1 §4.1.8](https://hl7.org/fhirpath/N1/#time-valued-quantities) is the original)
-- Quantity equality, equivalence and comparison kernels, and `+ - * /` kernels, all through the `UnitSystem`.
+- Quantity equality, equivalence and comparison kernels, and `+ - * /` kernels, all through the `UnitSystem`. The Decimal kernels they build on return `undefined` beyond the Decimal size bound ([T0004](T0004-decimal.md#design-notes)); the Quantity kernels and unit conversions then give empty too.
 - A helper that maps FHIR `Quantity` JSON to `System.Quantity` ([R5 §2.1.9.1.3](https://hl7.org/fhir/R5/fhirpath.html#quantity)).
 
 ## Design notes

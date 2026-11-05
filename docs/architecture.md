@@ -249,6 +249,7 @@ Line coverage for the core (excluding generated code) is reported in CI with a t
 - **Regular expressions:** `matches()` and `replaceMatches()` run user-supplied patterns on JavaScript's backtracking engine, so ReDoS is possible. This is documented, and a `regex` hook lets hosts plug in a safe engine ([T0021](tasks/T0021-hooks-async.md)).
 - **Bounded work:**
   - parsing has a maximum nesting depth
+  - a `Decimal` has at most 10,000 digits and a scale of at most 10,000. Arithmetic beyond that is overflow or underflow and gives empty, as FHIRPath 3.0.0 requires, instead of growing without limit ([T0004](tasks/T0004-decimal.md#design-notes))
   - `repeat()` deduplicates per the spec, which only guarantees termination for projections that navigate a finite input tree. A value-generating projection such as `'x'.repeat($this & 'x')` never runs out of new items.
   - every evaluation therefore has finite default limits (`limits.maxRepeatItems`, `limits.maxCollectionSize`), and exceeding them raises `eval/limit-exceeded` in both sync and async mode ([T0012](tasks/T0012-fn-filtering.md), [T0025](tasks/T0025-public-api-release.md#public-api-sketch))
   - async evaluations can be cancelled with a signal ([T0021](tasks/T0021-hooks-async.md#sync-and-async))
