@@ -77,7 +77,7 @@ PR titles follow [Conventional Commits 1.0.0](https://www.conventionalcommits.or
 
 **Commits on your branch** are not kept individually on `main`. Write them so a reviewer can follow the work; the same format is encouraged but not required. Do not rewrite branch history once review has started, so review comments stay attached to their lines.
 
-**Trailers.** Credit co-authors, whether people or AI tools, with a `Co-authored-by: Name <email>` [Git trailer](https://git-scm.com/docs/git-interpret-trailers) at the end of a commit message or PR description. GitHub shows them as co-authors.
+**Trailers.** Credit co-authors who are people with a `Co-authored-by: Name <email>` [Git trailer](https://git-scm.com/docs/git-interpret-trailers) at the end of a commit message or PR description. GitHub shows them as co-authors. Do not add trailers or other attribution for AI tools.
 
 ## Pull requests
 
