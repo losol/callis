@@ -241,7 +241,13 @@ function isJsonObject(value: unknown): value is Readonly<Record<string, unknown>
 /** Whether a JSON property value gives navigation at least one item. */
 function hasItems(value: unknown): boolean {
   if (Array.isArray(value)) {
-    return value.some(hasItems);
+    // Own indices only: `some()` would also visit indices a sparse array inherits.
+    for (let position = 0; position < value.length; position++) {
+      if (Object.hasOwn(value, position) && hasItems(value[position])) {
+        return true;
+      }
+    }
+    return false;
   }
   return value !== null && value !== undefined;
 }
@@ -297,7 +303,10 @@ function appendChildItems(
   }
   if (Array.isArray(value)) {
     for (let position = 0; position < value.length; position++) {
-      appendChildItems(items, value[position], name, parent, position);
+      // Skip holes, so a sparse array never reads an index it inherits.
+      if (Object.hasOwn(value, position)) {
+        appendChildItems(items, value[position], name, parent, position);
+      }
     }
     return;
   }

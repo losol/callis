@@ -259,6 +259,20 @@ describe('equality and equivalence', () => {
       expectEquality(node(ownProto), node({}), false, false);
     });
 
+    it('ignores array entries that a sparse array inherits', () => {
+      // `new Array(1)` has no own index 0; its prototype supplies one.
+      const inheriting = (): unknown[] => {
+        const array: unknown[] = new Array(1);
+        Object.setPrototypeOf(array, Object.assign(Object.create(Array.prototype), { 0: 'ghost' }));
+        return array;
+      };
+      expectEquality(node({ a: inheriting() }), node({ a: ['ghost'] }), false, false);
+      expectEquality(node({ a: inheriting() }), node({}), true, true);
+      expectEquality(node({ a: [inheriting(), 'x'] }), node({ a: ['x'] }), true, true);
+      expectEquality(node({ a: [inheriting()] }), node({ a: [['ghost']] }), false, false);
+      expectEquality(node({ a: [inheriting()] }), node({}), true, true);
+    });
+
     // testEquality29, testEquality30, testNEquality25, testNEquality26
     it('is false between a complex value and a primitive', () => {
       expectEquality(node(name), 'Peter', false, false);
