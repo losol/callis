@@ -22,8 +22,9 @@ export type ItemConversion<T extends Item> = (item: Item) => T | undefined;
  * 1. A single item that converts to the expected type gives the converted value.
  * 2. Otherwise, a single item where a Boolean is expected gives `true`.
  * 3. An empty collection gives `undefined` (empty).
- * 4. Anything else raises `eval/singleton-expected`: more than one item, or a single item that
- *    does not convert to an expected type other than Boolean.
+ * 4. Anything else is an error. More than one item raises `eval/singleton-expected`. A single
+ *    item that does not convert to an expected type other than Boolean raises
+ *    `eval/type-mismatch`: the problem is its type, not the number of items.
  *
  * Boolean contexts (the criteria of `where()` and `iif()`, the operands of `and` and `or`) use
  * the Boolean overload, which gives `true`, `false` or `undefined`. When the expected type is only
@@ -41,7 +42,8 @@ export type ItemConversion<T extends Item> = (item: Item) => T | undefined;
  * @param expectedType - The type the operator or function expects. Used for the Boolean rule and
  *   in error messages.
  * @param convert - Converts the single item, or returns undefined when it cannot.
- * @throws {@link FhirPathEvaluationError} with code `eval/singleton-expected` in case 4.
+ * @throws {@link FhirPathEvaluationError} in case 4: `eval/singleton-expected` for more than one
+ *   item, `eval/type-mismatch` for a single item that does not convert.
  */
 export function singleton(
   collection: Collection,
@@ -78,8 +80,8 @@ export function singleton(
       return true;
     }
     throw new FhirPathEvaluationError(
-      'eval/singleton-expected',
-      `Expected a single ${expected}, but the item cannot be converted to ${expected}`,
+      'eval/type-mismatch',
+      `Expected ${expected}, but found an item that cannot be converted to ${expected}`,
     );
   }
   throw new FhirPathEvaluationError(

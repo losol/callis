@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import type { EvaluationErrorCode } from '../errors/error-codes.ts';
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
 import { ModelNode } from '../model/model-node.ts';
 import type { SystemTypeName } from '../types/system-types.ts';
@@ -16,7 +17,7 @@ const toText: ItemConversion<string> = (item) => (typeof item === 'string' ? ite
 const toDecimalText: ItemConversion<string> = (item) =>
   typeof item === 'number' ? item.toFixed(1) : undefined;
 
-function expectSingletonError(evaluate: () => unknown): void {
+function expectEvaluationError(evaluate: () => unknown, code: EvaluationErrorCode): void {
   let caught: unknown;
   try {
     evaluate();
@@ -24,7 +25,7 @@ function expectSingletonError(evaluate: () => unknown): void {
     caught = error;
   }
   expect(caught).toBeInstanceOf(FhirPathEvaluationError);
-  expect(caught).toMatchObject({ code: 'eval/singleton-expected' });
+  expect(caught).toMatchObject({ code });
 }
 
 // https://hl7.org/fhirpath/N1/#singleton-evaluation-of-collections
@@ -91,23 +92,45 @@ describe('singleton', () => {
     });
   });
 
-  describe('4. anything else raises eval/singleton-expected', () => {
-    it('for more than one item where a Boolean is expected', () => {
+  describe('4. anything else is an error', () => {
+    it('raises eval/singleton-expected for more than one item where a Boolean is expected', () => {
       // `Patient.active and Patient.telecom` with several telecoms is an error.
-      expectSingletonError(() => singleton([true, true], 'Boolean', toBoolean));
+      expectEvaluationError(
+        () => singleton([true, true], 'Boolean', toBoolean),
+        'eval/singleton-expected',
+      );
     });
 
-    it('for more than one item where another type is expected', () => {
-      expectSingletonError(() => singleton([1, 2, 3], 'Integer', toInteger));
+    it('raises eval/singleton-expected for more than one item where another type is expected', () => {
+      expectEvaluationError(
+        () => singleton([1, 2, 3], 'Integer', toInteger),
+        'eval/singleton-expected',
+      );
     });
 
-    it('for more than one item even when each would convert', () => {
-      expectSingletonError(() => singleton(['a', 'b'], 'String', toText));
+    it('raises eval/singleton-expected for more than one item even when each would convert', () => {
+      expectEvaluationError(
+        () => singleton(['a', 'b'], 'String', toText),
+        'eval/singleton-expected',
+      );
     });
 
-    it('for a single item that does not convert to a type other than Boolean', () => {
-      expectSingletonError(() => singleton(['5'], 'Integer', toInteger));
-      expectSingletonError(() => singleton([true], 'String', toText));
+    it('raises eval/type-mismatch for a single item that does not convert', () => {
+      // `'abc'.substring('x')`: one argument, of the wrong type. `first()` would not help.
+      expectEvaluationError(() => singleton(['5'], 'Integer', toInteger), 'eval/type-mismatch');
+      expectEvaluationError(() => singleton([true], 'String', toText), 'eval/type-mismatch');
+      expectEvaluationError(
+        () => singleton([new ModelNode({ value: {}, name: 'name' })], 'Decimal', toDecimalText),
+        'eval/type-mismatch',
+      );
+    });
+
+    it('follows the same rules when the expected type is only known at runtime', () => {
+      const integer = ((): SystemTypeName => 'Integer')();
+      const boolean = ((): SystemTypeName => 'Boolean')();
+      expectEvaluationError(() => singleton(['5'], integer, toInteger), 'eval/type-mismatch');
+      expectEvaluationError(() => singleton([1, 2], integer, toInteger), 'eval/singleton-expected');
+      expect(singleton(['5'], boolean, toInteger)).toBe(true);
     });
   });
 

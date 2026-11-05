@@ -101,7 +101,8 @@ How Callis reads the FHIRPath specification where the text is ambiguous, silent,
 
 - **Spec:** [N1 §4.5](https://hl7.org/fhirpath/N1/#singleton-evaluation-of-collections) says a single item is used if it "can be converted to the expected input type"; 3.0.0 says "implicitly converted".
 - **Tests:** none specific.
-- **Decision:** Only the implicit conversions of [N1 §5.5](https://hl7.org/fhirpath/N1/#conversion) apply. A single `'5'` where an Integer is expected is an error (`eval/singleton-expected`), not `5`; where a Boolean is expected it is `true` (step 2).
+- **Decision:** Only the implicit conversions of [N1 §5.5](https://hl7.org/fhirpath/N1/#conversion) apply. A single `'5'` where an Integer is expected is an error, not `5`; where a Boolean is expected it is `true` (step 2).
+- **Error codes:** the spec only says that evaluation "will signal an error". More than one item raises `eval/singleton-expected`; a single item that does not convert raises `eval/type-mismatch`, because its type is the problem and `first()` would not help. The owner decided this on 2026-11-05.
 - **Code:** `singleton()` in `packages/core/src/runtime/singleton.ts` ([T0003](tasks/T0003-types-and-collections.md)).
 
 ## Strings

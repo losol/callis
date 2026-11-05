@@ -52,7 +52,7 @@ The shared, dependency-free building blocks used by the runtime, functions and m
   1. A single item that converts implicitly to the expected type is that value (3.0.0 says "implicitly converted").
   2. A single item where a `Boolean` is expected is `true`.
   3. An empty collection stays empty.
-  4. Anything else raises the error code `eval/singleton-expected`.
+  4. Anything else is an error: more than one item raises `eval/singleton-expected`, and a single item that does not convert to an expected type other than Boolean raises `eval/type-mismatch` (owner decision, 2026-11-05).
 - **Boolean contexts** (`where` criteria, `iif` criteria, operands of `and`/`or`) use the same helper, producing `true`, `false` or empty.
 
 ### Three-valued logic
@@ -124,7 +124,7 @@ The TSDoc in `src/model/model-provider.ts` is the full contract. The points that
 ## Acceptance criteria
 
 - [ ] The three-valued logic tables are tested exhaustively against [N1 §6.5](https://hl7.org/fhirpath/N1/#boolean-logic).
-- [ ] All four branches of singleton evaluation are tested, including the `eval/singleton-expected` error.
+- [ ] All four branches of singleton evaluation are tested, including the `eval/singleton-expected` and `eval/type-mismatch` errors.
 - [ ] Type-specifier resolution is tested with a stub model: the model is searched before System, and qualified names resolve directly.
 - [ ] String equivalence follows [N1 string equivalence](https://hl7.org/fhirpath/N1/#string-equivalence) (case, whitespace).
 - [ ] The interfaces are documented with TSDoc.
