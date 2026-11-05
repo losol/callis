@@ -60,7 +60,7 @@ The collector walks the first-parent history of the ref it is given (`HEAD` in C
 | --- | --- |
 | PR number, date, subject | The squash commit's subject and date. |
 | Tasks merged | `Task: T0001` lines in the commit body. The PR template makes this the first line of the description, and the description becomes the commit body ([CONTRIBUTING.md](../../CONTRIBUTING.md#pull-request-titles-and-commit-messages)). `Task: none` is ignored. A task counts from the first commit that names it. |
-| Conformance | `docs/conformance/summary.json` at that commit, if it exists: per suite, the totals and the Phase 1 totals. |
+| Conformance | The summary table of `docs/conformance/r4.md` and `r5.md` at that commit, if they exist: per suite, the Total and the Phase 1 rows. The adapter is named in the report's introduction. (An earlier version of the runner also committed `summary.json`; the reports are the part that was committed at every commit.) |
 | Test cases | The number of `it(` and `test(` calls in `*.test.ts` files (`git grep -c`). `it.each` counts once, so this is a lower bound; the page says so. |
 | Source lines | Lines in non-test `.ts` files under `packages/*/src`. |
 
@@ -70,7 +70,7 @@ Function and operator names come from the task files for T0010–T0017 and T0020
 
 Rules for the page:
 
-- Until the conformance runner has a real engine behind it, every test fails or is skipped, so the conformance line is flat at zero. The page shows that and says why, using the adapter name from `summary.json`. It never fakes progress.
+- Until the conformance runner has a real engine behind it, every test fails or is skipped, so the conformance line is flat at zero. The page shows that and says why, using the adapter name from the report. It never fakes progress.
 - Everything that comes from git (commit subjects, task titles) is rendered as text by React, never as HTML.
 - The charts have text labels and the log table holds the same numbers; everything works with the keyboard; animation stops under `prefers-reduced-motion`.
 - The page uses the site's ratio-ui theme variables, so it follows the theme toggle.
