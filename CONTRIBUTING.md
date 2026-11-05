@@ -65,7 +65,7 @@ PR titles follow [Conventional Commits 1.0.0](https://www.conventionalcommits.or
 - Keep the whole title at most 72 characters.
 - Say what changes for someone reading `git log --oneline`. Task IDs and issue numbers go in the description, not the title.
 
-**Breaking changes** add `!` after the type or scope and explain the migration in the description. This applies before 1.0 too.
+**Breaking changes** add `!` after the type or scope. This applies before 1.0 too. The description and the changeset must also explain the change ([API changes](#api-changes)).
 
 | Good | Not good |
 | --- | --- |
@@ -152,6 +152,15 @@ A PR is ready to merge when:
 - user-visible changes to a publishable package have a changeset
 - the task file, `docs/spec-notes.md` and ADRs are updated where the change affects them
 - the conformance baseline did not go down
+
+## API changes
+
+Users depend on the public API, and other packages implement its interfaces (`ModelProvider`), so design it to last. Until 1.0 a breaking change is allowed, but only as a last resort.
+
+- **Design forward.** Before you add public API, read the task files that will build on it. Prefer optional members, options objects and extensible unions over positional parameters and closed shapes, so later tasks can extend it without breaking it.
+- **Look for a compatible change first,** such as a new optional member or option, or a new function next to the old one.
+- **Justify a breaking change.** Add `!` to the PR title. Under an *Interface changes* heading in the description, state what breaks, why, which alternatives you considered, and how to migrate. The changeset says what breaks and how to migrate.
+- **Before 1.0,** any public API, including `ModelProvider`, may break in a minor release under these rules. What is frozen for 1.0 is decided separately ([roadmap backlog](docs/roadmap.md#backlog-not-scheduled)).
 
 ## Changesets
 
