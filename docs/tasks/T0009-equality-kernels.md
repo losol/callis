@@ -17,7 +17,8 @@ Item-level and collection-level `equals`, `equivalent` and `compare` for every v
   - an extension point for model-specific equivalence, which T0020 uses for `Coding`/`CodeableConcept`
   - collection-level `=` (order-sensitive) and `~` (order-insensitive)
   - the return type is `true | false | undefined`
-- `src/runtime/comparison.ts`: `compare(a, b): -1 | 0 | 1 | undefined`, and `eval/type-mismatch` for incompatible types.
+- `src/runtime/comparison.ts`: export the shared runtime type `Ordering = -1 | 0 | 1`, with `compare(a, b): Ordering | undefined`, and `eval/type-mismatch` for incompatible types ([#57](https://github.com/losol/callis/issues/57)). Runtime consumers, operators and later `sort()` reuse it. Value modules retain their inline unions (including `TemporalComparison`); they must not import `runtime/` or each other beyond the existing Quantity → Decimal exception ([dependency rules](../architecture.md#repository-layout)).
+- Own the [model-less date convenience](#model-less-date-convenience) defined in T0003 ([#55](https://github.com/losol/callis/issues/55)).
 
 ## Design notes
 
@@ -38,6 +39,16 @@ The equality kernel returns `true | false | undefined` (undefined means "cannot 
 
 `!=` is `not(=)` and `!~` is `not(~)`. The collection functions (`distinct`, `isDistinct`, `union`, `intersect`, `exclude`, `subsetOf`, `supersetOf`, `in`, `contains`) use `=` semantics. Each function decides how to treat an undetermined comparison; for example, `@2020.combine(@2020-01-01).isDistinct()` is empty in the test suite.
 
+### Model-less date convenience
+
+[T0003: type system](T0003-types-and-collections.md#type-system) defines this Callis extension; T0009 implements it in the equality and ordering dispatch, where the temporal values and input provenance are both available. It is not a general String → date/time implicit conversion. Record the implemented rule in `docs/spec-notes.md` in T0009's PR.
+
+- Only when no model is supplied, an input `ModelNode` with no model type and a JavaScript string value is eligible. Preserve that provenance until comparison dispatch, before unwrapping it to a System String. A missing node type alone is insufficient: a model may be supplied but not know the node's type.
+- When the other item is a Date or DateTime, parse eligible date-only text with `parseDate()` and text with a time part with `parseDateTime()`. When the other item is a Time, use `parseTime()`. Use the existing T0005 parsers, without `@`/`@T` literal prefixes, and the ordinary temporal comparison rules, including partial precision, Date → DateTime conversion and the evaluation timezone policy.
+- Apply symmetrically, regardless of operand order, in `=`, `!=`, `~`, `!~`, `<`, `>`, `<=` and `>=`. Functions and collection operators using these kernels inherit it (for example `in`, `contains` and `distinct()`). Two input strings remain strings when neither operand is temporal.
+- String literals and newly computed strings are never eligible, even if their text looks like a date. Functions that select or forward an existing input item preserve its provenance; functions and operators that construct a new String do not acquire input provenance.
+- If parsing fails, retain the original String and follow the normal cross-type equality/equivalence or ordering rules; do not throw an invalid-literal error or silently drop the item. The convenience never applies to typed nodes or with a model supplied. It neither mutates the input nor caches one operand-dependent coercion as the node's permanent type.
+
 ### Ordering
 
 `<`, `>`, `<=` and `>=` ([N1 §6.2](https://hl7.org/fhirpath/N1/#comparison)) are defined for Integer, Decimal, String (by Unicode code point), Date, DateTime, Time and Quantity (with comparable units). Mixing incompatible types is an error. Partial-precision dates can give empty. Phase 2's `sort()` reuses the same kernel.
@@ -47,3 +58,6 @@ The equality kernel returns `true | false | undefined` (undefined means "cannot 
 - [ ] Every row of the equality table in the [design notes](#equality-and-equivalence) has tests, including the "undetermined" cases (dates with different precision, incomparable quantities).
 - [ ] Integer and Decimal mix correctly (`1 = 1.0`, `1 ~ 1.0`), and so do Date and DateTime.
 - [ ] Equality of complex JSON objects is recursive and order-sensitive for arrays.
+- [ ] Without a model, on `{"birthDate": "1974-12-25", "t": "10:00:00"}`, `birthDate = @1974-12-25`, `@1974-12-25 = birthDate`, `birthDate ~ @1974-12-25`, `birthDate < @2000`, `@2000 > birthDate` and `t = @T10:00:00` are true. Cover DateTime, partial precision and negated comparisons through the same dispatch.
+- [ ] A literal (`'1974-12-25' = @1974-12-25`), a computed string, two input strings, invalid temporal text, a typed node, and an untyped node with a model supplied keep ordinary comparison semantics. Forwarding an input item through a projection preserves eligibility; comparing it does not change later String operations on it ([#55](https://github.com/losol/callis/issues/55)).
+- [ ] `Ordering` is exported from `runtime/comparison.ts`; the String, Integer, Decimal, temporal and Quantity comparison results are assignable to `Ordering | undefined` without value modules importing runtime types ([#57](https://github.com/losol/callis/issues/57)).
