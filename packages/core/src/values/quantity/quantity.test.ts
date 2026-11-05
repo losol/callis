@@ -156,6 +156,26 @@ describe('quantity arithmetic and conversion', () => {
     expect(minimalUnitSystem.convert(value, 's', 'ms')?.scale).toBe(value.scale);
   });
 
+  // https://hl7.org/fhirpath/STU3/en/index.html#unit-conversions
+  // https://hl7.org/fhirpath/STU3/en/index.html#math-1
+  it.each([1n, -1n])(
+    'cancels redundant zeros to retain a supported conversion at the Decimal bounds (%s)',
+    (sign) => {
+      const coefficient = sign * (10n ** BigInt(MAX_DECIMAL_DIGITS) - 1n);
+      const value = Decimal.of(coefficient, MAX_DECIMAL_DIGITS);
+      const converted = minimalUnitSystem.convert(value, 's', 'ms');
+      expect(converted?.coefficient).toBe(coefficient);
+      expect(converted?.scale).toBe(MAX_DECIMAL_DIGITS - 3);
+      const quantityValue = convertQuantity(new Quantity(value, 's'), 'ms');
+      expect(quantityValue?.value.coefficient).toBe(coefficient);
+      expect(quantityValue?.value.scale).toBe(MAX_DECIMAL_DIGITS - 3);
+      const roundTrip =
+        converted === undefined ? undefined : minimalUnitSystem.convert(converted, 'ms', 's');
+      expect(roundTrip?.coefficient).toBe(coefficient);
+      expect(roundTrip?.scale).toBe(MAX_DECIMAL_DIGITS);
+    },
+  );
+
   it('retains identity precision and distinguishes implicit from explicit conversion', () => {
     const value = Decimal.of(100n, 2);
     expect(minimalUnitSystem.convert(value, 'days', 'day')).toBe(value);

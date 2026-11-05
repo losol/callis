@@ -156,7 +156,13 @@ function scale(value: Decimal, numerator: bigint, denominator: bigint): Decimal 
   if (recurring === 1n) {
     const places = Math.max(twos, fives);
     coefficient *= 2n ** BigInt(places - twos) * 5n ** BigInt(places - fives);
-    const scale = value.scale + places;
+    let scale = value.scale + places;
+    // Preserve visible precision when it fits; redundant zeros must not reject an exact value.
+    // https://hl7.org/fhirpath/STU3/en/index.html#unit-conversions
+    while (!isWithinDecimalBounds(coefficient, scale) && scale > 0 && coefficient % 10n === 0n) {
+      coefficient /= 10n;
+      scale--;
+    }
     return isWithinDecimalBounds(coefficient, scale) ? Decimal.of(coefficient, scale) : undefined;
   }
   // Only recurring conversions use arithmetic division's 28-significant-digit rounding.
