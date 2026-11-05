@@ -83,7 +83,11 @@ export function multiplyQuantity(
 ): Quantity | undefined {
   const product = units.multiply(a.unit, b.unit);
   if (product === undefined) return undefined;
-  return wrap(a.value.multiply(b.value)?.multiply(product.factor), product.unit);
+  const scaled = a.value.multiply(b.value)?.multiply(product.factor);
+  return wrap(
+    product.divisor === undefined ? scaled : scaled?.divide(product.divisor),
+    product.unit,
+  );
 }
 
 /** Divides quantities using the provider's unit algebra; division by zero gives empty.
@@ -96,7 +100,11 @@ export function divideQuantity(
 ): Quantity | undefined {
   const product = units.divide(a.unit, b.unit);
   if (product === undefined) return undefined;
-  return wrap(a.value.multiply(product.factor)?.divide(b.value), product.unit);
+  const denominator = product.divisor === undefined ? b.value : b.value.multiply(product.divisor);
+  return wrap(
+    denominator === undefined ? undefined : a.value.multiply(product.factor)?.divide(denominator),
+    product.unit,
+  );
 }
 
 function wrap(value: Decimal | undefined, unit: string): Quantity | undefined {
@@ -112,7 +120,11 @@ function selectUnit(
 ): string | undefined {
   const ratio = units.convert(Decimal.ONE, a, b, { equivalence });
   if (ratio === undefined) return undefined;
-  const order = ratio.compare(Decimal.ONE);
+  // Subtract the converted origin so affine units use their interval size, not their offset.
+  const origin = units.convert(Decimal.ZERO, a, b, { equivalence });
+  const interval = origin === undefined ? undefined : ratio.subtract(origin)?.abs();
+  if (interval === undefined) return undefined;
+  const order = interval.compare(Decimal.ONE);
   return order === 0 || (finer ? order < 0 : order > 0) ? a : b;
 }
 

@@ -11,6 +11,7 @@ import {
   subtractQuantity,
 } from '../src/values/quantity/operations.ts';
 import { Quantity } from '../src/values/quantity/quantity.ts';
+import type { UnitSystem } from '../src/values/quantity/unit-system.ts';
 import { stubUnitSystem } from './support/stub-unit-system.ts';
 
 // https://hl7.org/fhirpath/N1/#quantity
@@ -42,6 +43,25 @@ describe('substitutable UnitSystem', () => {
     expect(multiplyQuantity(q(1, 'cm'), q(1, 's'), stubUnitSystem)).toBeUndefined();
     expect(divideQuantity(q(1, 'cm'), q(1, 's'), stubUnitSystem)).toBeUndefined();
     expect(convertQuantity(q(1, 'cm'), 's', stubUnitSystem)).toBeUndefined();
+  });
+
+  it('selects the least granular unit using intervals for affine providers', () => {
+    // Synthetic offset units: 1 wide = 2 narrow in interval size, origin -100 narrow.
+    // This exercises the contract required by T0007 special (non-ratio) units.
+    const affine: UnitSystem = {
+      ...stubUnitSystem,
+      convert(value, from, to, options) {
+        if (from === 'wide' && to === 'narrow')
+          return value.multiply(Decimal.of(2n))?.subtract(Decimal.of(100n));
+        if (from === 'narrow' && to === 'wide')
+          return value.add(Decimal.of(100n))?.divide(Decimal.of(2n));
+        return stubUnitSystem.convert(value, from, to, options);
+      },
+    };
+    const narrow = new Quantity(Decimal.of(-971n, 1), 'narrow');
+    expect(quantityEquivalent(q(1, 'wide'), narrow, affine)).toBe(true);
+    expect(quantityEquivalent(narrow, q(1, 'wide'), affine)).toBe(true);
+    expect(quantityEquals(q(1, 'wide'), narrow, affine)).toBe(false);
   });
 
   // https://hl7.org/fhirpath/STU3/#math-1

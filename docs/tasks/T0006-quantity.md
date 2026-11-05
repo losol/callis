@@ -42,12 +42,15 @@ These operations need unit knowledge:
 - **`@callis/ucum`** is a separate package, also without runtime dependencies. It provides full UCUM conversion: a parser for UCUM unit expressions (prefixes, atoms, exponents, `.` and `/`, `{annotations}`, `10*n` factors) plus tables generated from [`ucum-essence.xml`](https://github.com/ucum-org/ucum), with exact `Decimal` factors and dimension vectors. A small, explicit set of special (non-ratio) units such as `Cel` and `[degF]` is supported; other special units report "not convertible". Users opt in with `compile(expr, { units: ucum })`. The conformance runner always uses it.
 
 ```ts
+interface UnitProduct { readonly unit: string; readonly factor: Decimal; readonly divisor?: Decimal; }
+interface UnitConversionOptions { readonly equivalence?: boolean; }
+interface ParsedUnit { readonly unit: string; }
 interface UnitSystem {
   /** Parse and validate a unit, or return undefined if it is unknown. */
   parse(unit: string): ParsedUnit | undefined;
   /** Convert a value between units, or return undefined if the dimensions differ. */
-  convert(value: Decimal, from: string, to: string): Decimal | undefined;
-  /** Canonical form used by * and /, for example 'cm2' / 'cm' → 'cm'. */
+  convert(value: Decimal, from: string, to: string, options?: UnitConversionOptions): Decimal | undefined;
+  /** Canonical form and numeric factor used by * and /, for example 'cm2' / 'cm' → 'cm'. */
   multiply(a: string, b: string): UnitProduct | undefined;
   divide(a: string, b: string): UnitProduct | undefined;
 }
@@ -67,6 +70,8 @@ The initial string-only algebra sketch cannot describe a scaled cancellation suc
 as `cm / m → 0.01 '1'`; returning only `'1'` would lose the factor. Returning
 `UnitProduct { unit: string; factor: Decimal }` corrects that sketch before any
 provider exists, and lets T0007 canonicalize compound units without a later break.
+An optional Decimal `divisor` represents rational factors exactly (`s/min` is
+`1/60`), so `60 's' / 1 'min'` remains exactly 1; ordinary providers omit it.
 The alternative of retaining every input spelling in an unsimplified unit string
 would force every consumer to parse composite units.
 
@@ -81,12 +86,12 @@ date/time arithmetic while FHIR mapping produces calendar year/month.
 
 ## Acceptance criteria
 
-- [ ] The 3.0.0 time-valued quantity table holds:
+- [x] The 3.0.0 time-valued quantity table holds:
   - `1 year = 1 'a'` is empty (`testEquality36`)
   - `1 year ~ 1 'a'` is `true`
   - `7 days = 1 'wk'` is `true` (`testQuantity6`)
   - `1 second = 1 's'` is `true`
   - `10 seconds > 1 's'` is `true`
   - `1 year > 1 'a'` is empty
-- [ ] With the minimal unit system, units it does not know compare as empty, and no error is thrown.
-- [ ] The `UnitSystem` interface is documented and has a test double for other tasks to use.
+- [x] With the minimal unit system, units it does not know compare as empty, and no error is thrown.
+- [x] The `UnitSystem` interface is documented and has a test double for other tasks to use.

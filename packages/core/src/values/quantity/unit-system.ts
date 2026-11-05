@@ -16,6 +16,8 @@ export interface UnitConversionOptions {
 export interface UnitProduct {
   readonly unit: string;
   readonly factor: Decimal;
+  /** Exact rational scale is factor/divisor; omit divisor for terminating factors. */
+  readonly divisor?: Decimal;
 }
 
 /**
@@ -23,7 +25,7 @@ export interface UnitProduct {
  * `parse` validates units known to the provider, but identical opaque units may still convert.
  * `convert` preserves input precision on identity. Calendar year/month remain distinct from
  * definite durations unless equivalence is requested. Providers must honor that distinction.
- * Algebra's factor scales the raw numeric product/quotient into the returned unit; this permits
+ * Algebra's factor/divisor scales the raw numeric product/quotient into the returned unit; this permits
  * canonicalizing scaled units (e.g. cm/m to '1') without losing a factor of 0.01.
  * Affine units must be rejected by algebra when a ratio calculation would be invalid.
  * Consumers must not inspect provider-specific parsed metadata. New capabilities should be
@@ -68,7 +70,7 @@ function convert(
   const source = normalizeCalendarUnit(from);
   const target = normalizeCalendarUnit(to);
   if (source === target) return value;
-  // Calendar years and months have a precise relation to each other, not to days.
+  // Calendar year/month use the specified 12:1 relation before the approximate day factors.
   if (source === 'year' && target === 'month') return value.multiply(Decimal.of(12n));
   if (source === 'month' && target === 'year') return value.divide(Decimal.of(12n));
   if (
@@ -97,9 +99,10 @@ function convert(
 }
 
 function scale(value: Decimal, numerator: bigint, denominator: bigint): Decimal | undefined {
+  if (numerator === denominator) return value;
   const divisor = gcd(numerator, denominator);
   const scaled = value.multiply(Decimal.of(numerator / divisor));
-  return scaled?.divide(Decimal.of(denominator / divisor));
+  return denominator === divisor ? scaled : scaled?.divide(Decimal.of(denominator / divisor));
 }
 
 function gcd(a: bigint, b: bigint): bigint {
@@ -126,7 +129,17 @@ export const minimalUnitSystem: UnitSystem = Object.freeze({
   },
   divide(a: string, b: string): UnitProduct | undefined {
     if (b === '1') return { unit: normalizeCalendarUnit(a), factor: Decimal.ONE };
-    const ratio = convert(Decimal.ONE, a, b);
-    return ratio === undefined ? undefined : { unit: '1', factor: ratio };
+    const source = normalizeCalendarUnit(a);
+    const target = normalizeCalendarUnit(b);
+    if (source === target) return { unit: '1', factor: Decimal.ONE };
+    const numerator = factor(definiteUnit(source) ?? '');
+    const denominator = factor(definiteUnit(target) ?? '');
+    if (numerator === undefined || denominator === undefined) return undefined;
+    const divisor = gcd(numerator, denominator);
+    return {
+      unit: '1',
+      factor: Decimal.of(numerator / divisor),
+      divisor: Decimal.of(denominator / divisor),
+    };
   },
 });

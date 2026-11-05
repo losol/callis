@@ -89,6 +89,7 @@ describe('quantity arithmetic and conversion', () => {
     expect(multiplyQuantity(quantity(2, 'kg'), quantity(3, '1'))?.toString()).toBe("6 'kg'");
     expect(divideQuantity(quantity(12, 'kg'), quantity(3, '1'))?.toString()).toBe("4 'kg'");
     expect(divideQuantity(quantity(1, 'min'), quantity(30, 's'))?.toString()).toBe("2 '1'");
+    expect(divideQuantity(quantity(60, 's'), quantity(1, 'min'))?.toString()).toBe("1 '1'");
     expect(divideQuantity(quantity(3, 'kg'), quantity(3, 'kg'))?.toString()).toBe("1 '1'");
     expect(multiplyQuantity(quantity(1, 'kg'), quantity(1, 'kg'))).toBeUndefined();
     expect(divideQuantity(quantity(1, 'kg'), quantity(1, 's'))).toBeUndefined();
@@ -114,6 +115,15 @@ describe('quantity arithmetic and conversion', () => {
     expect(quantityEquivalent(quantity(1, 'year'), quantity(12, 'mo'))).toBe(true);
     expect(addQuantity(quantity(2, 'minutes'), quantity(60, 's'))?.toString()).toBe('180 second');
     expect(addQuantity(quantity(60, 's'), quantity(2, 'minutes'))?.toString()).toBe('180 second');
+  });
+
+  it('preserves exact values and precision across aliases and integer conversion factors', () => {
+    const value = Decimal.of(12345678901234567890123456789012345678900n, 2);
+    expect(minimalUnitSystem.convert(value, 'second', 's')).toBe(value);
+    expect(minimalUnitSystem.convert(value, 's', 'ms')?.coefficient).toBe(
+      value.coefficient * 1000n,
+    );
+    expect(minimalUnitSystem.convert(value, 's', 'ms')?.scale).toBe(value.scale);
   });
 
   it('retains identity precision and rejects calendar conversions by default', () => {
