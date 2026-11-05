@@ -103,7 +103,8 @@ The PR changes no repository settings, secrets, DNS or Cloudflare configuration.
 - Create the `site` environment, with `main` as the only deployment branch.
 - Keep `callis.losol.no` attached to the Worker `callis` (done; the deploy leaves it alone).
 - Turn off GitHub Pages for this repository (it is enabled with a workflow source, but no workflow publishes to it; the site lives on Cloudflare).
-- Check that the secrets reach this repository and that the `site` environment exists. The site build does not need a required check of its own: add the job to the `needs` list of the `CI result` job in `ci.yml`, which is the one required check.
+- Check that the secrets reach this repository and that the `site` environment exists.
+- Keep `CI result` as the required check of the branch protection. The site build does not need a required check of its own, but its job must be listed in the `needs` of `CI result`, the aggregate job that PR #77 adds to `ci.yml`. Whichever of the site PR and #77 merges second makes that change, so the site build blocks a merge as soon as both are on `main`. Until then the `Site build` job runs on pull requests but does not block.
 
 CONTRIBUTING.md lists these under *Repository settings*.
 
