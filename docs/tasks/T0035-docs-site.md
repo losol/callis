@@ -30,6 +30,7 @@ Out of scope:
 - Task frontmatter (a `status` and the list of functions a task provides). That is a plan change and gets its own `docs` PR. Until then the collector reads the task files as they are, and keeps that parsing in one module so the switch is local.
 - A per-task and per-function conformance view. It needs real pass counts, which arrive with T0008 and T0023.
 - API reference generated from `@callis/core`. That belongs to T0025.
+- An interactive FHIRPath playground. It needs the engine and its public API (T0025), and is on the [backlog](../roadmap.md#backlog-not-scheduled). The site is built to leave room for it ([the playground](#room-for-a-playground)).
 - Changing repository settings, secrets, DNS or the Cloudflare account. The owner does that ([owner actions](#owner-actions)).
 
 ## Design notes
@@ -91,7 +92,7 @@ The site must not publish anything that is not in the repository: it reads files
 - `actions/checkout` with `fetch-depth: 0`, because the progress page reads the whole history.
 - Triggers: `push` to `main` and `workflow_dispatch`. `permissions: contents: read`. `concurrency` with `cancel-in-progress: false`, so a deploy is never cut off halfway.
 - The job uses the `site` environment, with the URL <https://callis.losol.no>.
-- It deploys as a Cloudflare Worker with static assets: `pnpm dlx wrangler@<pinned version> deploy --name <worker> --compatibility-date <date> --assets <build output>`. Wrangler is called directly, without `cloudflare/wrangler-action`, and its version is pinned. A Worker with static assets, and not Pages, means server-side logic later is a `main` entry and not a platform migration.
+- It deploys as a Cloudflare Worker with static assets: `pnpm dlx wrangler@<pinned version> deploy --name callis --compatibility-date <date> --assets <build output>`. The Worker `callis` (`callis.losol.workers.dev`) exists, with the custom domain `callis.losol.no` attached in Cloudflare. The deploy adds no route, domain or DNS configuration, so it cannot fight what is attached. Wrangler is called directly, without `cloudflare/wrangler-action`, and its version is pinned. A Worker with static assets, and not Pages, means server-side logic later is a `main` entry and not a platform migration.
 - It reads `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` from secrets, and nothing else.
 - It runs the same checks the pull request build ran (build and typecheck of the site) before it deploys, so it never publishes something that does not build.
 
@@ -101,11 +102,19 @@ The PR changes no repository settings, secrets, DNS or Cloudflare configuration.
 
 - Make the Cloudflare credentials available to this repository: the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets, as organization secrets that include this repository or as repository secrets.
 - Create the `site` environment, with `main` as the only deployment branch.
-- Point `callis.losol.no` at the Worker (custom domain and DNS).
+- Keep `callis.losol.no` attached to the Worker `callis` (done; the deploy leaves it alone).
 - Turn off GitHub Pages for this repository (it is enabled with a workflow source, but no workflow publishes to it; the site lives on Cloudflare).
-- If the site build should block merging, add it to the required checks of the branch protection.
+- Check that the secrets reach this repository and that the `site` environment exists. The site build does not need a required check of its own: add the job to the `needs` list of the `CI result` job in `ci.yml`, which is the one required check.
 
 CONTRIBUTING.md lists these under *Repository settings*.
+
+### Room for a playground
+
+The owner wants an interactive FHIRPath playground on the site once the engine exists (T0025). It is not built here, but nothing in the site should stand in its way:
+
+- Routes are plain React Router modules in `app/routes/`, listed in `app/routes.ts`. A `playground` route is one more entry, and it can be client-only: it imports `@callis/core` in the browser and evaluates there. The direction of the dependency is site → core; `@callis/core` never depends on the site.
+- The site is a Worker with static assets, not a Pages project, so server-side logic later is a `main` entry in the Worker and not a platform migration.
+- The theme, the header and the search are shared by every route, so a new route needs no layout work.
 
 ## Acceptance criteria
 

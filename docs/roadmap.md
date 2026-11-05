@@ -152,5 +152,6 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 - FHIR XML as an input format (a separate package that reuses the T0023 converter).
 - A SQL-on-FHIR `ViewDefinition` runner built on Callis.
 - A differential test harness against `fhirpath.js` and the HL7 Java engine.
+- An interactive FHIRPath playground on the documentation site ([T0035](tasks/T0035-docs-site.md)): a client-side route that imports `@callis/core` and evaluates expressions in the browser. Needs the public API of T0025.
 - An optional "compiled sync-only" build mode, if T0033 shows a significant gain.
 - API stabilisation for 1.0: review the public API surface (the `@callis/core` exports, `ModelProvider`, the conformance `EvaluatorAdapter`, the error codes) and decide what is frozen for 1.0. Until then, 0.x releases may break any of it ([T0025](tasks/T0025-public-api-release.md#public-api-sketch)).
