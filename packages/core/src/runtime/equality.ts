@@ -381,17 +381,12 @@ function hasEquivalentPairing(
   ctx: EquivalenceContext,
 ): boolean {
   const count = left.length;
-  const known = new Map<number, boolean>();
+  // Not memoized: the kernels are pure, and a table of pair results would need memory quadratic
+  // in the collection size.
   const pairs = (leftIndex: number, rightIndex: number): boolean => {
-    const key = leftIndex * count + rightIndex;
-    let result = known.get(key);
-    if (result === undefined) {
-      const a = left[leftIndex];
-      const b = right[rightIndex];
-      result = a !== undefined && b !== undefined && itemEquivalent(a, b, ctx);
-      known.set(key, result);
-    }
-    return result;
+    const a = left[leftIndex];
+    const b = right[rightIndex];
+    return a !== undefined && b !== undefined && itemEquivalent(a, b, ctx);
   };
   const leftMatch = new Int32Array(count).fill(-1);
   const rightMatch = new Int32Array(count).fill(-1);

@@ -343,6 +343,13 @@ describe('equality and equivalence', () => {
       expect(equivalent(literals(...b), literals(...a), ctx)).toBe(expected);
     });
 
+    it('pairs large collections in any order', () => {
+      const items = Array.from({ length: 1000 }, (_, index) => index);
+      const reversed = [...items].reverse();
+      expect(equivalent(items, reversed, ctx)).toBe(true);
+      expect(equivalent(items, [...reversed.slice(1), 1000], ctx)).toBe(false);
+    });
+
     it('agrees with trying every pairing', () => {
       // One-digit decimals near 1 make equivalence often non-transitive.
       const items = fc.constantFrom('1', '2', '1.0', '1.2', '1.4', '1.5', '1.24', '1.25', '2.0');
