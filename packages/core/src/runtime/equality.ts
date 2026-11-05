@@ -166,8 +166,8 @@ export function itemEquivalent(left: Item, right: Item, ctx: EquivalenceContext)
 
 /**
  * Equality (`=`) of two collections ([N1 §6.1.1](https://hl7.org/fhirpath/N1/#equals), as
- * clarified in [3.0.0](https://hl7.org/fhirpath/STU3/en/index.html#-equals)): the items are compared pairwise,
- * in order.
+ * clarified in [3.0.0](https://hl7.org/fhirpath/STU3/en/index.html#-equals)): the items are
+ * compared pairwise, in order.
  *
  * @returns undefined (empty) if either collection is empty; `false` if the lengths differ or any
  *   pair is not equal; `true` if every pair is equal; otherwise undefined.
