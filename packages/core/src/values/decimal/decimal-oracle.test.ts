@@ -286,6 +286,27 @@ const nearBoundDecimals: fc.Arbitrary<Decimal> = fc.oneof(
     .map(([coefficient, scale]) => Decimal.of(coefficient, scale)),
 );
 
+/** Factors whose product lands on the bound: about 5,000 digits and a scale of about 5,000. */
+const halfBoundFactors: fc.Arbitrary<Decimal> = fc
+  .tuple(
+    fc.integer({ min: 4_998, max: 5_002 }),
+    fc.integer({ min: 4_998, max: 5_002 }),
+    fc.boolean(),
+  )
+  .chain(([digits, scale, negative]) =>
+    fc
+      .bigInt({ min: 10n ** BigInt(digits - 1), max: 10n ** BigInt(digits) - 1n })
+      .map((magnitude) => Decimal.of(negative ? -magnitude : magnitude, scale)),
+  );
+
+/** Factors whose product always fits: below 10^5000, with a scale of at most 5,000. */
+const fittingFactors: fc.Arbitrary<Decimal> = fc
+  .tuple(
+    fc.bigInt({ min: -(10n ** 5_000n - 1n), max: 10n ** 5_000n - 1n }),
+    fc.integer({ min: 0, max: 5_000 }),
+  )
+  .map(([coefficient, scale]) => Decimal.of(coefficient, scale));
+
 /** Whether an exact result with the given scale fits the size bound. */
 function fitsBound(exact: DecimalJs, scale: number): boolean {
   const coefficient = exact.times(new BoundOracle(10).pow(scale));
@@ -321,7 +342,37 @@ describe('the size bound against decimal.js', () => {
     );
   });
 
-  it('never throws for division near the bound', () => {
+  it('multiplies exactly up to the bound, and gives empty exactly beyond it', () => {
+    // Factors of about 5,000 digits with a scale of about 5,000 put the product's digits and
+    // scale on both sides of 10,000; half-size factors always fit.
+    for (const factors of [halfBoundFactors, fittingFactors]) {
+      fc.assert(
+        fc.property(factors, factors, (a, b) => {
+          expectBoundedResult(
+            a.multiply(b),
+            toBoundOracle(a).times(toBoundOracle(b)),
+            a.scale + b.scale,
+          );
+        }),
+        options,
+      );
+    }
+  });
+
+  it('generates products on both sides of the bound', () => {
+    const products = fc
+      .sample(fc.tuple(halfBoundFactors, halfBoundFactors), { numRuns: 200, seed: 47 })
+      .map(([a, b]) => a.multiply(b));
+    expect(products.some((product) => product === undefined)).toBe(true);
+    expect(products.some((product) => product !== undefined)).toBe(true);
+    expect(
+      fc
+        .sample(fc.tuple(fittingFactors, fittingFactors), { numRuns: 200, seed: 47 })
+        .every(([a, b]) => a.multiply(b) !== undefined),
+    ).toBe(true);
+  });
+
+  it('divides near the bound without throwing, to 28 significant digits when defined', () => {
     fc.assert(
       fc.property(nearBoundDecimals, nearBoundDecimals, (a, b) => {
         for (const result of [a.divide(b), a.div(b), a.mod(b)]) {
@@ -331,6 +382,15 @@ describe('the size bound against decimal.js', () => {
               MAX_DECIMAL_DIGITS,
             );
           }
+        }
+        const quotient = a.divide(b);
+        if (quotient !== undefined && quotient.sign() !== 0) {
+          // Rounded to at least 28 significant digits: |q − a/b| ≤ ½ unit of the 28th digit,
+          // so |q × b − a| ≤ |b| × 10^(e − 27), where e is the exponent of q's first digit.
+          const q = toBoundOracle(quotient);
+          const divisor = toBoundOracle(b);
+          const error = q.times(divisor).minus(toBoundOracle(a)).abs();
+          expect(error.lte(divisor.abs().times(new BoundOracle(10).pow(q.e - 27)))).toBe(true);
         }
       }),
       options,

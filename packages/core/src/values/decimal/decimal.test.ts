@@ -568,6 +568,23 @@ describe('the size bound', () => {
     expect(Decimal.of(10n ** 9_999n).div(d('0.1'))).toBeUndefined();
   });
 
+  it('gives empty for a large quotient whose 8 digits after the point do not fit', () => {
+    // 1e9992 / 3 has 9,992 integer digits and 8 after the point: exactly 10,000 digits.
+    const fits = Decimal.of(10n ** 9_992n).divide(d('3'));
+    expect(fits?.scale).toBe(8);
+    expect(fits?.coefficient.toString()).toHaveLength(10_000);
+    // 1e9993 / 3 would need 10,001 digits.
+    expect(Decimal.of(10n ** 9_993n).divide(d('3'))).toBeUndefined();
+    // An exact quotient needs no digits after the point: 1e9995 / 4 = 2.5e9994.
+    expect(show(Decimal.of(10n ** 9_995n).divide(d('4')))).toBe(`25${'0'.repeat(9_993)}`);
+    // div has no digits after the point.
+    expect(
+      Decimal.of(10n ** 9_999n)
+        .div(d('3'))
+        ?.toString(),
+    ).toBe('3'.repeat(9_999));
+  });
+
   it('keeps an exact quotient that fits once its trailing zeros are removed', () => {
     const expected = `2${'0'.repeat(9_999)}`;
     expect(show(Decimal.of(10n ** 9_999n).divide(d('0.5')))).toBe(expected);

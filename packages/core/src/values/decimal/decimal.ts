@@ -104,7 +104,8 @@ export class Decimal {
    * whitespace and other forms are rejected.
    *
    * @returns the value, or `undefined` if the text is not in that form or the value is outside the
-   *   {@link MAX_DECIMAL_DIGITS} bound (leading zeros do not count).
+   *   {@link MAX_DECIMAL_DIGITS} bound (leading zeros do not count). So a number literal that the
+   *   lexer accepts, such as `1` followed by 10,000 zeros, can still give `undefined`.
    * @see https://hl7.org/fhirpath/N1/#todecimal-decimal
    */
   static parse(text: string): Decimal | undefined {
@@ -233,7 +234,8 @@ export class Decimal {
    * Exact product, with the sum of the two scales: `1.2 * 1.8` is `2.16`.
    *
    * @returns the product, or `undefined` (empty) if its coefficient or its scale is outside the
-   *   {@link MAX_DECIMAL_DIGITS} bound.
+   *   {@link MAX_DECIMAL_DIGITS} bound. The scale counts even for zero: `0` with scale 6,000 times
+   *   `0` with scale 6,000 has scale 12,000 and is empty.
    * @see https://hl7.org/fhirpath/N1/#multiplication
    */
   multiply(other: Decimal): Decimal | undefined {
@@ -245,8 +247,11 @@ export class Decimal {
    * after the decimal point if that keeps more, and then trailing zeros are removed: `1 / 2` is
    * `0.5`, `4 / 2` is `2`, and `1 / 3` is `0.3333333333333333333333333333`.
    *
-   * @returns the quotient, or `undefined` (empty) when dividing by zero or when the quotient is
-   *   outside the {@link MAX_DECIMAL_DIGITS} bound (`1e-9999 / 1e9999` underflows).
+   * @returns the quotient, or `undefined` (empty) when dividing by zero or when the rounded
+   *   quotient is outside the {@link MAX_DECIMAL_DIGITS} bound. That happens on the small side
+   *   (`1e-9999 / 1e9999` underflows), and also from about `1e9992` up: there the 8 digits after
+   *   the point no longer fit next to the integer part, so `1e9995 / 3` is empty unless the
+   *   quotient is exact within fewer digits.
    * @see https://hl7.org/fhirpath/N1/#division
    */
   divide(divisor: Decimal): Decimal | undefined {
