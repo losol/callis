@@ -97,6 +97,25 @@ describe('substitutable UnitSystem', () => {
     expect(divideQuantity(q(1, 'wide'), q(1, 'wide'), affine)).toBeUndefined();
   });
 
+  // https://hl7.org/fhirpath/STU3/en/index.html#multiplication
+  it.each([undefined, Decimal.ONE, Decimal.of(100n, 2)])(
+    'preserves exact multiplication with an omitted or explicit default divisor %s',
+    (divisor) => {
+      const provider: UnitSystem = {
+        ...stubUnitSystem,
+        multiply: () =>
+          divisor === undefined
+            ? { unit: 'm2', factor: Decimal.ONE }
+            : { unit: 'm2', factor: Decimal.ONE, divisor },
+      };
+      const value = Decimal.of(10n ** 28n + 1n, 28);
+      const product = multiplyQuantity(new Quantity(value, 'm'), q(1, 'm'), provider);
+      expect(product?.value.coefficient).toBe(value.coefficient);
+      expect(product?.value.scale).toBe(value.scale);
+      expect(product?.unit).toBe('m2');
+    },
+  );
+
   it('keeps rational scales exact in both algebra kernels', () => {
     const rational: UnitSystem = {
       ...stubUnitSystem,

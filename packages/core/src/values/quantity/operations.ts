@@ -122,7 +122,9 @@ export function multiplyQuantity(
     return undefined;
   const scaled = a.value.multiply(b.value)?.multiply(product.factor);
   return wrap(
-    product.divisor === undefined ? scaled : scaled?.divide(product.divisor),
+    product.divisor === undefined || product.divisor.equals(Decimal.ONE)
+      ? scaled
+      : scaled?.divide(product.divisor),
     product.unit,
   );
 }
