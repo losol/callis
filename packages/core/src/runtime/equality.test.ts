@@ -271,6 +271,11 @@ describe('equality and equivalence', () => {
       expectEquality(node({ a: [inheriting(), 'x'] }), node({ a: ['x'] }), true, true);
       expectEquality(node({ a: [inheriting()] }), node({ a: [['ghost']] }), false, false);
       expectEquality(node({ a: [inheriting()] }), node({}), true, true);
+      // An own entry after an inherited hole: only the own entry counts.
+      const partly = inheriting();
+      partly[1] = 1;
+      expectEquality(node({ a: partly }), node({ a: [1] }), true, true);
+      expectEquality(node({ a: partly }), node({ a: ['ghost', 1] }), false, false);
     });
 
     // testEquality29, testEquality30, testNEquality25, testNEquality26
