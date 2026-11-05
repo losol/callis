@@ -1,29 +1,11 @@
 name: FHIR model regeneration
 
 on:
+  workflow_call:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "tools/model-gen/**"
-      - "packages/fhir-r4/**"
-      - "packages/fhir-r5/**"
-      - ".github/workflows/model-gen.yml"
-      - "pnpm-lock.yaml"
-  push:
-    branches: [main]
-    paths:
-      - "tools/model-gen/**"
-      - "packages/fhir-r4/**"
-      - "packages/fhir-r5/**"
-      - ".github/workflows/model-gen.yml"
-      - "pnpm-lock.yaml"
 
 permissions:
   contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   regenerate:

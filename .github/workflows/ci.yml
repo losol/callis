@@ -21,10 +21,35 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      model_changed: ${{ steps.model-changes.outputs.changed }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Detect model regeneration changes
+        id: model-changes
+        env:
+          IS_PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
+          DIFF_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          DIFF_HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        # A missing base (for example the first push) conservatively regenerates. Paths cover
+        # both generator inputs and output, so a hand-edited model cannot skip regeneration.
+        run: |
+          if [ "$IS_PULL_REQUEST" = true ]; then
+            DIFF_BASE="$(git merge-base "$DIFF_BASE" "$DIFF_HEAD")" || DIFF_BASE=""
+          fi
+          if git cat-file -e "${DIFF_BASE}^{commit}" 2>/dev/null &&
+             git diff --quiet "$DIFF_BASE" "$DIFF_HEAD" -- \
+               tools/model-gen packages/fhir-r4 packages/fhir-r5 packages/core scripts \
+               package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json \
+               vitest.config.ts biome.json .node-version .npmrc \
+               .github/workflows/model-gen.yml .github/workflows/ci.yml; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -141,6 +166,14 @@ jobs:
           test -f search-index.json
           grep -q "Callis" index.html
 
+  # Keep the expensive network regeneration path-filtered, while making a failed generated
+  # output check fail the same aggregate result as tests and package checks.
+  model-gen:
+    needs: check
+    # Only an explicit unchanged result skips regeneration; a missing output runs it.
+    if: needs.check.outputs.model_changed != 'false'
+    uses: ./.github/workflows/model-gen.yml
+
   # The one check that branch protection requires, so the jobs above can be renamed, added or split
   # (for example a new Node version in the matrix) without changing the repository settings. It
   # fails when any job it needs failed or was cancelled. A skipped job counts as passed, so a job
@@ -148,7 +181,7 @@ jobs:
   result:
     name: CI result
     if: always()
-    needs: [check, test, conformance, site]
+    needs: [check, test, conformance, site, model-gen]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
