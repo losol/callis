@@ -48,6 +48,7 @@ export interface UnitProduct {
  * Scale components must be strictly positive. Kernels return undefined for invalid components.
  * Every intermediate uses bounded Decimal kernels; intermediate overflow also gives undefined.
  * Affine units must be rejected by algebra when a ratio calculation would be invalid.
+ * Calendar division is unsupported except division by the dimensionless unit '1'.
  * Consumers must not inspect provider-specific parsed metadata. New capabilities should be
  * optional; a provider implementing these four methods remains valid.
  * @see https://hl7.org/fhirpath/STU3/#quantity
@@ -183,6 +184,9 @@ export const minimalUnitSystem: UnitSystem = Object.freeze({
   },
   divide(a: string, b: string): UnitProduct | undefined {
     if (b === '1') return { unit: normalizeCalendarUnit(a), factor: Decimal.ONE };
+    // Calendar units cannot cancel, even when their fixed-duration counterparts could.
+    // https://hl7.org/fhirpath/STU3/en/index.html#division
+    if (isCalendarUnit(a) || isCalendarUnit(b)) return undefined;
     const source = normalizeCalendarUnit(a);
     const target = normalizeCalendarUnit(b);
     if (source === target) return { unit: '1', factor: Decimal.ONE };

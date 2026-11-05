@@ -99,6 +99,33 @@ describe('quantity arithmetic and conversion', () => {
     expect(divideQuantity(quantity(1, 's'), quantity(0, 's'))).toBeUndefined();
   });
 
+  // https://hl7.org/fhirpath/STU3/en/index.html#division
+  it.each([
+    ['year', 'a'],
+    ['month', 'mo'],
+    ['week', 'wk'],
+    ['day', 'd'],
+    ['hour', 'h'],
+    ['minute', 'min'],
+    ['second', 's'],
+    ['millisecond', 'ms'],
+  ])('rejects calendar %s cancellation while retaining UCUM %s cancellation', (calendar, ucum) => {
+    expect(divideQuantity(quantity(2, calendar), quantity(1, calendar))).toBeUndefined();
+    expect(divideQuantity(quantity(2, `${calendar}s`), quantity(1, calendar))).toBeUndefined();
+    expect(divideQuantity(quantity(2, ucum), quantity(1, ucum))?.toString()).toBe("2 '1'");
+  });
+
+  // https://hl7.org/fhirpath/STU3/en/index.html#division
+  it('rejects differing and mixed calendar quotients but retains scalar and UCUM division', () => {
+    expect(divideQuantity(quantity(1, 'week'), quantity(1, 'day'))).toBeUndefined();
+    expect(divideQuantity(quantity(1, 'day'), quantity(1, 'week'))).toBeUndefined();
+    expect(divideQuantity(quantity(1, 'week'), quantity(1, 'd'))).toBeUndefined();
+    expect(divideQuantity(quantity(1, 'wk'), quantity(1, 'day'))).toBeUndefined();
+    expect(divideQuantity(quantity(1, '1'), quantity(1, 'day'))).toBeUndefined();
+    expect(divideQuantity(quantity(2, 'days'), quantity(1, '1'))?.toString()).toBe('2 day');
+    expect(divideQuantity(quantity(1, 'wk'), quantity(1, 'd'))?.toString()).toBe("7 '1'");
+  });
+
   it.each(['constructor', '__proto__', 'toString', 'mg', '', 'S'])(
     'handles unsupported %s without throwing',
     (unit) => {

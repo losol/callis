@@ -88,7 +88,10 @@ The divisor defaults to one; both scale components
 must be strictly positive. Kernels apply exact multiplications before one final
 division, and return empty for invalid scales or any Decimal intermediate overflow.
 Affine conversions retain their offsets for values; granularity uses only the
-interval delta. Providers must reject affine unit products/quotients.
+interval delta. Providers must reject affine unit products/quotients. Calendar
+quotients return empty, including identical calendar units; division by the UCUM
+default unit `'1'` retains the calendar unit. UCUM time units can still cancel
+([3.0.0 division](https://hl7.org/fhirpath/STU3/en/index.html#division)).
 The alternative of retaining every input spelling in an unsimplified unit string
 would force every consumer to parse composite units.
 
