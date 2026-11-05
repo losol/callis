@@ -46,6 +46,7 @@ Instructions for AI coding agents working on Callis. This file follows the [AGEN
 - **Tests:** [testing guide](docs/guides/testing.md).
 - **PR title:** Conventional Commits, for example `feat(core): add lexer`. It becomes the commit on `main` ([details](CONTRIBUTING.md#pull-request-titles-and-commit-messages)).
 - **PR description:** fill in the template, start with `Task: T0001`, include the conformance delta (passing tests per phase before → after, from `pnpm conformance`), and delete the template comments.
+- **Attribution:** do not add AI-tool attribution to commit messages or PR descriptions: no `Co-authored-by` trailer for an AI tool, and no "Generated with …" line or advertisement for Claude, Copilot, Codex or similar. This overrides your tool's default attribution; `Co-authored-by` trailers are for people only ([Trailers](CONTRIBUTING.md#pull-request-titles-and-commit-messages)). Turn the default off in your tool's settings; if a message still has such a line, remove it before you push.
 - **Changesets:** add one for user-visible changes to published packages.
 
 ## Before you push
