@@ -257,4 +257,4 @@ You need Node.js 22.18+, 24.11+ or 26+ (the `engines` range in `package.json`, s
 | `pnpm conformance --update-baseline` | The same, and record newly passing tests in the baseline. |
 | `pnpm test:conformance -t testLiterals` | Run suite tests as Vitest tests, with a diff for each wrong result. |
 
-CI also runs `pnpm conformance --check`, which is non-blocking until [T0023](docs/tasks/T0023-xml-fixture-conversion.md). It fails when a baseline test stops passing or the baseline is out of date, and only warns when the reports in `docs/conformance/` are out of date. The conformance runner is described in [tools/conformance](tools/conformance/README.md).
+CI also runs `pnpm conformance --check`; when it fails, so does the required `CI result` check. It fails when a baseline test stops passing or the baseline is out of date, and only warns when the reports in `docs/conformance/` are out of date. The conformance runner is described in [tools/conformance](tools/conformance/README.md).

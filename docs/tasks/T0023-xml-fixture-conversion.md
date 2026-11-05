@@ -22,8 +22,17 @@ Convert the suite's XML input files to FHIR JSON once, so that every test can ru
 - A check against an official JSON example where one exists (for example `patient-example` from `hl7.fhir.r4.examples`), allowing only documented differences.
 - The conformance CI job becomes blocking, with the baseline ratchet.
 
+## Decisions made while building
+
+- **XML reader:** the converter reads XML with its own strict reader (`tools/conformance/src/xml-reader.ts`), not `fast-xml-parser`, which does not normalize whitespace in attribute values ([XML 1.0 §3.3.3](https://www.w3.org/TR/xml/#AVNormalize)) and leaves undefined entities in the text. DTDs are refused.
+- **Numbers** keep their XML text in the committed JSON (`1.50`, `9.5e2`). The runner parses inputs with `JSON.parse`, which loses it, until T0018 sets the adapter's `parseInput` to the lossless `parseJson` ([tools/conformance: converted inputs](../../tools/conformance/README.md#converted-xml-inputs)).
+- **Interpretations** (narrative XHTML copied as written, attribute whitespace, `integer64`) are in [spec notes](../spec-notes.md#converting-the-xml-inputs).
+- **Official examples:** the ten inputs that copy a FHIR example are compared with the official JSON from `hl7.fhir.r4.examples` 4.0.1 and `hl7.fhir.r5.examples` 5.0.0, vendored in `tools/conformance/official-examples/`. `tools/conformance/src/official-examples.ts` lists every difference with its reason.
+- **Out of scope:** `r5/ccda.xml`, a CDA document used only by the unsupported `cdaTests` group (`UNCONVERTED_INPUTS` in `tools/conformance/src/fixture-conversion.ts`).
+- **Baseline:** it records the tests that pass with the adapter in `engine-adapter.ts`. With the stub adapter that is none: every phase-1 test runs and fails as "not implemented", or is skipped as a documented exception.
+
 ## Acceptance criteria
 
-- [ ] Every XML input referenced by the suite converts. Any input that is out of scope (such as `ccda.xml`) is listed.
-- [ ] The comparison with official JSON examples shows no unexplained differences.
-- [ ] After this task, the conformance report covers every phase-1 test, and the baseline is committed.
+- [x] Every XML input referenced by the suite converts. Any input that is out of scope (such as `ccda.xml`) is listed.
+- [x] The comparison with official JSON examples shows no unexplained differences.
+- [x] After this task, the conformance report covers every phase-1 test, and the baseline is committed.
