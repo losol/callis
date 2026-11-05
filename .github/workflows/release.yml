@@ -46,8 +46,10 @@ jobs:
         with:
           node-version-file: .node-version
           cache: pnpm
+      # Not the documentation site (T0035, `apps/site`): this job can publish to npm, so it installs
+      # only the packages it publishes and the tools it runs.
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --filter "!@callis/site"
       # With changesets pending, this opens or updates the "chore: version packages" PR. Merging
       # that PR leaves nothing pending, and the same step then publishes every package whose
       # version is not on npm yet, tags it and creates a GitHub release. `pnpm release` builds and
