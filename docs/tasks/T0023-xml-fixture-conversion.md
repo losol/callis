@@ -18,7 +18,7 @@ Convert the suite's XML input files to FHIR JSON once, so that every test can ru
   - `id`/`extension` on primitives written as `_field`
   - `xhtml` → string
   - `resourceType`, contained resources and choice element names
-- The converted JSON is committed next to the XML.
+- The converted JSON is committed as `name.json` next to `name.xml` in the same fixture folder. The runner reads that exact path and skips the test as `fixture not converted` while it is missing ([T0022: converted inputs](T0022-conformance-runner.md#decisions-made-while-building-the-runner), `tools/conformance/src/fixtures.ts`, [#48](https://github.com/losol/callis/issues/48)).
 - A check against an official JSON example where one exists (for example `patient-example` from `hl7.fhir.r4.examples`), allowing only documented differences.
 - The conformance CI job becomes blocking, with the baseline ratchet.
 
