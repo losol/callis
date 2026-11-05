@@ -57,7 +57,7 @@ PR titles follow [Conventional Commits 1.0.0](https://www.conventionalcommits.or
 | `chore` | Other maintenance that does not fit above. |
 | `revert` | Reverting an earlier change. |
 
-**Scopes** name the package or tool directory the change is about: `core`, `ucum`, `fhir-r4`, `fhir-r5`, `cli`, `conformance`, `model-gen`. The scope is optional for repository-wide `docs`, `build`, `ci` and `chore` changes. Use one scope. If a PR needs two, it is usually two PRs.
+**Scopes** name the package, app or tool directory the change is about: `core`, `ucum`, `fhir-r4`, `fhir-r5`, `cli`, `conformance`, `model-gen`, `site`. The scope is optional for repository-wide `docs`, `build`, `ci` and `chore` changes. Use one scope. If a PR needs two, it is usually two PRs.
 
 **Summary**
 
@@ -201,6 +201,7 @@ Only the owner releases, following the runbook in [RELEASING.md](RELEASING.md). 
 
 - `@callis/core` has **no runtime dependencies**; CI enforces this. Other published packages avoid runtime dependencies; ask the owner before adding one.
 - Dev dependencies are fine when they earn their place. Say why in the PR. Prefer well-maintained packages with MIT, ISC, BSD or Apache-2.0 licenses.
+- The documentation site in `apps/site` is a private app that is never published. Its dependencies are dev-time dependencies of that app only, and `@callis/core` neither depends on them nor on the site. It uses MPL-2.0 packages from Losol AS (`@eventuras/ratio-ui`, `@eventuras/markdown`) and the MIT-licensed `@eventuras/lectio-docs` packages.
 - Vendored data (test fixtures, UCUM tables, FHIR definitions) records its source, version and license next to it.
 - Never commit secrets or real patient data. Fixtures are synthetic or official HL7 examples.
 
@@ -209,11 +210,22 @@ Only the owner releases, following the runbook in [RELEASING.md](RELEASING.md). 
 For maintainers. These settings make the rules above hold:
 
 - **Merging:** squash merge only. The squash commit takes the PR title as its subject and the PR description as its body. Branches are deleted automatically after merge.
-- **Required checks** (once T0000 has added them): CI, and a PR-title check for Conventional Commits.
+- **Required checks:** `CI result` and `Conventional Commits`. `CI result` is the last job in the CI workflow and fails when any other CI job fails, so CI jobs can change without changing this setting. `Conventional Commits` is the PR-title check.
 - **Approval:** the owner's approval is required.
 - **Secrets:** `ROADMAP_SYNC_TOKEN` for the [roadmap sync](#roadmap-sync). A fine-grained token owned by `losol` with read and write access to issues in this repository and to the organization's projects, or a classic token with the `repo` and `project` scopes.
 - **Variables:** `RELEASE_ENABLED` turns the [release workflow](#releases) on when it is `true`.
 - **Environments:** `npm`, for the release workflow, with `main` as its only deployment branch.
+- **Documentation site:** the [deploy workflow](#documentation-site) needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, as organization secrets that include this repository or as repository secrets, and a `site` environment whose only deployment branch is `main`. The Worker is named `callis`, and the custom domain `callis.losol.no` is attached to it in Cloudflare; the deploy adds no route, domain or DNS configuration. GitHub Pages stays off: the site is served from Cloudflare.
+
+## Documentation site
+
+The site at <https://callis.losol.no> is built from this repository by `apps/site` (see its [README](apps/site/README.md)): the documents under `docs/`, the root `README.md` and this file, the READMEs of `packages/*` and `tools/*`, and a progress page that shows the project commit by commit. It is [T0035](docs/tasks/T0035-docs-site.md).
+
+- **Writing for it:** write documents as usual. Link to other documents by path (`../adr/0001-spec-baseline.md`); the site turns the link into a link to the page, or to GitHub when the document is not published. A document's title is its first heading.
+- **What is published:** the list is in [`apps/site/docs.config.ts`](apps/site/docs.config.ts). The repository is public, so everything under `docs/` is published. To leave a document out, add its path to `ignore`.
+- **Node:** the site needs the development Node (`.node-version`, 24); a dependency of it does not support Node 26 yet, so `pnpm install` fails there. On Node 26 install without the site: `pnpm install --filter "!@callis/site"`.
+- **CI** builds the site on every pull request, so a change that breaks it fails the PR. The **Deploy** workflow builds it again and publishes it as a Cloudflare Worker with static assets on every push to `main`; it can also be run by hand.
+- **The progress page** reads the git history. It counts a task as merged at the first commit whose message has a `Task: T0001` line, which is why the PR description must start with it.
 
 ## Commands
 
@@ -232,6 +244,8 @@ You need Node.js 22.18+, 24.11+ or 26+ (the `engines` range in `package.json`, s
 | `pnpm test:watch` | Run tests in watch mode. |
 | `pnpm coverage` | Run tests with a coverage report in `coverage/`. |
 | `pnpm build` | Build all packages with tsdown. |
+| `pnpm site:dev` | Collect the documents and run the [documentation site](#documentation-site) locally. |
+| `pnpm site:build` | Build the documentation site into `apps/site/build/client/`. Needs the whole git history for the progress page. |
 | `pnpm check:packages` | Run publint, attw, the zero-dependency check and the size report. Needs a build first. |
 | `pnpm check:title "feat(core): add lexer"` | Check a PR title against the rules above, as CI does. |
 | `pnpm check:roadmap` | Check that the roadmap and the task files agree. |

@@ -51,6 +51,7 @@
 | [T0032](tasks/T0032-fhir-phase2.md) | FHIR phase 2: structure functions and R5 service APIs | 2 | T0025 | 8 | L |
 | [T0033](tasks/T0033-performance.md) | Benchmarks and performance | 3 | T0025 | 8 | L |
 | [T0034](tasks/T0034-cli.md) | CLI (optional) | 3 | T0025 | 8 | M |
+| [T0035](tasks/T0035-docs-site.md) | Documentation site, progress page and deployment | 3 | T0022 | 2 | L |
 
 ## Dependency graph
 
@@ -101,6 +102,7 @@ flowchart TD
   subgraph P3["Phase 3: performance + tooling"]
     T0033["T0033 Benchmarks + performance"]
     T0034["T0034 CLI"]
+    T0035["T0035 Docs site + progress page"]
   end
 
   T0000 --> T0001 & T0003 & T0004 & T0005 & T0022
@@ -115,6 +117,7 @@ flowchart TD
   T0009 & T0018 --> T0020
   T0020 --> T0021
   T0019 & T0022 --> T0023
+  T0022 --> T0035
   T0018 & T0019 --> T0024
   T0007 & T0010 & T0011 & T0012 & T0013 & T0014 & T0015 & T0016 & T0017 & T0021 & T0023 & T0024 --> T0025
   T0025 --> T0026 & T0027 & T0028 & T0029 & T0030 & T0031 & T0032 & T0033 & T0034
@@ -128,7 +131,7 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 | :---: | --- | :---: | --- |
 | 0 | T0000 | 1 | Everything else waits for the scaffold. |
 | 1 | T0001, T0003, T0004, T0005, T0022 | 5 | Independent leaf modules, plus fixture vendoring. |
-| 2 | T0002, T0006, T0019 | 3 | |
+| 2 | T0002, T0006, T0019, T0035 | 4 | T0035 is tooling and can start as soon as the conformance runner is merged. |
 | 3 | T0007, T0008, T0009, T0023 | 4 | T0008 is on the critical path; staff it first. |
 | 4 | T0010, T0011, T0012, T0013, T0014, T0015, T0016, T0017, T0018 | up to 9 | Function groups only add files in `src/functions/`, so they rarely conflict. |
 | 5 | T0020, T0024 | 2 | |
@@ -149,5 +152,6 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 - FHIR XML as an input format (a separate package that reuses the T0023 converter).
 - A SQL-on-FHIR `ViewDefinition` runner built on Callis.
 - A differential test harness against `fhirpath.js` and the HL7 Java engine.
+- An interactive FHIRPath playground on the documentation site ([T0035](tasks/T0035-docs-site.md)): a client-side route that imports `@callis/core` and evaluates expressions in the browser. Needs the public API of T0025.
 - An optional "compiled sync-only" build mode, if T0033 shows a significant gain.
 - API stabilisation for 1.0: review the public API surface (the `@callis/core` exports, `ModelProvider`, the conformance `EvaluatorAdapter`, the error codes) and decide what is frozen for 1.0. Until then, 0.x releases may break any of it ([T0025](tasks/T0025-public-api-release.md#public-api-sketch)).

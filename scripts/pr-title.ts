@@ -17,7 +17,7 @@ export const TYPES: readonly string[] = [
   'revert',
 ];
 
-/** Allowed scopes: the package and tool directories. */
+/** Allowed scopes: the package, app and tool directories. */
 export const SCOPES: readonly string[] = [
   'core',
   'ucum',
@@ -26,6 +26,7 @@ export const SCOPES: readonly string[] = [
   'cli',
   'conformance',
   'model-gen',
+  'site',
 ];
 
 /** Types that may omit the scope for repository-wide changes. */
