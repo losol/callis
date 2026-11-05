@@ -43,3 +43,4 @@ Generate compact R4 and R5 models from the official StructureDefinitions and pub
   - `Observation.value[x]` lists the correct types per version
 - [ ] Running the generator twice gives byte-identical output.
 - [ ] Gzip size per model is reported. Over 60 kB needs a justification in the PR.
+- [ ] Both generated providers pass `describeModelProviderContract` over all generated resource and datatype roots, including primitive and derived-primitive mappings, `Quantity`/`Age`, and choice elements ([#56](https://github.com/losol/callis/issues/56)).

@@ -4,7 +4,11 @@
  */
 import { listPackages } from './packages.ts';
 
-const ZERO_DEPENDENCY_PACKAGES: ReadonlySet<string> = new Set(['@callis/core']);
+const ZERO_DEPENDENCY_PACKAGES: ReadonlySet<string> = new Set([
+  '@callis/core',
+  '@callis/fhir-r4',
+  '@callis/fhir-r5',
+]);
 
 const failures: string[] = [];
 for (const { manifest } of listPackages()) {
