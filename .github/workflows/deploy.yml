@@ -53,7 +53,9 @@ jobs:
       # Wrangler is run directly, not through cloudflare/wrangler-action: that is one third-party
       # action less, and the version is pinned here. It deploys a Worker with static assets, not
       # Pages: the same static upload today, but adding server-side logic later is a `main` entry
-      # and not a platform migration. This step is the only one that sees the Cloudflare secrets.
+      # and not a platform migration. The Worker `callis` and its custom domain callis.losol.no exist
+      # in Cloudflare, and this adds no route, domain or DNS configuration that could fight them.
+      # This step is the only one that sees the Cloudflare secrets.
       - name: Deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -61,6 +63,6 @@ jobs:
         working-directory: apps/site
         run: >-
           pnpm dlx wrangler@4.112.0 deploy
-          --name callis-docs
+          --name callis
           --compatibility-date 2026-07-20
           --assets ./build/client

@@ -32,6 +32,7 @@ The build needs the whole git history (the progress page reads it), so a shallow
 | `app/root.tsx`, `app/components/site-header.tsx` | The layout, the theme (dark by default) and the header. |
 | `app/routes/docs.tsx` | The document pages: navigation, rendering, link resolution. |
 | `app/routes/progress.tsx`, `app/components/progress/` | The progress page. |
+| `app/routes.ts` | The route table. A later `playground` route (T0035, "Room for a playground") is one more entry that imports `@callis/core` in the browser. |
 
 ## The progress page
 
