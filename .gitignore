@@ -6,6 +6,12 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# The documentation site (apps/site): what its build collects and generates
+apps/site/build/
+apps/site/.lectio/
+apps/site/.react-router/
+apps/site/public/search-index.json
+
 # Logs and local files
 *.log
 .DS_Store

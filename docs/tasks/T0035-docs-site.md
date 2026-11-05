@@ -17,12 +17,13 @@ It gives readers one place for the architecture, the decisions, the roadmap and 
 - `apps/site` (private, never published): a small [React Router](https://reactrouter.com/) app, prerendered to static HTML.
   - The content comes from `docs/**` (ADRs, tasks, roadmap, guides, spec notes, conformance reports), the root `README.md`, and the READMEs of `packages/*` and `tools/*`.
   - Full-text search in the header, a navigation tree built from the content, and a light and a dark theme (dark is the default).
-  - Which files are published is a list in the site's config, so a path can be left out with one line.
+  - Which files are published is a list in the site's config (`apps/site/docs.config.ts`), so a path can be left out with one line.
   - Links between documents resolve to site pages; a link to a file the site does not publish goes to GitHub.
 - The progress page, a prerendered route (`/progress`) of the same app, linked from the header. A build step collects its data (`history.json`) from the git history. It shows, per commit on `main`: HL7 conformance (Phase 1 pass rate), roadmap tasks merged, unit test cases and source size. It also shows the roadmap as a board (merged, unblocked, blocked), the functions and operators each task adds, and a commit log, with a player to step through the history.
 - `.github/workflows/deploy.yml`: build and deploy on a push to `main` and on manual dispatch.
 - A build job in `.github/workflows/ci.yml` that builds the site on pull requests, so a broken site fails the PR and not the deploy.
-- `apps/*` in `pnpm-workspace.yaml`, and the docs for all of it: [architecture.md](../architecture.md#repository-layout) (the repository layout), [CONTRIBUTING.md](../../CONTRIBUTING.md) (the commands, the `site` environment and the secrets under *Repository settings*), and a README in `apps/site`.
+- Root scripts `pnpm site:dev` and `pnpm site:build`, `apps/*` in `pnpm-workspace.yaml` and the `apps/site` project in the Vitest projects, the generated output in `.gitignore`, and a Biome override that allows the default exports React Router needs in `apps/site/app`.
+- The docs for all of it: [architecture.md](../architecture.md#repository-layout) (the repository layout), [CONTRIBUTING.md](../../CONTRIBUTING.md#documentation-site) (the commands, the `site` environment and the secrets under *Repository settings*), and a README in `apps/site`.
 
 Out of scope:
 
@@ -118,11 +119,11 @@ The owner wants an interactive FHIRPath playground on the site once the engine e
 
 ## Acceptance criteria
 
-- [ ] `pnpm --filter @callis/site build` (or the script the PR documents) builds the site without network access to anything but the package registry, and the build output holds a page for every published document, a search index and `/progress`.
+- [ ] `pnpm site:build` builds the site, and the build output holds a page for every published document, a search index and `/progress`. A shallow clone fails with a message that says the build needs the whole history.
 - [ ] The site shows the architecture, the ADRs, the tasks, the roadmap, the guides, the spec notes, the conformance reports and the package READMEs, in a navigation tree, with working search and with links between documents that resolve.
 - [ ] Dark is the default theme, the toggle works, and the choice is remembered.
 - [ ] The progress page is correct for the current history: every ID in a `Task:` line is merged at its first commit, and the tasks that are not merged are split into unblocked and blocked from the roadmap's dependencies.
-- [ ] Unit tests cover the `Task:` line parsing (including `Task: none` and a task named by two commits), the merged, unblocked and blocked rule, the function-name extraction for each task that has a list, and the escaping of git data. A commit subject with `</script>` and HTML tags renders as text.
+- [ ] Unit tests cover the `Task:` line parsing (including `Task: none` and a task named by two commits), the merged, unblocked and blocked rule, the reading of the conformance reports, the function-name extraction for each task that has a list (pinned against the task files of the repository), and the escaping of git data. A commit subject with `</script>` and HTML tags renders as text.
 - [ ] The collector uses `parseRoadmap` and does not duplicate the roadmap format.
 - [ ] The site works in both themes at a narrow and a wide viewport, can be used with the keyboard alone, and logs nothing to the browser console.
 - [ ] `ci.yml` builds the site on pull requests, and only there. `deploy.yml` has the triggers, permissions, concurrency and environment above, pins every action by SHA and wrangler by version, and `pnpm dlx wrangler deploy` is the only step with the Cloudflare secrets.

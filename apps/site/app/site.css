@@ -1,0 +1,34 @@
+/* The header of the site. */
+
+.site-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.site-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--color-primary-700);
+  color: #fff;
+  font-weight: 700;
+}
+
+.site-brand-name {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.site-github-link {
+  color: var(--text-muted);
+  font-size: 14px;
+  text-decoration: none;
+}

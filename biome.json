@@ -75,6 +75,20 @@
       }
     },
     {
+      "includes": [
+        "apps/site/app/root.tsx",
+        "apps/site/app/routes.ts",
+        "apps/site/app/routes/*.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": ["packages/*/src/index.ts"],
       "linter": {
         "rules": {

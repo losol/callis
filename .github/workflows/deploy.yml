@@ -1,0 +1,68 @@
+# Deploys the documentation site (T0035) to https://callis.losol.no on every push to main. The
+# pattern is the one of losol/lectio-docs: a Cloudflare Worker with static assets.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time, and never cut one off halfway.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Cloudflare
+    runs-on: ubuntu-latest
+    # Named for what is deployed, not for a stage, so publishing to npm can get its own environment
+    # later. The environment buys a deployment-branch restriction (main only, set in the repository
+    # settings) and a tracked deployment with its URL. It does not hide the Cloudflare secrets: those
+    # are organization or repository secrets, and an environment adds secrets, it does not restrict
+    # the ones already in scope.
+    environment:
+      name: site
+      url: https://callis.losol.no
+    steps:
+      # Actions are pinned to commit SHAs, not tags: a tag can be moved, a SHA cannot. The trailing
+      # comment records the version. The pins are the ones of ci.yml.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The progress page reads the whole history.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      # This job builds independently of CI: it would rather fail than publish a site that does not
+      # typecheck, pass its tests or build.
+      - name: Typecheck the site
+        run: pnpm --filter @callis/site run typecheck
+      - name: Test the site
+        run: pnpm site:test
+      - name: Build the site
+        run: pnpm site:build
+      # Wrangler is run directly, not through cloudflare/wrangler-action: that is one third-party
+      # action less, and the version is pinned here. It deploys a Worker with static assets, not
+      # Pages: the same static upload today, but adding server-side logic later is a `main` entry
+      # and not a platform migration. The Worker `callis` and its custom domain callis.losol.no exist
+      # in Cloudflare, and this adds no route, domain or DNS configuration that could fight them.
+      # This step is the only one that sees the Cloudflare secrets.
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: apps/site
+        run: >-
+          pnpm dlx wrangler@4.112.0 deploy
+          --name callis
+          --compatibility-date 2026-07-20
+          --assets ./build/client
