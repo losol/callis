@@ -30,7 +30,7 @@ Compile an AST into closures and evaluate them over plain JSON ([compiling to cl
   - helpers for value, lambda and host functions
   - a handful of test-only functions to exercise the machinery
 - `src/api/`: internal `compile()` and `evaluate()`, plus basic `plain`/`typed` output adapters (finished in T0025).
-- The conformance runner's evaluator adapter (T0022) is wired to this internal API, replacing the runner's stub.
+- The conformance runner's `EvaluatorAdapter` is wired to this internal API, replacing the runner's stub in `tools/conformance/src/engine-adapter.ts` ([T0022: adapter interface](T0022-conformance-runner.md#adapter-interface), [runner contract](../../tools/conformance/README.md#plugging-in-an-evaluator)). T0025 later switches that entry point to the public API ([#48](https://github.com/losol/callis/issues/48)).
 
 ## Out of scope
 
