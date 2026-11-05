@@ -179,7 +179,7 @@ Only the owner releases, following the runbook in [RELEASING.md](RELEASING.md). 
 - **Every release, from 0.1.0 on,** goes through the [Release workflow](.github/workflows/release.yml) with [changesets/action](https://github.com/changesets/action), with provenance. Nothing is published until the owner merges the version PR, and it is not merged before 0.1.0 is ready.
 - **The version PR.** While changesets are pending, every push to `main` opens or updates a PR titled `chore: version packages`. It bumps the versions, writes the changelogs and deletes the changesets. It is a draft, and every update turns it back into one, so releasing starts with a deliberate *Ready for review*. Its body lists each package with the version it will publish. Only the owner merges it.
 - **CI on the version PR.** The workflow pushes with the `GITHUB_TOKEN`, and events from that token start no workflows, so the version PR gets no checks by itself. Close and reopen it before you merge: that runs CI and the PR-title check, which the branch rules require.
-- **Publishing.** Merging the version PR leaves no changesets pending. The next run builds the packages, runs the package checks (`pnpm release`) and publishes every package whose version is not on npm yet. It tags each one, for example `@callis/core@0.1.0`, and creates a GitHub release.
+- **Publishing.** Merging the version PR leaves no changesets pending. The next run (`pnpm release`) runs the release guard, which refuses any public package below 0.1.0, builds the packages and runs the package checks. It then publishes every package whose version is not on npm yet. It tags each one, for example `@callis/core@0.1.0`, and creates a GitHub release.
 - **npm trusted publishing.** The workflow signs in to npm with OIDC, so no npm token exists anywhere, and npm adds [provenance](https://docs.npmjs.com/generating-provenance-statements) to each version. The job runs in the `npm` environment, which only allows `main`. On npm, each package has a [trusted publisher](https://docs.npmjs.com/trusted-publishers/) for this repository, `release.yml` and the `npm` environment, and the trusted publisher allows direct `npm publish`. New trusted publishers only allow `npm stage publish` by default, and Changesets publishes directly. A new trusted publisher expires if it has not published within two days, so it is created right before the package's first release from the workflow.
 
 ## Specification questions and decisions
@@ -251,7 +251,8 @@ You need Node.js 22.18+, 24.11+ or 26+ (the `engines` range in `package.json`, s
 | `pnpm sync:roadmap` | Show what the [roadmap sync](#roadmap-sync) would change on GitHub. Add `--apply` to make the changes. |
 | `pnpm changeset` | Add a changeset. |
 | `pnpm changeset:version` | Apply the pending changesets: bump versions and write changelogs. The release workflow runs it for the version PR. |
-| `pnpm release` | Build, run the package checks and publish with Changesets. Only the release workflow runs it. |
+| `pnpm check:release` | The release guard: fail if a public package is below 0.1.0. `pnpm release` runs it first. |
+| `pnpm release` | Run the release guard, build, run the package checks and publish with Changesets. Only the release workflow runs it. |
 | `pnpm conformance` | Run the HL7 FHIRPath test suite, write the reports in `docs/conformance/` and compare with the baseline. |
 | `pnpm conformance --update-baseline` | The same, and record newly passing tests in the baseline. |
 | `pnpm test:conformance -t testLiterals` | Run suite tests as Vitest tests, with a diff for each wrong result. |

@@ -26,7 +26,8 @@
     "sync:roadmap": "node scripts/sync-roadmap.ts",
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "release": "pnpm build && pnpm check:packages && changeset publish"
+    "check:release": "node scripts/check-release-versions.ts",
+    "release": "pnpm check:release && pnpm build && pnpm check:packages && changeset publish"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",

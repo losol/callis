@@ -61,7 +61,7 @@ If `npm view` returns 404 after a successful publish, check how the package was 
 **Dist-tags.** The first publish makes 0.0.1 `latest`. Until 0.1.0 is out, `npm install @callis/core` therefore installs the placeholder, with a deprecation warning, and there is nothing to import. The workflow publishes 0.1.0 under `latest` (the Changesets default), which replaces it. 0.0.1 stays deprecated.
 
 - **Never unpublish the placeholder.** npm never accepts a version number twice, and unpublishing a package's last version blocks the name for 24 hours.
-- **The first real version must be 0.1.0, not 0.0.1.** The packages in the repository stay at 0.0.0 until their first version PR. A `minor` changeset takes 0.0.0 to 0.1.0. A package with only `patch` changesets would become 0.0.1, which the placeholder already holds. That does **not** fail: `changeset publish` skips every version that is already on npm, so the release run succeeds, publishes nothing for that package, and `latest` still points to the empty placeholder. Catch it in the version PR ([3](#3-every-release), step 1).
+- **The first real version must be 0.1.0, not 0.0.1.** The packages in the repository stay at 0.0.0 until their first version PR. A `minor` changeset takes 0.0.0 to 0.1.0. A package with only `patch` changesets would become 0.0.1, which the placeholder already holds. The [release guard](#2-the-version-pr) then fails the release run. Without the guard, `changeset publish` would skip the version silently, because npm already has it. Catch it in the version PR ([3](#3-every-release), step 1).
 
 ## 2. The version PR
 
@@ -74,7 +74,8 @@ Safeguards that make an accidental release unlikely:
 - **The PR is a draft,** and every update turns it back into one. A draft cannot be merged, so releasing takes a deliberate *Ready for review* first.
 - **Its body lists each package with the version it will publish,** for example `@callis/core@0.1.0`, followed by its changelog entry.
 - **It gets no CI by itself,** because the workflow's token starts no workflows, and the branch rules require CI. So it must also be closed and reopened before it can be merged.
-- **Nothing is published while changesets are pending.** The workflow then only updates the version PR, and only merging it consumes the changesets. Never delete pending changesets by hand: with nothing pending, the next push to `main` would publish what is on `main`, for example `@callis/core@0.0.0`. `pnpm exec changeset publish-plan` shows what that would be.
+- **Nothing is published while changesets are pending.** The workflow then only updates the version PR, and only merging it consumes the changesets. Never delete pending changesets by hand: with nothing pending, the next push to `main` starts the publish step.
+- **Nothing below 0.1.0 is ever published.** `pnpm release`, the workflow's publish step, starts with the release guard, `pnpm check:release` ([`scripts/check-release-versions.ts`](scripts/check-release-versions.ts)). The guard fails the run before anything is built or published if any public workspace package is below 0.1.0. That includes 0.0.0, the placeholder's 0.0.1, and prereleases of 0.1.0. So even a run with nothing pending cannot publish the `0.0.0` on `main`. Run `pnpm check:release` to see what it says; today it fails on `@callis/core@0.0.0`, as it should.
 
 Once, before the first release, give the `npm` environment `main` as its only deployment branch:
 
@@ -115,7 +116,7 @@ This covers 0.1.0 and every release after it.
 
 This covers `@callis/fhir-r4`, `@callis/fhir-r5` and `@callis/ucum` (only after T0007's license check, [ADR-0007](docs/adr/0007-ucum-split.md)), and any later package. It gets the same placeholder, so that its first real version also comes from the workflow:
 
-1. **The PR that adds the package also adds a `minor` changeset for it.** Its first version is then 0.1.0. Without a pending changeset, a run with nothing else pending would try to publish its `0.0.0`.
+1. **The PR that adds the package also adds a `minor` changeset for it.** Its first version is then 0.1.0. Without one, the release guard fails every publish run on its `0.0.0` until it has one.
 2. **Reserve the name** ([1](#1-reserve-the-name-with-a-placeholder)) with its `PKG` and `PKG_DIR`, for example `@callis/fhir-r4` and `packages/fhir-r4`, before its first version PR is merged.
 3. **Create its trusted publisher** right before you merge that version PR ([3](#3-every-release), step 2), and release as usual.
 
@@ -125,4 +126,5 @@ For the first release, do steps 2 and 3 for every package that 0.1.0 includes.
 
 - **Pause releases** with `gh workflow disable release.yml`, and resume them with `gh workflow enable release.yml`. While the workflow is disabled, the version PR is not updated and nothing is published.
 - **A publish fails with an authentication error** (E401, E403, E404 or ENEEDAUTH). Check the trusted publisher: it may be missing, expired, stage-only, or have a field that does not match. The workflow name is case-sensitive. Fix it on npm, then re-run the failed job, or run `gh workflow run release.yml --ref main`.
+- **The release run fails at the release guard** (`::error title=Release guard::…`): a public package is below 0.1.0. Give it a `minor` changeset and release through the version PR.
 - **A version that is already on npm is skipped, not failed.** `changeset publish` only publishes versions that npm does not have yet, so such a run still succeeds. After every release, check that `npm view <package> dist-tags` shows the new version ([3](#3-every-release), step 5). npm never accepts the same version twice, even after an unpublish: add a changeset that bumps past it. This is also how to fix a bad release.

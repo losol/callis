@@ -51,8 +51,9 @@ jobs:
         run: pnpm install --frozen-lockfile --filter "!@callis/site"
       # With changesets pending, this opens or updates the "chore: version packages" PR. Merging
       # that PR leaves nothing pending, and the same step then publishes every package whose
-      # version is not on npm yet, tags it and creates a GitHub release. `pnpm release` builds and
-      # runs the package checks first, because `changeset publish` ships what is on disk.
+      # version is not on npm yet, tags it and creates a GitHub release. `pnpm release` first runs
+      # the release guard, which fails if any public package is below 0.1.0, then builds and runs
+      # the package checks, because `changeset publish` ships what is on disk.
       #
       # The action pushes the version commit and the tags through the GitHub API with the
       # github-token input (default: github.token). Events from that token start no workflows, so
