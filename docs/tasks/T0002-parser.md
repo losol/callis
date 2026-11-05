@@ -73,12 +73,18 @@ type ExpressionNode =
   | IndexerNode          // { kind: 'Indexer', target, index }
   | UnaryNode            // { kind: 'Unary', op: '+' | '-', operand }
   | BinaryNode           // { kind: 'Binary', op, left, right }
-  | TypeOperationNode    // { kind: 'TypeOperation', op: 'is' | 'as', operand, type: TypeSpecifier }
+  | TypeOperationNode    // { kind: 'TypeOperation', op: 'is' | 'as', operand, type: TypeSpecifierNode }
   | VariableNode         // { kind: 'Variable', name }                    — %name
   | ThisNode | IndexNode | TotalNode;                                   // $this, $index, $total
 ```
 
 Literal nodes keep the **raw source text**. The compiler converts it with the value modules. This keeps the parser independent of the `Decimal` and date/time implementations, so they can be built in parallel, and it preserves decimal precision (`1.0` vs `1`). Literal values that are well-formed but invalid (`@2015-02-30`, `@T14:34:28Z`) are handled by the compiler at evaluation time; see [T0008: invalid literal values](T0008-compiler-evaluator.md#invalid-literal-values).
+
+The official [N1 grammar invocation rule](https://hl7.org/fhirpath/N1/grammar.html) also permits `expr.$this`, `expr.$index` and `expr.$total`. Those nodes have an optional `target?: ExpressionNode`; bare forms omit the property. This represents syntax only; T0008/T0018 decide evaluation semantics.
+
+`parse(expression, { maxDepth? })` stays internal until T0025. Depth counts recursive expression calls including the root; the default and maximum permitted setting is 1,000, and callers may lower it. Invalid settings and excess nesting raise `syntax/nesting-limit`. Flat member, binary and index chains do not consume recursive nesting depth.
+
+The AST type name is `TypeSpecifierNode`, distinct from `types/TypeSpecifier` (#54). It carries `kind: 'TypeSpecifier'`, a span, and `identifiers: readonly string[]` preserving decoded identifiers as written (without resolving namespaces or changing case). The compiler adapts these with `typeSpecifierFromIdentifiers()`. String literals additionally retain the lexer's decoded `value`; quantity literals retain the decoded `unit` and the raw numeric `number` text. `raw` always keeps untouched literal source spelling, even when parentheses widen `span`; `value` and `unit` are decoded, with no case or unit normalization. Grouping expands the enclosed node's span to include parentheses without introducing another AST kind.
 
 The AST is part of the public API (`parse()`), but its shape is not frozen before 1.0.
 
@@ -88,6 +94,7 @@ The AST is part of the public API (`parse()`), but its shape is not frozen befor
 - [ ] Every in-scope `<expression>` in `tests-fhir-r4.xml` and `tests-fhir-r5.xml` without `invalid="syntax"` parses, and every in-scope `invalid="syntax"` one throws `FhirPathSyntaxError`. Exceptions, each listed in the PR:
   - out-of-scope groups (`documentFunctions`, `cdaTests`)
   - expressions that use phase-2 syntax (`L` literals, instance selectors)
+  - the R5 `htmlTest01` expression `text.div.htmlChecks()`, which violates the identifier grammar because `div` is reserved. It must throw; the corrected ``text.`div`.htmlChecks()`` form must parse. See [spec notes](../spec-notes.md#reserved-div-in-an-html-fixture).
   - suite labels that do not describe a grammar error. For example, `testSection13` marks the well-formed call `Bundle.section('http://loinc.org', '11450-4', 1)` as `syntax`, although the problem is the arity of an extension function. These go into `spec-notes.md`. The parser stays purely syntactic and does not check functions.
 
   The XML files come from T0022's vendored fixtures; if T0022 has not landed yet, copy the two files into the test folder temporarily.

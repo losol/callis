@@ -243,3 +243,17 @@ How the conformance runner ([T0022](tasks/T0022-conformance-runner.md), [`tools/
 
 - **Tests:** the R4 file has two tests named `testEquivalent23` (R5 renamed the second to `testEquivalent24`).
 - **Decision:** test IDs are the names, made unique with a `#2`, `#3`, … suffix in document order. The second R4 test is `testEquivalent23#2` in reports and in the baseline.
+
+## Parser
+
+### Reserved `div` in an HTML fixture
+
+- **Spec:** [N1 identifiers](https://hl7.org/fhirpath/N1/#identifiers), [N1 grammar](https://hl7.org/fhirpath/N1/grammar.html) (`identifier` and `multiplicativeExpression`), and [3.0.0 grammar](https://hl7.org/fhirpath/STU3/en/grammar.html). `div` is reserved; N1 permits only `as`, `contains`, `in` and `is` as keyword-identifiers. The 3.0.0 rule additionally permits `asc`, `desc` and `sort`, but does not add `div`.
+- **Test:** R5 `htmlTest01`: `text.div.htmlChecks()` (group `HTMLChecks`).
+- **Decision:** this one expression is an explicit parse-only suite/grammar mismatch. It raises `FhirPathSyntaxError`; `text.\`div\`.htmlChecks()` parses. The acceptance test asserts both outcomes and does not count the original expression as a passing parse. No compatibility extension, fixture edit or conformance-baseline change is made.
+
+### Function arity is not a grammar error
+
+- **Spec:** [N1 function invocations](https://hl7.org/fhirpath/N1/#function-invocations) and [grammar](https://hl7.org/fhirpath/N1/grammar.html) (`function` and `paramList`) allow any syntactically valid argument list. Function resolution and arity checks belong to the compiler (T0008).
+- **Tests:** R5 `testSection13`, `testEntry12`, `testSameSubject16`, `testHasCoding10`, all in the out-of-scope `documentFunctions` group, mark well-formed extension calls `invalid="syntax"`.
+- **Decision:** those calls parse successfully. They remain excluded from parse-only suite acceptance by group, and separate regression tests assert that parsing does not check function signatures.
