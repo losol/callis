@@ -30,10 +30,10 @@ jobs:
     # npm trusted publishing, so there is no NPM_TOKEN anywhere. The trusted publisher on npm names
     # this repository, release.yml and this environment, and the environment only allows main.
     #
-    # npm can only configure a trusted publisher for a package that exists, so the first version of
-    # each package is published by hand (RELEASING.md). A new trusted publisher expires if no
-    # publish succeeds within two days, so it is created right before the package's first release
-    # from this workflow.
+    # npm can only configure a trusted publisher for a package that exists, so each package name is
+    # first reserved with a deprecated placeholder, 0.0.1, published by hand (RELEASING.md). A new
+    # trusted publisher expires if no publish succeeds within two days, so it is created right
+    # before the package's first release from this workflow.
     environment: npm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

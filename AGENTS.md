@@ -39,7 +39,7 @@ Design public API to last. Breaking it is a last resort, also before 1.0 ([API c
 - Never edit generated files by hand. Change the generator and regenerate.
 - Never lower the conformance baseline, and never delete or weaken tests to make CI pass.
 - Never commit secrets or real patient data. Fixtures are synthetic or official HL7 examples.
-- Never publish a package: do not run `pnpm release`, `changeset publish` or `npm publish`. Only the [release workflow](CONTRIBUTING.md#releases) publishes, and only the owner starts a release.
+- Never publish a package or change one on npm: do not run `pnpm release`, `changeset publish`, `npm publish` or `npm deprecate`. Only the [release workflow](CONTRIBUTING.md#releases) and the owner publish ([RELEASING.md](RELEASING.md)).
 - Write everything in the repository in English.
 
 ## The specification
