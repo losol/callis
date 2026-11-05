@@ -163,6 +163,8 @@ const ast = parse("name.where(use = 'official').given");                   // AS
 
 The full sketch, including options, output modes and limits, is in [T0025](tasks/T0025-public-api-release.md#public-api-sketch). Errors are described in [T0000](tasks/T0000-scaffold.md#errors-and-diagnostics).
 
+**Stability:** releases before 1.0 may break the public API, including `ModelProvider`; each breaking change is called out in its changeset and PR. Stabilising the API is a goal for 1.0, not for 0.1.0 ([roadmap backlog](roadmap.md#backlog-not-scheduled)).
+
 ## Repository layout
 
 ```text

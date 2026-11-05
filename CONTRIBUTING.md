@@ -65,7 +65,7 @@ PR titles follow [Conventional Commits 1.0.0](https://www.conventionalcommits.or
 - Keep the whole title at most 72 characters.
 - Say what changes for someone reading `git log --oneline`. Task IDs and issue numbers go in the description, not the title.
 
-**Breaking changes** add `!` after the type or scope and explain the migration in the description. This applies before 1.0 too.
+**Breaking changes** add `!` after the type or scope. The description lists them under an *Interface changes* heading with the migration, and the changeset says what breaks. This applies before 1.0 too: until then any public API, including `ModelProvider`, may break in a minor release.
 
 | Good | Not good |
 | --- | --- |
