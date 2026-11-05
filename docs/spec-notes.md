@@ -257,3 +257,11 @@ How the conformance runner ([T0022](tasks/T0022-conformance-runner.md), [`tools/
 - **Spec:** [N1 function invocations](https://hl7.org/fhirpath/N1/#function-invocations) and [grammar](https://hl7.org/fhirpath/N1/grammar.html) (`function` and `paramList`) allow any syntactically valid argument list. Function resolution and arity checks belong to the compiler (T0008).
 - **Tests:** R5 `testSection13`, `testEntry12`, `testSameSubject16`, `testHasCoding10`, all in the out-of-scope `documentFunctions` group, mark well-formed extension calls `invalid="syntax"`.
 - **Decision:** those calls parse successfully. They remain excluded from parse-only suite acceptance by group, and separate regression tests assert that parsing does not check function signatures.
+
+## Quantity
+
+### Calendar and definite month factors
+
+- **Spec:** [3.0.0 time-valued conversions](https://hl7.org/fhirpath/STU3/en/index.html#time-valued-unit-conversions) gives calendar month = 30 days, definite UCUM `mo` = 30.4375 days, and `a` = 365.25 days. The older [FHIR R5 mapping discussion](https://hl7.org/fhir/R5/fhirpath.html#quantity) calls `mo` 30 days.
+- **Tests:** `quantity time table`, `uses calendar factors explicitly and requires explicit conversion before addition`, and `quantity and datetime calendar consistency`.
+- **Decision:** use the 3.0.0 definite factors. Calendar year/month stay distinct from definite durations for equality and ordering; equivalence permits the specified counterparts. Calendar-to-calendar conversion uses 12 months/year, 365 days/year or 30 days/month directly, not a transitive chain through UCUM. Addition/subtraction require explicit conversion when calendar year/month units differ. FHIR mapping follows R5's six-code table; `wk`/`ms` remain UCUM spellings. (T0006)

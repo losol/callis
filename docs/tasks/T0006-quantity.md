@@ -48,12 +48,36 @@ interface UnitSystem {
   /** Convert a value between units, or return undefined if the dimensions differ. */
   convert(value: Decimal, from: string, to: string): Decimal | undefined;
   /** Canonical form used by * and /, for example 'cm2' / 'cm' → 'cm'. */
-  multiply(a: string, b: string): string | undefined;
-  divide(a: string, b: string): string | undefined;
+  multiply(a: string, b: string): UnitProduct | undefined;
+  divide(a: string, b: string): UnitProduct | undefined;
 }
 ```
 
 The UCUM tables are derived from data under the [UCUM license](https://github.com/ucum-org/ucum/blob/main/LICENSE.md) (Regenstrief Institute), which is not MIT. The owner made a license check a condition for `@callis/ucum`; [T0007](T0007-ucum.md) does it.
+
+## Implementation contract
+
+The value and kernels remain internal imports until T0025 selects package exports.
+`UnitSystem.convert` takes an optional options object with an `equivalence` flag;
+calendar years/months must not silently become definite durations for equality,
+ordering or addition. Providers return `undefined` for unsupported conversions
+and Decimal overflow. Unit algebra returns a unit and a Decimal factor, so a
+future UCUM provider can canonicalize scaled compound units without losing value.
+The initial string-only algebra sketch cannot describe a scaled cancellation such
+as `cm / m → 0.01 '1'`; returning only `'1'` would lose the factor. Returning
+`UnitProduct { unit: string; factor: Decimal }` corrects that sketch before any
+provider exists, and lets T0007 canonicalize compound units without a later break.
+The alternative of retaining every input spelling in an unsimplified unit string
+would force every consumer to parse composite units.
+
+`ParsedUnit` exposes only its unit spelling; provider-specific metadata can be
+added without forcing consumers to know dimension vectors or affine transforms.
+
+For #53, `calendar-units.ts` owns quantity normalization and the calendar/UCUM
+relationships. Date/time arithmetic keeps its independent table under the module
+dependency rules. Cross-module tests in `packages/core/test/` must verify singular,
+plural and fixed-duration aliases agree, and that `a`/`mo` remain rejected by
+date/time arithmetic while FHIR mapping produces calendar year/month.
 
 ## Acceptance criteria
 

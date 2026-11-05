@@ -1,0 +1,199 @@
+import { describe, expect, it } from 'vitest';
+import { Decimal, MAX_DECIMAL_DIGITS } from '../decimal/decimal.ts';
+import { fromFhirQuantity } from './fhir-quantity.ts';
+import {
+  addQuantity,
+  compareQuantity,
+  convertQuantity,
+  divideQuantity,
+  multiplyQuantity,
+  quantityEquals,
+  quantityEquivalent,
+  subtractQuantity,
+} from './operations.ts';
+import { Quantity } from './quantity.ts';
+import { minimalUnitSystem } from './unit-system.ts';
+
+function quantity(value: number, unit: string): Quantity {
+  return new Quantity(Decimal.fromInteger(value), unit);
+}
+
+// https://hl7.org/fhirpath/STU3/#time-valued-quantities
+// https://hl7.org/fhirpath/STU3/#quantity-equality
+// https://hl7.org/fhirpath/STU3/#quantity-equivalence
+describe('quantity time table', () => {
+  it.each([
+    [1, 'year', 1, 'a', undefined, true, undefined], // testEquality36
+    [1, 'month', 1, 'mo', undefined, true, undefined],
+    [7, 'days', 1, 'wk', true, true, 0], // testQuantity6
+    [1, 'second', 1, 's', true, true, 0],
+    [10, 'seconds', 1, 's', false, false, 1],
+    [1, 'year', 12, 'months', true, true, 0],
+    [1, 'a', 1, 'year', undefined, true, undefined],
+    [1, 'mo', 1, 'month', undefined, true, undefined],
+    [1, 'wk', 7, 'days', true, true, 0],
+    [1, 'a', 365, 'd', false, true, 1],
+    [1, 'mo', 30, 'd', false, true, 1],
+    [1, 'g', 1000, 'mg', undefined, undefined, undefined],
+    [1, 'kg', 1, 's', undefined, undefined, undefined],
+    [1, 'opaque', 1, 'opaque', true, true, 0],
+  ] as const)('%s %s compared with %s %s', (av, au, bv, bu, equal, equivalent, order) => {
+    const a = quantity(av, au);
+    const b = quantity(bv, bu);
+    expect(quantityEquals(a, b)).toBe(equal);
+    expect(quantityEquivalent(a, b)).toBe(equivalent);
+    expect(compareQuantity(a, b)).toBe(order);
+    expect(quantityEquals(b, a)).toBe(equal);
+    expect(quantityEquivalent(b, a)).toBe(equivalent);
+  });
+
+  it.each([
+    ['year', 'a'],
+    ['month', 'mo'],
+    ['week', 'wk'],
+    ['day', 'd'],
+    ['hour', 'h'],
+    ['minute', 'min'],
+    ['second', 's'],
+    ['millisecond', 'ms'],
+  ])('normalizes %s and its plural without changing %s', (calendar, ucum) => {
+    expect(quantity(1, `${calendar}s`).unit).toBe(calendar);
+    expect(quantity(1, `${calendar}s`).toString()).toBe(`1 ${calendar}`);
+    expect(quantity(1, ucum).toString()).toBe(`1 '${ucum}'`);
+    expect(minimalUnitSystem.parse(calendar)?.unit).toBe(calendar);
+    expect(minimalUnitSystem.parse(`${calendar}s`)?.unit).toBe(calendar);
+    expect(minimalUnitSystem.parse(ucum)?.unit).toBe(ucum);
+  });
+
+  it('retains Decimal precision, escapes unit text and freezes values', () => {
+    const value = new Quantity(Decimal.of(100n, 2), "a'\\\n\r\t\f");
+    expect(value.toString()).toBe("1.00 'a\\'\\\\\\n\\r\\t\\f'");
+    expect(Object.isFrozen(value)).toBe(true);
+    expect(new Quantity(Decimal.ONE).toString()).toBe("1 '1'");
+    expect(quantity(1, 'Days').unit).toBe('Days');
+  });
+});
+
+// https://hl7.org/fhirpath/N1/#math
+describe('quantity arithmetic and conversion', () => {
+  it('adds/subtracts converted values in the most granular unit', () => {
+    expect(addQuantity(quantity(1, 'min'), quantity(30, 's'))?.toString()).toBe("90 's'");
+    expect(subtractQuantity(quantity(1, 'min'), quantity(90, 's'))?.toString()).toBe("-30 's'");
+    expect(convertQuantity(quantity(2, 'h'), 'minutes')?.toString()).toBe('120 minute');
+    expect(addQuantity(quantity(1, 'year'), quantity(1, 'a'))).toBeUndefined();
+    expect(subtractQuantity(quantity(1, 'mo'), quantity(1, 'month'))).toBeUndefined();
+  });
+
+  it('supports identities and scaled dimensionless quotients without full unit algebra', () => {
+    expect(multiplyQuantity(quantity(3, '1'), quantity(2, 'kg'))?.toString()).toBe("6 'kg'");
+    expect(multiplyQuantity(quantity(2, 'kg'), quantity(3, '1'))?.toString()).toBe("6 'kg'");
+    expect(divideQuantity(quantity(12, 'kg'), quantity(3, '1'))?.toString()).toBe("4 'kg'");
+    expect(divideQuantity(quantity(1, 'min'), quantity(30, 's'))?.toString()).toBe("2 '1'");
+    expect(divideQuantity(quantity(3, 'kg'), quantity(3, 'kg'))?.toString()).toBe("1 '1'");
+    expect(multiplyQuantity(quantity(1, 'kg'), quantity(1, 'kg'))).toBeUndefined();
+    expect(divideQuantity(quantity(1, 'kg'), quantity(1, 's'))).toBeUndefined();
+    expect(divideQuantity(quantity(1, 's'), quantity(0, 's'))).toBeUndefined();
+  });
+
+  it.each(['constructor', '__proto__', 'toString', 'mg', '', 'S'])(
+    'handles unsupported %s without throwing',
+    (unit) => {
+      expect(minimalUnitSystem.parse(unit)).toBeUndefined();
+      expect(convertQuantity(quantity(1, unit), 's')).toBeUndefined();
+      expect(addQuantity(quantity(1, unit), quantity(1, 's'))).toBeUndefined();
+    },
+  );
+
+  it('uses calendar factors explicitly and requires explicit conversion before addition', () => {
+    expect(convertQuantity(quantity(1, 'year'), 'days')?.value.toString()).toBe('365');
+    expect(convertQuantity(quantity(1, 'month'), 'days')?.value.toString()).toBe('30');
+    expect(addQuantity(quantity(1, 'year'), quantity(12, 'months'))).toBeUndefined();
+    expect(subtractQuantity(quantity(1, 'year'), quantity(12, 'months'))).toBeUndefined();
+    expect(quantityEquivalent(quantity(1, 'year'), quantity(11, 'months'))).toBe(true);
+    expect(quantityEquivalent(quantity(11, 'months'), quantity(1, 'year'))).toBe(true);
+    expect(quantityEquivalent(quantity(1, 'year'), quantity(12, 'mo'))).toBe(true);
+    expect(addQuantity(quantity(2, 'minutes'), quantity(60, 's'))?.toString()).toBe('180 second');
+    expect(addQuantity(quantity(60, 's'), quantity(2, 'minutes'))?.toString()).toBe('180 second');
+  });
+
+  it('retains identity precision and rejects calendar conversions by default', () => {
+    const value = Decimal.of(100n, 2);
+    expect(minimalUnitSystem.convert(value, 'days', 'day')).toBe(value);
+    expect(convertQuantity(quantity(1, 'year'), 'a')).toBeUndefined();
+    expect(compareQuantity(quantity(1, 'year'), quantity(1, 'd'))).toBeUndefined();
+  });
+
+  // https://hl7.org/fhirpath/STU3/#math-1
+  it('propagates Decimal overflow/underflow through every arithmetic and conversion path', () => {
+    const maximum = Decimal.of(10n ** BigInt(MAX_DECIMAL_DIGITS) - 1n);
+    const huge = new Quantity(maximum, 's');
+    const tiny = new Quantity(Decimal.of(1n, MAX_DECIMAL_DIGITS), 's');
+    expect(addQuantity(huge, quantity(1, 's'))).toBeUndefined();
+    expect(subtractQuantity(new Quantity(maximum.negate(), 's'), quantity(1, 's'))).toBeUndefined();
+    expect(multiplyQuantity(huge, quantity(2, '1'))).toBeUndefined();
+    expect(divideQuantity(tiny, quantity(10, '1'))).toBeUndefined();
+    expect(convertQuantity(huge, 'ms')).toBeUndefined();
+    expect(compareQuantity(quantity(1, 'ms'), huge)).toBeUndefined();
+    expect(quantityEquivalent(quantity(1, 'ms'), huge)).toBe(false);
+    expect(addQuantity(quantity(1, 'ms'), huge)).toBeUndefined();
+    expect(subtractQuantity(quantity(1, 'ms'), huge)).toBeUndefined();
+    expect(minimalUnitSystem.convert(maximum, 's', 'ms')).toBeUndefined();
+  });
+});
+
+// https://hl7.org/fhir/R5/fhirpath.html#quantity
+describe('FHIR Quantity mapping', () => {
+  it.each([
+    ['a', 'year'],
+    ['mo', 'month'],
+    ['d', 'day'],
+    ['h', 'hour'],
+    ['min', 'minute'],
+    ['s', 'second'],
+    ['wk', 'wk'],
+    ['ms', 'ms'],
+    ['mg', 'mg'],
+  ])('maps UCUM %s to %s', (code, unit) => {
+    expect(
+      fromFhirQuantity({ value: 1.5, code, system: 'http://unitsofmeasure.org', unit: 'ignored' })
+        ?.unit,
+    ).toBe(unit);
+  });
+
+  it('maps zero and preserves lossless Decimal values', () => {
+    expect(
+      fromFhirQuantity({ value: 0, code: 'mg', system: 'http://unitsofmeasure.org' })?.value.equals(
+        Decimal.ZERO,
+      ),
+    ).toBe(true);
+    const value = Decimal.of(12300n, 4);
+    expect(fromFhirQuantity({ value, code: 'a', system: 'http://unitsofmeasure.org' })?.value).toBe(
+      value,
+    );
+  });
+
+  it.each([
+    null,
+    [],
+    1,
+    {},
+    { value: 1, unit: 'mg' },
+    { value: 1, code: 'mg', system: 'other' },
+    { value: 1, code: '', system: 'http://unitsofmeasure.org' },
+    { value: '1', code: 'mg', system: 'http://unitsofmeasure.org' },
+    { value: Number.NaN, code: 'mg', system: 'http://unitsofmeasure.org' },
+    { value: Number.POSITIVE_INFINITY, code: 'mg', system: 'http://unitsofmeasure.org' },
+    { code: 'mg', system: 'http://unitsofmeasure.org' },
+  ])('returns empty for unmappable JSON %j', (json) => {
+    expect(fromFhirQuantity(json)).toBeUndefined();
+  });
+
+  it.each(['value', 'code', 'system'])('does not read inherited %s', (field) => {
+    const valid = { value: 1, code: 'mg', system: 'http://unitsofmeasure.org' };
+    const json = Object.create(valid);
+    for (const key of ['value', 'code', 'system'] as const) {
+      if (key !== field) Object.defineProperty(json, key, { value: valid[key] });
+    }
+    expect(fromFhirQuantity(json)).toBeUndefined();
+  });
+});
