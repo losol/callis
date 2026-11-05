@@ -61,7 +61,7 @@ If `npm view` returns 404 after a successful publish, check how the package was 
 **Dist-tags.** The first publish makes 0.0.1 `latest`. Until 0.1.0 is out, `npm install @callis/core` therefore installs the placeholder, with a deprecation warning, and there is nothing to import. The workflow publishes 0.1.0 under `latest` (the Changesets default), which replaces it. 0.0.1 stays deprecated.
 
 - **Never unpublish the placeholder.** npm never accepts a version number twice, and unpublishing a package's last version blocks the name for 24 hours.
-- **The first real version must be 0.1.0, not 0.0.1.** The packages in the repository stay at 0.0.0 until their first version PR. A `minor` changeset takes 0.0.0 to 0.1.0. A package with only `patch` changesets would become 0.0.1, which the placeholder already holds, and its publish would fail.
+- **The first real version must be 0.1.0, not 0.0.1.** The packages in the repository stay at 0.0.0 until their first version PR. A `minor` changeset takes 0.0.0 to 0.1.0. A package with only `patch` changesets would become 0.0.1, which the placeholder already holds. That does **not** fail: `changeset publish` skips every version that is already on npm, so the release run succeeds, publishes nothing for that package, and `latest` still points to the empty placeholder. Catch it in the version PR ([3](#3-every-release), step 1).
 
 ## 2. The version PR
 
@@ -89,7 +89,7 @@ gh api -X POST repos/losol/callis/environments/npm/deployment-branch-policies -f
 
 This covers 0.1.0 and every release after it.
 
-1. **Review the version PR** like any other. Every bumped `package.json` has the version you expect: 0.1.0 for a package's first release, and never 1.0.0 before 1.0. Every `CHANGELOG.md` entry reads well for users.
+1. **Review the version PR** like any other. Every bumped `package.json` has the version you expect: 0.1.0 for a package's first release, never 0.0.1 (the placeholder's), and never 1.0.0 before 1.0. Every `CHANGELOG.md` entry reads well for users.
 2. **Check that every package it bumps has a working trusted publisher on npm.** For a package's first release from the workflow, which is 0.1.0 for the first packages, create one now. A new trusted publisher expires if no publish succeeds within two days. On npmjs.com, open the package settings, then *Trusted publisher*, then *GitHub Actions*:
    - organization or user `losol`, repository `callis`, workflow `release.yml`, environment `npm`
    - **allow direct `npm publish`**. Trusted publishers created after 2026-09-03 only allow `npm stage publish` by default, and Changesets publishes directly.
@@ -125,4 +125,4 @@ For the first release, do steps 2 and 3 for every package that 0.1.0 includes.
 
 - **Pause releases** with `gh workflow disable release.yml`, and resume them with `gh workflow enable release.yml`. While the workflow is disabled, the version PR is not updated and nothing is published.
 - **A publish fails with an authentication error** (E401, E403, E404 or ENEEDAUTH). Check the trusted publisher: it may be missing, expired, stage-only, or have a field that does not match. The workflow name is case-sensitive. Fix it on npm, then re-run the failed job, or run `gh workflow run release.yml --ref main`.
-- **A publish fails because the version exists.** npm never accepts the same version twice, even after an unpublish. Add a changeset that bumps past it; this is also how to fix a bad release.
+- **A version that is already on npm is skipped, not failed.** `changeset publish` only publishes versions that npm does not have yet, so such a run still succeeds. After every release, check that `npm view <package> dist-tags` shows the new version ([3](#3-every-release), step 5). npm never accepts the same version twice, even after an unpublish: add a changeset that bumps past it. This is also how to fix a bad release.
