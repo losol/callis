@@ -60,7 +60,7 @@ The collector walks the first-parent history of the ref it is given (`HEAD` in C
 | --- | --- |
 | PR number, date, subject | The squash commit's subject and date. |
 | Tasks merged | `Task: T0001` lines in the commit body. The PR template makes this the first line of the description, and the description becomes the commit body ([CONTRIBUTING.md](../../CONTRIBUTING.md#pull-request-titles-and-commit-messages)). `Task: none` is ignored. A task counts from the first commit that names it. |
-| Conformance | The summary table of `docs/conformance/r4.md` and `r5.md` at that commit, if they exist: per suite, the Total and the Phase 1 rows. The adapter is named in the report's introduction. (An earlier version of the runner also committed `summary.json`; the reports are the part that was committed at every commit.) |
+| Conformance | The summary table of `docs/conformance/r4.md` and `r5.md` at that commit, if they exist: per suite, the Total and the Phase 1 rows. Both reports are committed by `pnpm conformance` (T0022), so every commit since the runner was added has them; earlier commits have none, and the page shows no data for them. The adapter is named in the report's introduction (`evaluated with the **stub (no engine yet)** adapter`). The JSON summary of the runner is only a CI artifact and is not read. |
 | Test cases | The number of `it(` and `test(` calls in `*.test.ts` files (`git grep -c`). `it.each` counts once, so this is a lower bound; the page says so. |
 | Source lines | Lines in non-test `.ts` files under `packages/*/src`. |
 
