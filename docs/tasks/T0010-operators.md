@@ -15,7 +15,7 @@ All remaining N1 operators, with correct empty propagation, singleton rules and 
 - `<`, `>`, `<=` and `>=`.
 - `+` for numbers, strings, quantities and date/time; `-`, `*`, `/`, `div` and `mod`; `&`.
 - `|` (union with deduplication), `in` and `contains`.
-- Integer overflow behaviour and division by zero (empty).
+- Integer overflow behaviour and division by zero (empty). Decimal `+`, `-`, `*`, `/` and `div` are also empty beyond the Decimal size bound, a coefficient of 10,000 digits and a scale of 10,000: the [T0004](T0004-decimal.md#design-notes) kernels return `undefined` ([3.0.0 §6.6](https://hl7.org/fhirpath/STU3/#math-1): overflow and underflow give empty).
 - Date/time + quantity arithmetic, wired to T0005/T0006.
 - Singleton checks with `eval/singleton-expected`.
 

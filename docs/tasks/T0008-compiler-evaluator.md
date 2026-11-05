@@ -14,7 +14,7 @@ Compile an AST into closures and evaluate them over plain JSON ([compiling to cl
 
 - `src/compiler/`:
   - `compileNode()` for every AST kind
-  - literal construction through the T0004/T0005/T0006 value modules. Invalid literal values (out-of-range dates, a timezone on a Time literal) compile to a closure that raises `eval/invalid-literal` when evaluated, not a compile-time error ([invalid literal values](#invalid-literal-values); tests `testLiteralTimeUTC` and `testLiteralTimeTimezoneOffset`)
+  - literal construction through the T0004/T0005/T0006 value modules. Invalid literal values (out-of-range dates, a timezone on a Time literal, a Decimal literal beyond the Decimal size bound) compile to a closure that raises `eval/invalid-literal` when evaluated, not a compile-time error ([invalid literal values](#invalid-literal-values); tests `testLiteralTimeUTC` and `testLiteralTimeTimezoneOffset`)
   - constant folding of `-<number>`
   - `MaybePromise` helpers (`then`, `all`, the sync guard), built on a structural `isThenable()` (a callable `then` property, never `instanceof Promise`; [T0021: sync and async](T0021-hooks-async.md#sync-and-async))
   - lambda compilation for higher-order parameters
@@ -71,7 +71,7 @@ function compileNode(node: ExpressionNode, cc: CompileContext): Evaluator {
 
 ### Invalid literal values
 
-Invalid literal values are well-formed tokens whose value is not allowed: an out-of-range date component (`@2015-02-30`), or a timezone on a Time literal (`@T14:34:28Z`). These do not fail at compile time. The compiler emits a closure that raises `FhirPathEvaluationError` (`eval/invalid-literal`) when it is evaluated. The suite classifies these as execution errors (`testLiteralTimeUTC` and `testLiteralTimeTimezoneOffset` are `invalid="execution"`), and the error-class checks in [T0022: conformance runner](T0022-conformance-runner.md#design-notes) depend on that.
+Invalid literal values are well-formed tokens whose value is not allowed: an out-of-range date component (`@2015-02-30`), a timezone on a Time literal (`@T14:34:28Z`), or a Decimal literal beyond the Decimal size bound. The size bound is more than 10,000 significant digits, or more than 10,000 digits after the point; `Decimal.parse()` returns `undefined` for such a literal ([T0004](T0004-decimal.md#design-notes)). These do not fail at compile time. The compiler emits a closure that raises `FhirPathEvaluationError` (`eval/invalid-literal`) when it is evaluated. The suite classifies these as execution errors (`testLiteralTimeUTC` and `testLiteralTimeTimezoneOffset` are `invalid="execution"`), and the error-class checks in [T0022: conformance runner](T0022-conformance-runner.md#design-notes) depend on that. The suite has no test for an oversized Decimal literal; the owner chose the same treatment for it ([#69](https://github.com/losol/callis/issues/69)).
 
 ### Function library
 
