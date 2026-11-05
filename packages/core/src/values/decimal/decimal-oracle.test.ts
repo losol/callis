@@ -323,7 +323,10 @@ function expectBoundedResult(actual: Decimal | undefined, exact: DecimalJs, scal
   }
 }
 
-describe('the size bound against decimal.js', () => {
+// These properties work on numbers of about 10,000 digits, and decimal.js is slow at that size: the
+// slowest test takes about 5 seconds on a laptop, right at Vitest's default timeout. The longer
+// timeout keeps them from failing on a busy machine without lowering the number of runs.
+describe('the size bound against decimal.js', { timeout: 30_000 }, () => {
   const options = { numRuns: 100 };
   const toBoundOracle = (value: Decimal): DecimalJs =>
     new BoundOracle(`${value.coefficient}e-${value.scale}`);
