@@ -32,7 +32,14 @@ export function resolveDocLinks(source: ContentSource, page: Page): DocLinks {
     if (key in links) continue;
 
     const link = source.resolveLink(href, page.source);
-    if (link === null) continue;
+    if (link === null) {
+      // Not a link to a Markdown file: a source file, a directory, a fixture.
+      // The content source leaves those alone, but they exist in the repository,
+      // so they go to the forge.
+      const forge = repositoryLink(source, href, page.source);
+      if (forge !== null) links[key] = { href: forge, external: true };
+      continue;
+    }
 
     if (link.page) {
       links[key] = { href: link.page.slug + link.suffix, external: false };
@@ -53,6 +60,55 @@ export function resolveDocLinks(source: ContentSource, page: Page): DocLinks {
 
   return links;
 }
+
+/**
+ * Resolves a relative link to something that is not a Markdown file (a source
+ * file such as `../../scripts/roadmap.ts`, a directory such as
+ * `../../tools/conformance/`, an XML fixture) against the document that holds
+ * it, and returns where it lives on the forge. Null for hrefs that are not
+ * relative paths (off-site, root-relative, anchor-only) and for paths that leave
+ * the repository, which are left as the author wrote them. Only the fragment
+ * travels, as in {@link resolveDocLinks}.
+ */
+export function repositoryLink(
+  source: ContentSource,
+  href: string,
+  fromSource: string,
+): string | null {
+  if (href === '' || href.startsWith('#') || href.startsWith('/') || ABSOLUTE_HREF.test(href)) {
+    return null;
+  }
+  const suffixAt = href.search(/[#?]/);
+  const path = suffixAt === -1 ? href : href.slice(0, suffixAt);
+  const suffix = suffixAt === -1 ? '' : href.slice(suffixAt);
+
+  const segments = fromSource.split('/').slice(0, -1);
+  for (const segment of decodeOrSame(path).split('/')) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
+      if (segments.length === 0) return null;
+      segments.pop();
+    } else {
+      segments.push(segment);
+    }
+  }
+  if (segments.length === 0) return null;
+
+  const forge = source.sourceHref(segments.join('/'));
+  if (forge === null) return null;
+  return suffix.startsWith('#') ? forge + suffix : forge;
+}
+
+function decodeOrSame(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+/** `scheme:` or protocol-relative `//host`: anything that leaves this origin. */
+const ABSOLUTE_HREF = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
 
 /**
  * The key a href is stored and looked up under. The renderer percent-encodes

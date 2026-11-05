@@ -206,7 +206,7 @@
 .pg-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
   margin-bottom: 1rem;
 }
 
@@ -422,7 +422,7 @@
 .pg-groups {
   display: grid;
   gap: 0.9rem 1.25rem;
-  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(19rem, 100%), 1fr));
 }
 
 .pg-group h3 {
