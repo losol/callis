@@ -15,7 +15,7 @@ Everything in this repository is written in English.
 | [`docs/guides/`](docs/guides/) | How to write code ([code style](docs/guides/code-style.md)) and tests ([testing](docs/guides/testing.md)). |
 | [`RELEASING.md`](RELEASING.md) | How the owner releases the packages. |
 | `docs/spec-notes.md` | Interpretations of the FHIRPath specification (created when first needed). |
-| GitHub issues and the *Callis roadmap* project | Task status, follow-ups and bugs ([task issues](#task-issues-and-the-project-board)). |
+| GitHub issues and the [Callis roadmap](https://github.com/orgs/losol/projects/11) project | Task status, follow-ups and bugs ([task issues](#task-issues-and-the-project-board)). |
 
 ## Workflow
 
@@ -124,7 +124,7 @@ The task files and the [roadmap](docs/roadmap.md) are the plan. Issues are the i
 
 ### Task issues and the project board
 
-Every task has a task issue titled like `T0001: Lexer`, labelled `task` and with its wave (`wave-1`, …), and an item on the *Callis roadmap* project board of the `losol` organization. The issue links the task file. The PR that implements the task closes the issue with `Closes #<issue>`.
+Every task has a task issue titled like `T0001: Lexer`, labelled `task` and with its wave (`wave-1`, …), and an item on the [Callis roadmap](https://github.com/orgs/losol/projects/11) project board. The issue links the task file. The PR that implements the task closes the issue with `Closes #<issue>`.
 
 | What | Source of truth | Copied to |
 | --- | --- | --- |
