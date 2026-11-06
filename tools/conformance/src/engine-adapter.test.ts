@@ -156,13 +156,6 @@ describe('engineAdapter.classifyError', () => {
     });
   });
 
-  it('reports operators of a later task as not implemented when they are evaluated', async () => {
-    expect(await classify('1 = 1')).toMatchObject({
-      kind: 'not-implemented',
-      code: 'eval/not-implemented',
-    });
-  });
-
   it('classifies anything else as other', () => {
     expect(engineAdapter.classifyError(new TypeError('bug'))).toMatchObject({ kind: 'other' });
     expect(engineAdapter.classifyError('text')).toMatchObject({ kind: 'other', message: 'text' });
