@@ -39,6 +39,7 @@ import { Decimal } from '../values/decimal/decimal.ts';
 import { Quantity } from '../values/quantity/quantity.ts';
 import { type CompiledArg, evaluateArgs } from './lambda.ts';
 import {
+  applyIntegerPolarity,
   type Constant,
   constantOf,
   literalConstant,
@@ -255,9 +256,6 @@ function compileUnary(node: UnaryNode, cc: CompilerState): Evaluator {
   );
 }
 
-const MIN_INTEGER = -(2 ** 31);
-const MAX_INTEGER = 2 ** 31 - 1;
-
 /**
  * `+x` or `-x` for a single Integer, Decimal or Quantity; empty for empty input. An Integer that
  * overflows the 32-bit range (`-(-2147483648)`) is empty, as other Integer overflows are
@@ -270,8 +268,8 @@ function applyPolarity(items: Collection, negate: boolean): Collection {
     return EMPTY;
   }
   if (typeof value === 'number') {
-    const result = negate ? 0 - value : value;
-    return result >= MIN_INTEGER && result <= MAX_INTEGER ? [result] : EMPTY;
+    const result = applyIntegerPolarity(value, negate);
+    return result === undefined ? EMPTY : [result];
   }
   if (value instanceof Decimal) {
     return [negate ? negateDecimal(value) : value];

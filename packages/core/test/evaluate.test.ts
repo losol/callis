@@ -473,6 +473,19 @@ describe('unary + and -', () => {
     expect(run('-%i', patient, { i: -2147483648 })).toEqual([]);
   });
 
+  // Folding a literal must give what evaluating the same value gives.
+  it.each<[string, string, unknown[]]>([
+    ['-(-2147483648)', '-%min', []],
+    ['-(-(-2147483648))', '-(-%min)', []],
+    ['- -2147483647', '- -%max', [2147483647]],
+    ['-(-(-2147483647))', '-(-%min1)', [-2147483647]],
+    ['+(-2147483648)', '+%min', [-2147483648]],
+  ])('folds %s like it evaluates %s', (folded, evaluated, expected) => {
+    const variables = { min: -2147483648, max: 2147483647, min1: -2147483647 };
+    expect(run(folded)).toEqual(expected);
+    expect(run(evaluated, patient, variables)).toEqual(expected);
+  });
+
   it('negates a Decimal and a Quantity', () => {
     const [decimal] = evaluate({}, '-%d', {
       variables: { d: Decimal.parse('1.50') },

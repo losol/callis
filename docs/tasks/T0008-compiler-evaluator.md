@@ -15,7 +15,7 @@ Compile an AST into closures and evaluate them over plain JSON ([compiling to cl
 - `src/compiler/`:
   - `compileNode()` for every AST kind
   - literal construction through the T0004/T0005/T0006 value modules. Invalid literal values (out-of-range dates, a timezone on a Time literal, a Decimal literal beyond the Decimal size bound, an Integer literal outside the 32-bit range) compile to a closure that raises `eval/invalid-literal` when evaluated, not a compile-time error ([invalid literal values](#invalid-literal-values); tests `testLiteralTimeUTC` and `testLiteralTimeTimezoneOffset`)
-  - constant folding of `-<number>` and `-<quantity>`, so `-2147483648` is a valid Integer
+  - constant folding of `-<number>` and `-<quantity>`, so `-2147483648` is a valid Integer; folding gives the same result as evaluation, so further polarity operators overflow to empty as at runtime
   - lambda compilation for higher-order parameters
 - `src/runtime/`:
   - `EvalContext` and `Frame` (`$this`, `$index`, `$total`)

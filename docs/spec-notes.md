@@ -133,7 +133,7 @@ How Callis reads the FHIRPath specification where the text is ambiguous, silent,
 
 - **Spec:** [N1 §4.1](https://hl7.org/fhirpath/N1/#literals) makes `Integer` a 32-bit signed integer, but the grammar's `NUMBER` token has no size limit, and N1 does not say what an Integer literal beyond the range means. FHIRPath 3.0.0 adds `Long` literals with an `L` suffix (STU, [T0028](tasks/T0028-stu-long.md)).
 - **Tests:** `testLiteralIntegerMax` (`2147483647`, valid); none beyond the range.
-- **Decision:** an Integer literal outside -2,147,483,648 to 2,147,483,647 is an invalid literal value: it compiles, and raises `eval/invalid-literal` when it is evaluated, like `@2015-02-30` ([T0008: invalid literal values](tasks/T0008-compiler-evaluator.md#invalid-literal-values)). It does not silently become a Decimal or a Long. The polarity operator is folded first, so `-2147483648` is valid although `2147483648` alone is not.
+- **Decision:** an Integer literal outside -2,147,483,648 to 2,147,483,647 is an invalid literal value: it compiles, and raises `eval/invalid-literal` when it is evaluated, like `@2015-02-30` ([T0008: invalid literal values](tasks/T0008-compiler-evaluator.md#invalid-literal-values)). It does not silently become a Decimal or a Long. A sign written directly before the literal is part of its value, so `-2147483648` is valid although `2147483648` alone is not. Any further `+` or `-` follows the ordinary Integer rules, so `-(-2147483648)` overflows to empty, exactly as `-%i` does when `%i` is the smallest Integer.
 - **Code:** `constantOf()` and `materialize()` in `packages/core/src/compiler/literal.ts`.
 
 ### Function arguments are evaluated with the focus of the call

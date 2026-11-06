@@ -49,6 +49,12 @@ describe('folding + and -', () => {
     ['-0.0', ['0.0']],
     ["-5.5 'mg'", ["-5.5 'mg'"]],
     ['-(1)', ['-1']],
+    ['+2147483647', ['2147483647']],
+    ['- -2147483647', ['2147483647']],
+    // After the sign written before the literal, the ordinary Integer rules apply: overflow is empty.
+    ['- -2147483648', []],
+    ['-(-2147483648)', []],
+    ['+(-2147483648)', ['-2147483648']],
   ])('%s', (expression, expected) => {
     expect(fold(expression)).toEqual(expected);
   });
@@ -76,7 +82,6 @@ describe('invalid literal values', () => {
     ['@T14:34:28Z', 'not a valid Time'],
     ['2147483648', '32-bit'],
     ['-2147483649', '32-bit'],
-    ['- -2147483648', '32-bit'],
     [`1.${'0'.repeat(10_001)}`, 'size bound'],
   ])('%s becomes an invalid constant', (expression, message) => {
     expect(fold(expression)).toContain(message);
@@ -84,7 +89,7 @@ describe('invalid literal values', () => {
 
   it('keeps an invalid literal invalid under + and -', () => {
     expect(fold('-@2015-02-30')).toContain('not a valid Date');
-    expect(fold('-2147483648')).toEqual(['-2147483648']);
+    expect(fold('+2147483648')).toContain('32-bit');
     expect(fold(`-1.${'0'.repeat(10_001)}`)).toContain('size bound');
   });
 });
