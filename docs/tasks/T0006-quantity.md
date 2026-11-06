@@ -39,7 +39,7 @@ These operations need unit knowledge:
 **Decision ([ADR-0007](../adr/0007-ucum-split.md)):**
 
 - **`@callis/core`** defines a `UnitSystem` interface and ships a **minimal built-in unit system**. It covers identical units, the calendar keywords, the UCUM time units `ms`, `s`, `min`, `h`, `d`, `wk`, `mo` and `a`, and the calendar ↔ definite duration table as refined in 3.0.0 (see [T0009: equality and equivalence](T0009-equality-kernels.md#equality-and-equivalence)). This meets the spec's minimum: implementations "must at least respect units, recognizing when units differ" ([N1 quantity equality](https://hl7.org/fhirpath/N1/#quantity-equality)). Units the minimal system cannot relate compare as empty.
-- **`@callis/ucum`** is a separate package, also without runtime dependencies. It provides full UCUM conversion: a parser for UCUM unit expressions (prefixes, atoms, exponents, `.` and `/`, `{annotations}`, `10*n` factors) plus tables generated from [`ucum-essence.xml`](https://github.com/ucum-org/ucum), with exact `Decimal` factors and dimension vectors. A small, explicit set of special (non-ratio) units such as `Cel` and `[degF]` is supported; other special units report "not convertible". Users opt in with `compile(expr, { units: ucum })`. The conformance runner always uses it.
+- **`@callis/ucum`** is a separate package, also without runtime dependencies. It provides full UCUM conversion: a parser for UCUM unit expressions (prefixes, atoms, exponents, `.` and `/`, `{annotations}`, `10*n` factors) plus the definitions of the unchanged [`ucum-essence.xml`](https://github.com/ucum-org/ucum), which it parses at startup into in-memory tables with exact `Decimal` factors and dimension vectors ([T0007: UCUM data and license](T0007-ucum.md#ucum-data-and-license)). A small, explicit set of special (non-ratio) units such as `Cel` and `[degF]` is supported; other special units report "not convertible". Users opt in with `compile(expr, { units: ucum })`. The conformance runner always uses it.
 
 ```ts
 interface UnitProduct { readonly unit: string; readonly factor: Decimal; readonly divisor?: Decimal; }
@@ -58,7 +58,7 @@ interface UnitSystem {
 }
 ```
 
-The UCUM tables are derived from data under the [UCUM license](https://github.com/ucum-org/ucum/blob/main/LICENSE.md) (Regenstrief Institute), which is not MIT. The owner made a license check a condition for `@callis/ucum`; [T0007](T0007-ucum.md) does it.
+The UCUM data is under the [UCUM license](https://github.com/ucum-org/ucum/blob/main/LICENSE.md) (Regenstrief Institute), which is not MIT. The owner made a license check a condition for `@callis/ucum`. After [T0007](T0007-ucum.md#ucum-data-and-license) did it, the owner decided that the package ships the essence file whole and unchanged, with its notices, and no generated tables ([ADR-0007](../adr/0007-ucum-split.md), [`packages/ucum/SOURCE.md`](../../packages/ucum/SOURCE.md)).
 
 ## Implementation contract
 
