@@ -12,6 +12,8 @@ const BUDGETS: Readonly<Record<string, number>> = {
   '@callis/core': 40 * 1024,
   '@callis/fhir-r4': 60 * 1024,
   '@callis/fhir-r5': 60 * 1024,
+  // About 12 kB of it is the embedded, unchanged UCUM essence file.
+  '@callis/ucum': 24 * 1024,
 };
 
 function javaScriptFiles(dir: string): string[] {

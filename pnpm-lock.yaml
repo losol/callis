@@ -295,6 +295,15 @@ importers:
         specifier: workspace:^
         version: link:../core
 
+  packages/ucum:
+    devDependencies:
+      '@callis/core':
+        specifier: workspace:^
+        version: link:../core
+      fast-check:
+        specifier: 4.10.2
+        version: 4.10.2
+
   tools/conformance:
     devDependencies:
       fast-xml-parser:

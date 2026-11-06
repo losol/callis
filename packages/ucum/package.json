@@ -1,0 +1,58 @@
+{
+  "name": "@callis/ucum",
+  "version": "0.0.0",
+  "description": "UCUM unit conversion for Callis, from the unchanged UCUM essence file",
+  "keywords": [
+    "fhirpath",
+    "fhir",
+    "ucum",
+    "units",
+    "hl7",
+    "healthcare",
+    "typescript"
+  ],
+  "license": "MIT AND LicenseRef-UCUM",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/losol/callis.git",
+    "directory": "packages/ucum"
+  },
+  "homepage": "https://github.com/losol/callis/tree/main/packages/ucum#readme",
+  "bugs": "https://github.com/losol/callis/issues",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "data",
+    "LICENSE.md",
+    "SOURCE.md",
+    "UCUM-LICENSE.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p . && tsc -p tsconfig.node.json",
+    "embed": "node scripts/embed-essence.ts",
+    "measure": "node scripts/measure-startup.ts",
+    "check:package": "publint --strict && attw --pack . --profile esm-only && node scripts/check-pack.ts"
+  },
+  "peerDependencies": {
+    "@callis/core": "^0.1.0-0"
+  },
+  "devDependencies": {
+    "@callis/core": "workspace:^",
+    "fast-check": "4.10.2"
+  }
+}
