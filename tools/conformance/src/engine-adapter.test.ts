@@ -81,6 +81,30 @@ describe('engineAdapter.classifyError', () => {
     expect(await classify(expression)).toMatchObject({ kind: 'not-implemented' });
   });
 
+  it.each(['(%resource)', '%`\\u0072esource`', '(%`rootResource`).id'])(
+    'recognizes the planned variable in %s however it is written',
+    async (expression) => {
+      expect(await classify(expression)).toMatchObject({ kind: 'not-implemented' });
+    },
+  );
+
+  it.each(['constructor()', 'hasOwnProperty()', 'valueOf()'])(
+    'keeps %s, which no task adds, a semantic error',
+    async (expression) => {
+      expect(await classify(expression)).toMatchObject({
+        kind: 'semantic',
+        code: 'semantic/unknown-function',
+      });
+    },
+  );
+
+  it('handles an expression too deep to compile', async () => {
+    expect(await classify(`a${'.a'.repeat(50_000)}`)).toMatchObject({
+      kind: 'syntax',
+      code: 'syntax/nesting-limit',
+    });
+  });
+
   it('reports the context expression as not implemented when it uses such a feature', async () => {
     expect(await classify('given', { context: 'name.first()' })).toMatchObject({
       kind: 'not-implemented',

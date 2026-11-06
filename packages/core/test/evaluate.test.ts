@@ -682,6 +682,14 @@ describe('functions', () => {
 });
 
 describe('operators of later tasks', () => {
+  it.each<[string, string]>([
+    ['noSuchFunction() + 1', 'semantic/unknown-function'],
+    ['true.not(1) = false', 'semantic/wrong-arity'],
+    ["1 | 1.is('Integer')", 'semantic/invalid-argument'],
+  ])('still checks the operands of %s at compile time', (expression, code) => {
+    expect(codeOf(() => compile(expression))).toBe(code);
+  });
+
   it.each(['1 = 1', '1 + 1', "'a' & 'b'", '1 | 2', '1 < 2', '1 in 1'])(
     'compiles %s and raises eval/not-implemented when it is evaluated',
     (expression) => {

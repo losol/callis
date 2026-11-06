@@ -46,6 +46,7 @@ import {
   materialize,
   negateDecimal,
 } from './literal.ts';
+import { checkNesting } from './nesting.ts';
 
 /** What the compiler needs besides the AST. */
 export interface CompileContext {
@@ -64,8 +65,11 @@ export interface CompileContext {
  *   wrong number of arguments (`semantic/wrong-arity`) or a type argument that is not a type name
  *   (`semantic/invalid-argument`). Unknown types and invalid literal values are not compile errors;
  *   they raise when evaluated.
+ * @throws {@link FhirPathSyntaxError} `syntax/nesting-limit` for a tree deeper than the limit,
+ *   such as a chain of thousands of member invocations.
  */
 export function compileExpression(node: ExpressionNode, context: CompileContext): Evaluator {
+  checkNesting(node, context.expression);
   return compileNode(node, { ...context, lines: new LineTable(context.expression) });
 }
 
@@ -346,6 +350,9 @@ function compileLogic(
 }
 
 function notImplemented(node: BinaryNode, cc: CompilerState): Evaluator {
+  // The operands are compiled anyway, so their functions and type arguments are checked now.
+  compileNode(node.left, cc);
+  compileNode(node.right, cc);
   const options = { span: spanOf(node, cc), expression: cc.expression };
   return () => {
     throw new FhirPathEvaluationError(

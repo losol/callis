@@ -7,6 +7,7 @@
  * because the internal API is not part of the published package.
  */
 import { compile } from '../../../packages/core/src/api/compile.ts';
+import { childNodes } from '../../../packages/core/src/compiler/nesting.ts';
 import {
   FhirPathEvaluationError,
   FhirPathSemanticError,
@@ -75,58 +76,36 @@ const REGISTRY = createRegistry();
  * engine does not have yet. A syntax error is left to `compile()`.
  */
 function checkImplemented(expression: string): void {
-  let ast: ExpressionNode;
+  for (const node of nodesOf(expression)) {
+    // Own properties only: `constructor()` is an unknown function, not a planned one.
+    if (
+      node.kind === 'FunctionCall' &&
+      Object.hasOwn(PLANNED_FUNCTIONS, node.name) &&
+      REGISTRY.get(node.name) === undefined
+    ) {
+      throw new NotImplementedError(`${node.name}() comes with ${PLANNED_FUNCTIONS[node.name]}`);
+    }
+  }
+}
+
+/**
+ * Every node of the parsed expression, without recursion, so a very deep expression cannot
+ * overflow the stack here. Empty when the expression does not parse; `compile()` reports that.
+ */
+function nodesOf(expression: string): ExpressionNode[] {
+  let root: ExpressionNode;
   try {
-    ast = parse(expression);
+    root = parse(expression);
   } catch {
-    return;
+    return [];
   }
-  const missing = findMissing(ast);
-  if (missing !== undefined) {
-    throw new NotImplementedError(missing);
+  const nodes: ExpressionNode[] = [];
+  const pending = [root];
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    nodes.push(node);
+    pending.push(...childNodes(node));
   }
-}
-
-function findMissing(node: ExpressionNode): string | undefined {
-  switch (node.kind) {
-    case 'FunctionCall': {
-      const task = PLANNED_FUNCTIONS[node.name];
-      if (task !== undefined && REGISTRY.get(node.name) === undefined) {
-        return `${node.name}() comes with ${task}`;
-      }
-      return firstMissing([node.target, ...node.args]);
-    }
-    case 'Member':
-      return findMissing(node.target);
-    case 'Indexer':
-      return firstMissing([node.target, node.index]);
-    case 'Unary':
-      return findMissing(node.operand);
-    case 'Binary':
-      return firstMissing([node.left, node.right]);
-    case 'TypeOperation':
-      return findMissing(node.operand);
-    case 'This':
-    case 'Index':
-    case 'Total':
-      return node.target === null ? undefined : findMissing(node.target);
-    case 'Literal':
-    case 'Identifier':
-    case 'Variable':
-      return undefined;
-    default:
-      return assertNever(node);
-  }
-}
-
-function firstMissing(nodes: readonly (ExpressionNode | null)[]): string | undefined {
-  for (const node of nodes) {
-    const missing = node === null ? undefined : findMissing(node);
-    if (missing !== undefined) {
-      return missing;
-    }
-  }
-  return undefined;
+  return nodes;
 }
 
 export const engineAdapter: EvaluatorAdapter = {
@@ -169,15 +148,23 @@ export const engineAdapter: EvaluatorAdapter = {
   },
 };
 
-/** Whether the error is for an undefined variable that a later task defines, such as `%resource`. */
+/**
+ * Whether the error is for an undefined variable that a later task defines, such as `%resource`.
+ * The variable is the node of the parsed expression with the error's span, so its name is
+ * decoded (`` %`\u0072esource` ``) and grouping (`(%resource)`) does not matter.
+ */
 function isPlannedVariable(error: FhirPathEvaluationError): boolean {
-  if (error.code !== 'eval/undefined-variable' || error.span === undefined) {
+  const { span, expression } = error;
+  if (error.code !== 'eval/undefined-variable' || span === undefined || expression === undefined) {
     return false;
   }
-  // The span covers the variable as written, such as %resource or %`vs-administrative-gender`.
-  const written = error.expression?.slice(error.span.start + 1, error.span.end) ?? '';
-  const name = written.replace(/^([`'"])(.*)\1$/, '$2');
-  return PLANNED_VARIABLES.some(({ pattern }) => pattern.test(name));
+  return nodesOf(expression).some(
+    (node) =>
+      node.kind === 'Variable' &&
+      node.span.start === span.start &&
+      node.span.end === span.end &&
+      PLANNED_VARIABLES.some(({ pattern }) => pattern.test(node.name)),
+  );
 }
 
 /**
@@ -209,8 +196,4 @@ function describeValue(value: Item): ResultItem {
     return { type: name, value: value.value.toString(), unit: value.unit };
   }
   return { type: name, value: String(value) };
-}
-
-function assertNever(value: never): never {
-  throw new Error(`Unexpected node ${JSON.stringify(value)}`);
 }
