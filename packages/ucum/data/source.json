@@ -1,0 +1,20 @@
+{
+  "repository": "https://github.com/ucum-org/ucum",
+  "commit": "e6660c5745d460c2f5e98675594f7ae9c8efc2a3",
+  "files": {
+    "ucum-essence.xml": {
+      "upstreamPath": "ucum-essence.xml",
+      "packagePath": "data/ucum-essence.xml",
+      "bytes": 82776,
+      "sha256": "dfccea1b5dc284245ebae97edd1dc03c45864da4e87df55bc9851797b4fd0b61",
+      "gitBlob": "ec61d23ce68da34bf10726daef7b33d70bbc1b4f"
+    },
+    "LICENSE.md": {
+      "upstreamPath": "LICENSE.md",
+      "packagePath": "UCUM-LICENSE.md",
+      "bytes": 14158,
+      "sha256": "b7989c84c68b7a80d42aad28cfdd824d756c2f70f26eaf1347d2e49f7838bbdf",
+      "gitBlob": "c31769a87daecbae90c0b3556651105383423931"
+    }
+  }
+}

@@ -6,3 +6,8 @@ tools/conformance/fixtures/** -text
 # committed reports with fresh output byte for byte, so they stay LF on every checkout.
 docs/conformance/** text eol=lf
 tools/conformance/baseline.json text eol=lf
+
+# The UCUM essence file and license ship unchanged; packages/ucum/data/source.json records their
+# checksums, and tests compare the bytes.
+packages/ucum/data/ucum-essence.xml -text
+packages/ucum/UCUM-LICENSE.md -text
