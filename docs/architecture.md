@@ -269,7 +269,7 @@ The open questions from the first draft were answered by the owner on 2026-11-03
 | Spec baseline | Follow FHIRPath 3.0.0's clarifications of normative behaviour. | [ADR-0001](adr/0001-spec-baseline.md) |
 | Math functions (STU in N1) | Included in phase 1. | [ADR-0001](adr/0001-spec-baseline.md) |
 | Module format | ESM only; no CommonJS build for now. | [ADR-0009](adr/0009-esm-only-zero-deps.md) |
-| UCUM | Separate opt-in `@callis/ucum`, published only after a check of the UCUM data license. | [ADR-0007](adr/0007-ucum-split.md), [T0007](tasks/T0007-ucum.md) |
+| UCUM | Separate opt-in `@callis/ucum`. After the license check, it ships the unchanged UCUM essence file with its notices and license, and parses it at startup; no generated tables. | [ADR-0007](adr/0007-ucum-split.md), [T0007](tasks/T0007-ucum.md#ucum-data-and-license), [`SOURCE.md`](../packages/ucum/SOURCE.md) |
 | Decimal in plain output | `number` by default; `decimalOutput: 'string'` and `output: 'typed'` for exact results. | [ADR-0012](adr/0012-evaluation-defaults.md) |
 | Default timezone | **UTC** for values without an offset; `timezoneOffset` overrides it, and `'local'` uses the host's offset. | [ADR-0012](adr/0012-evaluation-defaults.md) |
 | Choice-type suffixes (`Observation.valueQuantity`) | Rejected by default as the spec requires; `lenient: { choiceSuffix: true }` accepts them. | [ADR-0012](adr/0012-evaluation-defaults.md) |
