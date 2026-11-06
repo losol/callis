@@ -3,9 +3,23 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import { describeModelProviderContract } from '../../../packages/core/test/support/model-provider-contract.ts';
 import type { TypeRow } from '../runtime/provider.ts';
 
+/** Source-specific acceptance expectations for a newly pinned model release. */
+export interface GeneratedProviderExpectations {
+  readonly rootCount: number;
+  readonly observationTypes: readonly string[];
+  readonly hasInteger64: boolean;
+}
+
 /** Applies the existing core contract and acceptance tests to every generated root. */
-export function describeGeneratedProvider(provider: ModelProvider, rows: readonly TypeRow[]): void {
+export function describeGeneratedProvider(
+  provider: ModelProvider,
+  rows: readonly TypeRow[],
+  expectations?: GeneratedProviderExpectations,
+): void {
   const r5 = provider.version === '5.0.0';
+  if (expectations === undefined && !r5 && provider.version !== '4.0.1') {
+    throw new Error(`Explicit snapshot expectations required for ${provider.version}`);
+  }
   const systemTypes: ReadonlyArray<readonly [string, Exclude<SystemTypeName, 'Any'> | undefined]> =
     [
       ['base64Binary', 'String'],
@@ -36,7 +50,9 @@ export function describeGeneratedProvider(provider: ModelProvider, rows: readonl
       ['Money', undefined],
       ['Patient', undefined],
       ['Element', undefined],
-      ...(r5 ? [['integer64', 'Long'] as const, ['PrimitiveType', undefined] as const] : []),
+      ...((expectations?.hasInteger64 ?? r5)
+        ? [['integer64', 'Long'] as const, ['PrimitiveType', undefined] as const]
+        : []),
     ];
   const observationTypes = [
     'Quantity',
@@ -59,7 +75,11 @@ export function describeGeneratedProvider(provider: ModelProvider, rows: readonl
     systemTypes,
     choiceElements: [
       { type: 'Patient', element: 'deceased', typeNames: ['boolean', 'dateTime'] },
-      { type: 'Observation', element: 'value', typeNames: observationTypes },
+      {
+        type: 'Observation',
+        element: 'value',
+        typeNames: expectations?.observationTypes ?? observationTypes,
+      },
     ],
   });
   // https://hl7.org/fhir/R5/fhirpath.html#rules
@@ -71,7 +91,9 @@ export function describeGeneratedProvider(provider: ModelProvider, rows: readonl
     it('covers every generated root and backbone', () => {
       // Resource and datatype roots in hl7.fhir.r4.core@4.0.1 and hl7.fhir.r5.core@5.0.0.
       // Update the numbers together with the pins in cli.ts.
-      expect(rows.filter((row) => row[1] !== 'backbone')).toHaveLength(r5 ? 231 : 209);
+      expect(rows.filter((row) => row[1] !== 'backbone')).toHaveLength(
+        expectations?.rootCount ?? (r5 ? 231 : 209),
+      );
       for (const [name] of rows) expect(provider.getType(name), name).toBeDefined();
     });
     it('resolves recursive and shared backbone content', () => {

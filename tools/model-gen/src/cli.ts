@@ -1,5 +1,4 @@
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -12,7 +11,14 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emitModel, emitProvider, generateModel, type StructureDefinition } from './generate.ts';
+import {
+  emitInventory,
+  emitModel,
+  emitProvider,
+  generateModel,
+  type StructureDefinition,
+} from './generate.ts';
+import { validateArchive, validateManifest } from './source.ts';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const cache = join(root, 'tools/model-gen/.cache');
@@ -21,11 +27,19 @@ const releases = [
     name: 'r4',
     version: '4.0.1',
     sha256: 'ebd7731df7d36b5b7d39d5fb6c9d77b44bb7fe5742f1a2e87f164738c3289d44',
+    url: 'https://packages.fhir.org/hl7.fhir.r4.core/4.0.1',
   },
   {
     name: 'r5',
     version: '5.0.0',
     sha256: '74b27cd1bfce9e80eaceac431edf230b0945a443564fbf5512f82e5fa50a80d4',
+    url: 'https://packages.fhir.org/hl7.fhir.r5.core/5.0.0',
+  },
+  {
+    name: 'r6',
+    version: '6.0.0-snapshot1',
+    sha256: 'c67aad1c83851aa7702f10a210f9e0e2c9fb0a54dcd43fd0826296dc6a175f59',
+    url: 'https://hl7.org/fhir/6.0.0-snapshot1/hl7.fhir.r6.core.tgz',
   },
 ];
 const check = process.argv.includes('--check');
@@ -43,11 +57,8 @@ for (const release of releases) {
   const packageName = `hl7.fhir.${release.name}.core`;
   const source = `${packageName}@${release.version}`;
   const archive = join(cache, `${source}.tgz`);
-  const url = `https://packages.fhir.org/${packageName}/${release.version}`;
-  const bytes = existsSync(archive) ? readFileSync(archive) : await download(url, source);
-  if (createHash('sha256').update(bytes).digest('hex') !== release.sha256) {
-    throw new Error(`Archive integrity mismatch for ${source}; remove ${archive} and retry`);
-  }
+  const bytes = existsSync(archive) ? readFileSync(archive) : await download(release.url, source);
+  validateArchive(bytes, release.sha256, source);
   writeFileSync(archive, bytes);
   const staging = mkdtempSync(join(tmpdir(), 'callis-model-gen-'));
   try {
@@ -55,18 +66,7 @@ for (const release of releases) {
     execFileSync('tar', ['-xzf', archive, '-C', staging]);
     const directory = join(staging, 'package');
     const manifest: unknown = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'));
-    if (
-      typeof manifest !== 'object' ||
-      manifest === null ||
-      !('name' in manifest) ||
-      manifest.name !== packageName ||
-      !('version' in manifest) ||
-      manifest.version !== release.version ||
-      !('license' in manifest) ||
-      manifest.license !== 'CC0-1.0'
-    ) {
-      throw new Error(`Unexpected package identity or license: ${source}`);
-    }
+    validateManifest(manifest, packageName, release.version);
     // The pinned official StructureDefinition JSON is the generator's typed input boundary.
     // Semantic checks (snapshots, references, cardinalities, bases) run in generateModel.
     const definitions = readdirSync(directory)
@@ -80,6 +80,9 @@ for (const release of releases) {
     const outputs: ReadonlyArray<readonly [string, string]> = [
       [join(root, target, 'provider.ts'), emitProvider(template)],
       [join(root, target, 'model-data.ts'), emitModel(rows, source)],
+      ...(release.name === 'r6'
+        ? ([[join(root, target, '../inventory.json'), emitInventory(rows, source)]] as const)
+        : []),
     ];
     for (const [output, text] of outputs) {
       if (check) {
