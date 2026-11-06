@@ -67,6 +67,11 @@ const { values: flags } = parseArgs({
 });
 const apply = flags.apply;
 const changes: string[] = [];
+/**
+ * The writes to GitHub that have succeeded so far. A change can take more than one write (creating
+ * the project also sets its description), so these are counted where the API is called.
+ */
+let writes = 0;
 
 /** Records a change, and makes it when `--apply` is given. */
 function change<T>(description: string, run: () => T): T | undefined {
@@ -82,13 +87,87 @@ function change<T>(description: string, run: () => T): T | undefined {
 
 /** Runs `gh` and parses its JSON output. `body` is sent as the request body. */
 function gh(args: readonly string[], body?: unknown): unknown {
-  const output = execFileSync('gh', body === undefined ? args : [...args, '--input', '-'], {
-    encoding: 'utf8',
-    input: body === undefined ? '' : JSON.stringify(body),
-    maxBuffer: 64 * 1024 * 1024,
-    stdio: ['pipe', 'pipe', 'inherit'],
-  });
+  let output: string;
+  try {
+    output = execFileSync('gh', body === undefined ? args : [...args, '--input', '-'], {
+      encoding: 'utf8',
+      input: body === undefined ? '' : JSON.stringify(body),
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    throw new Error(`gh ${args.slice(0, 4).join(' ')} failed: ${ghErrorMessage(error)}`, {
+      cause: error,
+    });
+  }
   return output.trim() === '' ? undefined : JSON.parse(output);
+}
+
+/**
+ * What a failed `gh` call reported: its own message on stderr, such as
+ * `gh: Validation Failed (HTTP 422)`, followed by the details of the API's error response that
+ * stderr leaves out (`Label.name already_exists`, or a GraphQL error with its path). Falls back to
+ * the process error when `gh` printed nothing.
+ */
+function ghErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+  const stderr =
+    'stderr' in error && typeof error.stderr === 'string'
+      ? error.stderr.trim().replace(/\s*\n\s*/g, ' ')
+      : '';
+  const body = 'stdout' in error && typeof error.stdout === 'string' ? error.stdout : '';
+  const details = apiErrorDetails(body).filter((detail) => !stderr.includes(detail));
+  const parts = stderr === '' ? details : [stderr, ...details];
+  return parts.length > 0 ? parts.join('; ') : error.message;
+}
+
+/** The errors in an API response body, as text, without repeats. */
+function apiErrorDetails(body: string): string[] {
+  let response: unknown;
+  try {
+    response = JSON.parse(body);
+  } catch {
+    // Not a JSON response body, so it has no error details; stderr still tells what failed.
+    return [];
+  }
+  const details = new Set<string>();
+  collectErrorDetails(response, details);
+  return [...details];
+}
+
+/**
+ * Adds the error described by a REST or GraphQL error object, then those in its `errors` list. A
+ * REST validation error names a resource, field and code; a GraphQL error has a path.
+ */
+function collectErrorDetails(value: unknown, details: Set<string>): void {
+  if (typeof value === 'string') {
+    details.add(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectErrorDetails(item, details);
+    }
+    return;
+  }
+  if (typeof value !== 'object' || value === null) {
+    return;
+  }
+  const fields = new Map<string, unknown>(Object.entries(value));
+  const text = [fields.get('message'), fields.get('code')].find(
+    (field) => typeof field === 'string',
+  );
+  if (typeof text === 'string') {
+    const subject = [fields.get('resource'), fields.get('field')]
+      .filter((field) => typeof field === 'string')
+      .join('.');
+    const path = fields.get('path');
+    const at = Array.isArray(path) ? ` at ${path.join('.')}` : '';
+    details.add(`${subject === '' ? '' : `${subject} `}${text}${at}`);
+  }
+  collectErrorDetails(fields.get('errors'), details);
 }
 
 /**
@@ -96,7 +175,11 @@ function gh(args: readonly string[], body?: unknown): unknown {
  * describe the documented response fields that the sync reads.
  */
 function rest<T>(method: string, path: string, body?: unknown): T {
-  return gh(['api', '--method', method, path], body) as T;
+  const result = gh(['api', '--method', method, path], body) as T;
+  if (method !== 'GET') {
+    writes++;
+  }
+  return result;
 }
 
 function restList<T>(path: string): T[] {
@@ -104,7 +187,11 @@ function restList<T>(path: string): T[] {
 }
 
 function graphql<T>(query: string, variables: Record<string, unknown> = {}): T {
-  return (gh(['api', 'graphql'], { query, variables }) as { data: T }).data;
+  const result = (gh(['api', 'graphql'], { query, variables }) as { data: T }).data;
+  if (query.trimStart().startsWith('mutation')) {
+    writes++;
+  }
+  return result;
 }
 
 // --- Issues and labels ---
@@ -503,26 +590,46 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-syncWaveLabels(roadmap.tasks);
+// The project board is the only part that uses GraphQL and the `project` token scope.
+let syncingProject = false;
+try {
+  syncWaveLabels(roadmap.tasks);
 
-const issues = readTaskIssues();
-for (const task of roadmap.tasks) {
-  const issue = syncIssue(task, issues.get(task.id));
-  if (issue !== undefined) {
-    issues.set(task.id, issue);
+  const issues = readTaskIssues();
+  for (const task of roadmap.tasks) {
+    const issue = syncIssue(task, issues.get(task.id));
+    if (issue !== undefined) {
+      issues.set(task.id, issue);
+    }
   }
-}
-for (const task of roadmap.tasks) {
-  syncBlockedBy(task, issues.get(task.id), issues);
-}
+  for (const task of roadmap.tasks) {
+    syncBlockedBy(task, issues.get(task.id), issues);
+  }
 
-const projectUrl = flags['skip-project'] ? undefined : syncProject(roadmap.tasks, issues);
+  syncingProject = !flags['skip-project'];
+  const projectUrl = syncingProject ? syncProject(roadmap.tasks, issues) : undefined;
+  syncingProject = false;
 
-const summary =
-  changes.length === 0 ? 'GitHub already matches the roadmap' : `${changes.length} changes`;
-console.log(
-  `${apply ? '✓' : '(dry run)'} ${summary}${projectUrl === undefined ? '' : ` · ${projectUrl}`}`,
-);
-if (!apply && changes.length > 0) {
-  console.log('Run with --apply to make them.');
+  const summary =
+    changes.length === 0 ? 'GitHub already matches the roadmap' : `${changes.length} changes`;
+  console.log(
+    `${apply ? '✓' : '(dry run)'} ${summary}${projectUrl === undefined ? '' : ` · ${projectUrl}`}`,
+  );
+  if (!apply && changes.length > 0) {
+    console.log('Run with --apply to make them.');
+  }
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`✗ ${message}`);
+  if (syncingProject) {
+    console.error(
+      'This happened while syncing the project board, which needs the "project" token scope. If the token lacks it, run `gh auth refresh -h github.com -s project`, or pass --skip-project.',
+    );
+  }
+  if (writes > 0) {
+    console.error(
+      `${writes} ${writes === 1 ? 'write' : 'writes'} to GitHub succeeded before the error. Run the sync again once it is fixed.`,
+    );
+  }
+  process.exit(1);
 }
