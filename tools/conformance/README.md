@@ -18,7 +18,7 @@ Run them from the repository root.
 | `pnpm --filter @callis/conformance convert-fixtures` | Convert the suite's XML inputs to JSON ([converted inputs](#converted-xml-inputs)). No network needed. |
 | `pnpm --filter @callis/conformance update-official-examples` | Vendor the official JSON examples that the converted inputs are compared with. |
 
-**When evaluation behaviour changes:** run `pnpm conformance --update-baseline` and commit `baseline.json` and `docs/conformance/`. The PR description shows the change in passing tests per phase.
+**When evaluation behaviour changes:** run `pnpm conformance --update-baseline` and commit `baseline.json` and `docs/conformance/`. The PR's validation comment shows the change in passing tests per phase ([CONTRIBUTING](../../CONTRIBUTING.md#description-and-validation-comment)).
 
 ## Layout
 
