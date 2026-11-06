@@ -4,9 +4,10 @@
  * models and the lossless `parseInput`. See `tools/conformance/README.md` for the contract.
  *
  * This is the only file of the runner that imports the engine. It imports engine sources directly,
- * because the internal API is not part of the published package.
+ * because the internal API is not part of the published package. It evaluates with the full UCUM
+ * unit system of `@callis/ucum`, also from source, as T0006 requires of the runner.
  */
-import { compile } from '../../../packages/core/src/api/compile.ts';
+import { type CompileOptions, compile } from '../../../packages/core/src/api/compile.ts';
 import { childNodes } from '../../../packages/core/src/compiler/nesting.ts';
 import {
   FhirPathEvaluationError,
@@ -21,6 +22,7 @@ import type { Item } from '../../../packages/core/src/runtime/collection.ts';
 import { toSystemValue } from '../../../packages/core/src/runtime/node-value.ts';
 import { systemTypeOf } from '../../../packages/core/src/runtime/type-target.ts';
 import { Quantity } from '../../../packages/core/src/values/quantity/quantity.ts';
+import { ucum } from '../../../packages/ucum/src/index.ts';
 import type { ClassifiedError, EvaluatorAdapter, ResultItem } from './adapter.ts';
 import { NotImplementedError } from './stub-adapter.ts';
 
@@ -71,6 +73,9 @@ function tasks(task: string, names: string): Record<string, string> {
 
 const REGISTRY = createRegistry();
 
+/** The options of every compile(): the suite's quantities use UCUM units. */
+const COMPILE_OPTIONS: CompileOptions = { units: ucum };
+
 /**
  * Throws {@link NotImplementedError} when the expression calls a function of the spec that the
  * engine does not have yet. A syntax error is left to `compile()`.
@@ -115,7 +120,9 @@ export const engineAdapter: EvaluatorAdapter = {
     let focus = input;
     if (options.context !== undefined) {
       checkImplemented(options.context);
-      const selected = await compile(options.context).evaluateAsync(input, { output: 'typed' });
+      const selected = await compile(options.context, COMPILE_OPTIONS).evaluateAsync(input, {
+        output: 'typed',
+      });
       if (selected.length !== 1) {
         throw new Error(`the context ${options.context} selected ${selected.length} items, not 1`);
       }
@@ -123,7 +130,7 @@ export const engineAdapter: EvaluatorAdapter = {
       focus = selected[0];
     }
     // TODO(T0018): evaluate with the R4 or R5 model, by options.fhirVersion.
-    return compile(expression).evaluateAsync(focus, { output: 'typed' });
+    return compile(expression, COMPILE_OPTIONS).evaluateAsync(focus, { output: 'typed' });
   },
   describeValue(value: unknown): ResultItem {
     return describeItem(value as Item);
