@@ -46,3 +46,22 @@ For every commit on the main line of the history it shows the HL7 conformance of
 ## Deployment
 
 `.github/workflows/deploy.yml` deploys on every push to `main`; see [CONTRIBUTING.md](../../CONTRIBUTING.md#documentation-site).
+
+## The playground
+
+`/playground` is a prerendered shell. After hydration it loads the JSON editor
+and the public `@callis/core` evaluator in the browser. It does not import an
+internal engine entry point, send input to a server, or persist input in storage
+or URLs. Editing either field clears the previous result; presets and reset
+replace both fields. JSON parsing errors are separate from FHIRPath errors.
+
+Computed Decimals and Quantity values use `decimalOutput: 'string'` for exact
+output. Input uses `JSON.parse`, so numeric precision already lost while parsing
+JSON cannot be recovered. Presets are synthetic and tested against the public
+API; the page describes the supported subset rather than promising all FHIRPath.
+
+The JSON editor is pinned to `@eventuras/ratio-ui-codeeditor` 0.1.1 (MPL-2.0,
+Losol AS), using the site's Ratio CSS tokens. Its upstream source and license
+are linked on the page. CodeMirror uses MIT. Keep their license notices in
+bundled output; any changes to covered upstream files must retain their source
+and notices. Domain behavior and error handling stay in this app and core.

@@ -6,5 +6,6 @@ import { index, type RouteConfig, route } from '@react-router/dev/routes';
 export default [
   index('routes/docs.tsx', { id: 'docs-index' }),
   route('progress', 'routes/progress.tsx'),
+  route('playground', 'routes/playground.tsx'),
   route('*', 'routes/docs.tsx'),
 ] satisfies RouteConfig;

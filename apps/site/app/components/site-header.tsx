@@ -80,8 +80,19 @@ export function SiteHeader() {
       </Navbar.Search>
 
       <Navbar.Links>
-        <Navbar.Link href="/" LinkComponent={RouterLink} isCurrent={pathname !== '/progress'}>
+        <Navbar.Link
+          href="/"
+          LinkComponent={RouterLink}
+          isCurrent={!['/progress', '/playground'].includes(pathname)}
+        >
           Docs
+        </Navbar.Link>
+        <Navbar.Link
+          href="/playground"
+          LinkComponent={RouterLink}
+          isCurrent={pathname === '/playground'}
+        >
+          Playground
         </Navbar.Link>
         <Navbar.Link
           href="/progress"

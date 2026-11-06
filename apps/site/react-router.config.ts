@@ -16,6 +16,6 @@ export default {
     const manifest = JSON.parse(readFileSync('.lectio/manifest.json', 'utf-8')) as {
       pages: Array<{ slug: string }>;
     };
-    return [...manifest.pages.map((page) => page.slug), '/progress'];
+    return [...manifest.pages.map((page) => page.slug), '/progress', '/playground'];
   },
 } satisfies Config;
