@@ -1,4 +1,4 @@
-/** T0037: install actual tarballs, then exercise one contract in Node and a Vite browser build. */
+/** T0037/T0040: install actual tarballs and exercise their contracts in Node and Vite. */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import {
@@ -19,7 +19,10 @@ import { build, preview } from 'vite';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const temporary = mkdtempSync(join(tmpdir(), 'callis-release-'));
-const names = ['core', 'ucum', 'fhir-r4', 'fhir-r5'];
+const names = ['core', 'ucum', 'fhir-r4', 'fhir-r5', 'fhir-r6'];
+const success = `${names.length} packed contracts passed`;
+const r6Source = 'hl7.fhir.r6.core@6.0.0-snapshot1';
+const r6Sha256 = 'c67aad1c83851aa7702f10a210f9e0e2c9fb0a54dcd43fd0826296dc6a175f59';
 const run = (command: string, args: string[], cwd: string): string =>
   execFileSync(command, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
 try {
@@ -47,6 +50,7 @@ try {
   mkdirSync(consumer);
   writeFileSync(join(consumer, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
   const archives: string[] = [];
+  let r6Inventory: unknown;
   for (const name of names) {
     const packed = JSON.parse(
       run(
@@ -75,13 +79,20 @@ try {
     for (const path of name === 'ucum'
       ? ['SOURCE.md', 'UCUM-LICENSE.md', 'data/ucum-essence.xml', 'data/source.json']
       : name.startsWith('fhir-')
-        ? ['SOURCE.md']
+        ? ['SOURCE.md', ...(name === 'fhir-r6' ? ['inventory.json'] : [])]
         : []) {
       assert.ok(files.includes(path), `${name}: missing ${path}`);
       assert.equal(
         run('tar', ['-xOf', archive, `package/${path}`], root),
         readFileSync(join(root, 'packages', name, path), 'utf8'),
       );
+    }
+    if (name === 'fhir-r6') {
+      const notice = run('tar', ['-xOf', archive, 'package/SOURCE.md'], root);
+      for (const required of [r6Source, r6Sha256, 'CC0-1.0', 'HL7', 'snapshot']) {
+        assert.ok(notice.includes(required), `R6 source notice: missing ${required}`);
+      }
+      r6Inventory = JSON.parse(run('tar', ['-xOf', archive, 'package/inventory.json'], root));
     }
     if (process.argv.includes('--stable')) {
       assert.ok(!manifest.version.includes('-'), `${name}: still a prerelease`);
@@ -120,6 +131,7 @@ import { compile, evaluate, Decimal, FhirPathError, FhirPathSemanticError } from
 import { ucum } from '@callis/ucum';
 import { r4 } from '@callis/fhir-r4';
 import { r5 } from '@callis/fhir-r5';
+import { r6 } from '@callis/fhir-r6';
 function equal(actual, expected) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(JSON.stringify({actual, expected}));
 }
@@ -139,7 +151,7 @@ export function check() {
     equal(error.code, 'semantic/unknown-function'); rejected = true;
   }
   if (!rejected) throw new Error('unsupported function silently accepted');
-  for (const [model, version] of [[r4,'4.0.1'],[r5,'5.0.0']]) {
+  for (const [model, version] of [[r4,'4.0.1'],[r5,'5.0.0'],[r6,'6.0.0-snapshot1']]) {
     equal(model.namespace, 'FHIR'); equal(model.version, version);
     const patient = model.getType('Patient');
     if (!patient || !Object.isFrozen(patient)) throw new Error('missing immutable model metadata');
@@ -147,7 +159,68 @@ export function check() {
     equal(choice?.isChoice, true); equal(choice?.typeNames, ['boolean','dateTime']);
     if (!Object.isFrozen(choice) || !Object.isFrozen(choice.typeNames)) throw new Error('mutable choice metadata');
   }
-  return 'all four packed contracts passed';
+  // Exact pinned snapshots, not assumptions about final R6:
+  // https://hl7.org/fhir/6.0.0-snapshot1/observation-definitions.html#Observation.value_x_
+  // https://hl7.org/fhir/6.0.0-snapshot1/observation-definitions.html#Observation.bodyStructure
+  // https://hl7.org/fhir/6.0.0-snapshot1/devicealert-definitions.html#DeviceAlert
+  // https://hl7.org/fhir/6.0.0-snapshot1/datatypes-definitions.html#RelativeTime.offset_x_
+  function type(model, name) {
+    const found = model.getType(name);
+    if (!found) throw new Error('missing packed type: ' + name);
+    return found;
+  }
+  function element(model, name, field) {
+    const found = model.getElement(type(model, name), field);
+    if (!found) throw new Error('missing packed element: ' + name + '.' + field);
+    return found;
+  }
+  const inventory = ${JSON.stringify(r6Inventory)};
+  equal(inventory.source, '${r6Source}');
+  equal(inventory.total, 683);
+  equal(Object.keys(inventory.types).sort(), ['backbone','complex','primitive','resource']);
+  let count = 0;
+  for (const [kind, expected] of [['resource',124],['complex',51],['primitive',21],['backbone',487]]) {
+    const names = inventory.types[kind];
+    equal(names.length, expected); equal(new Set(names).size, expected);
+    equal(names, [...names].sort()); count += names.length;
+    for (const name of names) {
+      const found = type(r6, name);
+      equal(found.kind, kind);
+      if (!Object.isFrozen(found) || !Object.isFrozen(r6.getElements(found))) throw new Error('mutable packed metadata');
+      for (const field of r6.getElements(found)) {
+        if (!Object.isFrozen(field) || !Object.isFrozen(field.typeNames)) throw new Error('mutable packed element');
+        for (const allowed of field.typeNames) type(r6, allowed);
+      }
+    }
+  }
+  equal(count, inventory.total);
+  if (!Object.isFrozen(r6)) throw new Error('mutable packed provider');
+  equal(r6.getRootType({resourceType:'DeviceAlert'}), type(r6,'DeviceAlert'));
+  equal(r6.getRootType(Object.create({resourceType:'DeviceAlert'})), undefined);
+  for (const model of [r4,r5]) equal(model.getType('DeviceAlert'), undefined);
+  equal(element(r6,'Observation','organizer').typeNames, ['boolean']);
+  equal(element(r6,'Observation','bodyStructure').typeNames, ['CodeableReference']);
+  equal(element(r6,'Observation','bodyStructure').isArray, true);
+  equal(element(r5,'Observation','bodyStructure').typeNames, ['Reference']);
+  equal(element(r5,'Observation','bodyStructure').isArray, false);
+  equal(element(r6,'Observation','value').typeNames, [
+    'Quantity','CodeableConcept','string','boolean','integer','Range','Ratio',
+    'SampledData','time','dateTime','Period','Attachment'
+  ]);
+  equal(element(r6,'Observation','value').isChoice, true);
+  equal(element(r5,'Observation','value').typeNames.includes('Reference'), true);
+  equal(element(r6,'RelativeTime','offset').typeNames, ['Duration','Range']);
+  equal(element(r6,'RelativeTime','offset').isChoice, true);
+  equal(element(r6,'Questionnaire.item','item').typeNames, ['Questionnaire.item']);
+  equal(r6.getSystemType(type(r6,'integer64')), 'Long');
+  equal(r6.getSystemType(type(r6,'Age')), 'Quantity');
+  let rejectedModel = false;
+  try { compile('DeviceAlert', {model:r6}); } catch (error) {
+    if (!(error instanceof FhirPathError)) throw error;
+    equal(error.code, 'eval/invalid-argument'); rejectedModel = true;
+  }
+  if (!rejectedModel) throw new Error('provider import silently enabled unsupported public model option');
+  return '${success}';
 }
 `;
   writeFileSync(join(consumer, 'contract.mjs'), contract);
@@ -163,11 +236,14 @@ import { compile, evaluate, type ModelProvider, type UnitSystem } from '@callis/
 import { ucum } from '@callis/ucum';
 import { r4 } from '@callis/fhir-r4';
 import { r5 } from '@callis/fhir-r5';
-const models: readonly ModelProvider[] = [r4, r5];
+import { r6 } from '@callis/fhir-r6';
+const models: readonly ModelProvider[] = [r4, r5, r6];
 const units: UnitSystem = ucum;
 const result: unknown[] = evaluate(null, '1', {units, decimalOutput:'string'});
 // @ts-expect-error provider metadata does not imply public model-aware evaluation
 compile('Patient', {model:r4});
+// @ts-expect-error R6 metadata also does not enable public model-aware evaluation
+compile('DeviceAlert', {model:r6});
 `,
   );
   run(
@@ -210,10 +286,7 @@ compile('Patient', {model:r4});
       const url = server.resolvedUrls?.local[0];
       assert.ok(url);
       await page.goto(url);
-      await page
-        .locator('#result')
-        .filter({ hasText: 'all four packed contracts passed' })
-        .waitFor();
+      await page.locator('#result').filter({ hasText: success }).waitFor();
       assert.deepEqual(errors, []);
     } finally {
       await browser.close();
@@ -224,7 +297,7 @@ compile('Patient', {model:r4});
     );
   }
   console.log(
-    'All four tarballs: offline strict-peer install, full licenses/notices, Node ESM, TypeScript and production Vite/Chromium PASS.',
+    `${names.length} tarballs: offline strict-peer install, full licenses/notices, Node ESM, TypeScript and production Vite/Chromium PASS.`,
   );
 } finally {
   rmSync(temporary, { recursive: true, force: true });

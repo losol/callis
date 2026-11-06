@@ -23,6 +23,7 @@ export const SCOPES: readonly string[] = [
   'ucum',
   'fhir-r4',
   'fhir-r5',
+  'fhir-r6',
   'cli',
   'conformance',
   'model-gen',

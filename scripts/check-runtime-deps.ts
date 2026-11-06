@@ -8,6 +8,7 @@ const ZERO_DEPENDENCY_PACKAGES: ReadonlySet<string> = new Set([
   '@callis/core',
   '@callis/fhir-r4',
   '@callis/fhir-r5',
+  '@callis/fhir-r6',
   '@callis/ucum',
 ]);
 

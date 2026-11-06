@@ -12,6 +12,7 @@ describe('validatePrTitle', () => {
     'ci: run the full check on Node 24 and only tests on Node 22 and 26',
     'docs(conformance): explain the baseline',
     'feat(site): add the progress page',
+    'feat(fhir-r6): add the pinned snapshot model',
     'test(core): x',
   ])('accepts %j', (title) => {
     expect(validatePrTitle(title)).toEqual([]);
