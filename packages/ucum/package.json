@@ -33,7 +33,8 @@
     "data",
     "LICENSE.md",
     "SOURCE.md",
-    "UCUM-LICENSE.md"
+    "UCUM-LICENSE.md",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=22"
