@@ -18,7 +18,7 @@
     "typecheck": "tsc -p scripts && pnpm --recursive run typecheck",
     "lint": "biome ci",
     "format": "biome check --write",
-    "check:packages": "pnpm --filter \"./packages/*\" run check:package && node scripts/check-runtime-deps.ts && node scripts/report-size.ts",
+    "check:packages": "pnpm --filter \"./packages/*\" run check:package && node scripts/check-runtime-deps.ts && node scripts/report-size.ts && node scripts/check-public-api.ts",
     "conformance": "node --import ./tools/conformance/src/core-source.ts tools/conformance/src/cli.ts",
     "check": "pnpm lint && pnpm typecheck && pnpm check:roadmap && pnpm test && pnpm site:test && pnpm build && pnpm check:packages",
     "check:title": "node scripts/check-pr-title.ts",

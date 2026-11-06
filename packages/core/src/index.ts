@@ -1,14 +1,33 @@
 /**
  * Public API of `@callis/core`.
  *
- * Everything exported from this file is public API; internal modules are imported directly, never
- * through this file. The evaluation API comes in later tasks; for now the package exports the
- * types a data model implements, so model packages such as `@callis/fhir-r4` can build on them,
- * and the `UnitSystem` contract with `Decimal` and the minimal unit system, so unit packages such
- * as `@callis/ucum` can implement and extend it.
+ * Synchronous model-less evaluation, plain result values, errors, and the contracts used by
+ * model and unit-provider packages. Internal modules are imported directly, never through here.
  *
  * @packageDocumentation
  */
+
+export type { PlainQuantity } from './api/output.ts';
+export type { CompiledExpression, CompileOptions, EvaluateOptions } from './api/public-api.ts';
+export { compile, evaluate } from './api/public-api.ts';
+export type { Diagnostic } from './errors/diagnostic.ts';
+export type {
+  ErrorCode,
+  EvaluationErrorCode,
+  SemanticErrorCode,
+  SyntaxErrorCode,
+} from './errors/error-codes.ts';
+export type {
+  FhirPathErrorOptions,
+  FhirPathSemanticErrorOptions,
+} from './errors/fhirpath-error.ts';
+export {
+  FhirPathError,
+  FhirPathEvaluationError,
+  FhirPathSemanticError,
+  FhirPathSyntaxError,
+} from './errors/fhirpath-error.ts';
+export type { SourceSpan } from './errors/source-span.ts';
 export type {
   ElementInfo,
   ModelProvider,

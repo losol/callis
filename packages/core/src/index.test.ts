@@ -6,9 +6,21 @@ import type { UnitSystem as InternalUnitSystem } from './values/quantity/unit-sy
 import { minimalUnitSystem } from './values/quantity/unit-system.ts';
 
 describe('@callis/core public API', () => {
-  it('exports only Decimal and the minimal unit system at runtime', () => {
+  it('exports the minimal facade, errors, Decimal and unit system at runtime', () => {
     // Unit packages such as @callis/ucum implement UnitSystem with Decimal values (T0007).
-    expect(Object.keys(api).sort()).toEqual(['Decimal', 'MAX_DECIMAL_DIGITS', 'minimalUnitSystem']);
+    expect(Object.keys(api).sort()).toEqual(
+      [
+        'Decimal',
+        'MAX_DECIMAL_DIGITS',
+        'minimalUnitSystem',
+        'compile',
+        'evaluate',
+        'FhirPathError',
+        'FhirPathSyntaxError',
+        'FhirPathSemanticError',
+        'FhirPathEvaluationError',
+      ].sort(),
+    );
     expect(api.Decimal).toBe(Decimal);
     expect(api.MAX_DECIMAL_DIGITS).toBe(MAX_DECIMAL_DIGITS);
     expect(api.minimalUnitSystem).toBe(minimalUnitSystem);
