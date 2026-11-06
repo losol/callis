@@ -14,7 +14,7 @@ test('loads the editor and evaluator only after entering the playground', async 
 test('prerenders a labelled shell and hydrates the direct route', async ({ page, request }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  const response = await request.get('/playground/');
+  const response = await request.get('/playground');
   expect(response.ok()).toBe(true);
   expect(await response.text()).toContain('Loading the JSON editor and evaluator');
   await page.goto('/playground/');
@@ -102,6 +102,9 @@ test('supports keyboard exit, run and search focus in both themes and a narrow l
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(expression).toBeFocused();
   await page.getByRole('button', { name: 'Switch theme' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.reload();
+  await expect(json).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect(json).toBeVisible();
   await page.getByRole('button', { name: 'Switch theme' }).click();
