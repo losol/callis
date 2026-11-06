@@ -20,6 +20,12 @@ The [first-0.1 inventory and owner checklist](docs/releases/0.1.0.md) records th
 
 These are release-preparation requirements, not authorization for an agent to publish, merge a version PR or change settings. Use the current files as evidence: core already has a prerelease version in the repository, so the initial `0.0.0` examples below describe first-package setup rather than current state.
 
+## R6 delivery decision before merge
+
+R6 implementation is scheduled in [T0039](docs/tasks/T0039-fhir-r6-model.md) and [T0040](docs/tasks/T0040-fhir-r6-validation.md), using published `6.0.0-snapshot1` draft model metadata. Development, verification and draft review are authorized independently of release inclusion. The [current first-0.1 inventory](docs/releases/0.1.0.md) remains exactly four packages; a local R6 placeholder does not establish npm state or authorize a fifth.
+
+Before a publishable R6 workspace package reaches main, the owner chooses either to land R6 ahead of a deliberately regenerated/reviewed version inventory, or to keep R6 branches unmerged until the current release completes. T0040 must provide isolated installed-Changesets discovery/version evidence and collision implications for that decision. The workflow can publish every unpublished workspace package, so source version `0.0.0` and a minor changeset alone are not a staging barrier. Do not silently expand #93, remove changesets, mark R6 private or add conditional release exclusions. No permanent release exclusion is decided here; npm/settings actions and publication remain owner-only.
+
 ## 1. Reserve the name with a placeholder
 
 Do this once per package, any time before the version PR that first releases the package is merged. Sign in to npm with an account that owns the `@callis` scope and has 2FA (`npm login`, then `npm whoami`).
