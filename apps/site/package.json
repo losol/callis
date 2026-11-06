@@ -7,16 +7,19 @@
   "type": "module",
   "scripts": {
     "collect": "node scripts/collect.ts",
-    "dev": "pnpm collect && react-router dev",
-    "build": "pnpm collect && react-router build",
-    "test": "vitest run",
-    "typecheck": "react-router typegen && tsc -p ."
+    "dev": "pnpm --filter @callis/core run build && pnpm collect && react-router dev",
+    "build": "pnpm --filter @callis/core run build && pnpm collect && react-router build",
+    "test": "pnpm --filter @callis/core run build && vitest run",
+    "typecheck": "pnpm --filter @callis/core run build && react-router typegen && tsc -p .",
+    "test:browser": "playwright test"
   },
   "dependencies": {
+    "@callis/core": "workspace:*",
     "@eventuras/lectio-docs": "0.6.0",
     "@eventuras/lectio-docs-react": "0.1.5",
     "@eventuras/markdown": "0.16.0",
     "@eventuras/ratio-ui": "2.35.1",
+    "@eventuras/ratio-ui-codeeditor": "0.1.1",
     "@react-router/node": "8.5.1",
     "isbot": "5.2.2",
     "react": "19.3.1",
@@ -24,6 +27,7 @@
     "react-router": "8.5.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.0",
     "@react-router/dev": "8.5.1",
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",

@@ -32,6 +32,8 @@ function RouterLink({ href, ...rest }: { href: string; children: ReactNode; clas
 export function SiteHeader() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  // Static hosts also serve directory URLs such as `/playground/`.
+  const currentPath = pathname.replace(/\/+$/, '') || '/';
   const [theme, setTheme] = useState<Theme | null>(null);
 
   // The search index is built from the collected manifest at build time and
@@ -80,8 +82,19 @@ export function SiteHeader() {
       </Navbar.Search>
 
       <Navbar.Links>
-        <Navbar.Link href="/" LinkComponent={RouterLink} isCurrent={pathname !== '/progress'}>
+        <Navbar.Link
+          href="/"
+          LinkComponent={RouterLink}
+          isCurrent={!['/progress', '/playground'].includes(currentPath)}
+        >
           Docs
+        </Navbar.Link>
+        <Navbar.Link
+          href="/playground"
+          LinkComponent={RouterLink}
+          isCurrent={currentPath === '/playground'}
+        >
+          Playground
         </Navbar.Link>
         <Navbar.Link
           href="/progress"

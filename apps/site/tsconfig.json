@@ -16,6 +16,7 @@
     "scripts",
     "*.ts",
     "../../scripts/roadmap.ts",
-    ".react-router/types/**/*"
+    ".react-router/types/**/*",
+    "test/browser"
   ]
 }
