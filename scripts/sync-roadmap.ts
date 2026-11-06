@@ -82,13 +82,37 @@ function change<T>(description: string, run: () => T): T | undefined {
 
 /** Runs `gh` and parses its JSON output. `body` is sent as the request body. */
 function gh(args: readonly string[], body?: unknown): unknown {
-  const output = execFileSync('gh', body === undefined ? args : [...args, '--input', '-'], {
-    encoding: 'utf8',
-    input: body === undefined ? '' : JSON.stringify(body),
-    maxBuffer: 64 * 1024 * 1024,
-    stdio: ['pipe', 'pipe', 'inherit'],
-  });
+  let output: string;
+  try {
+    output = execFileSync('gh', body === undefined ? args : [...args, '--input', '-'], {
+      encoding: 'utf8',
+      input: body === undefined ? '' : JSON.stringify(body),
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    throw new Error(`gh ${args.slice(0, 4).join(' ')} failed: ${ghErrorMessage(error)}`, {
+      cause: error,
+    });
+  }
   return output.trim() === '' ? undefined : JSON.parse(output);
+}
+
+/** The API's own error messages from a failed `gh` call, or the process error. */
+function ghErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+  const streams = ['stdout' in error ? error.stdout : '', 'stderr' in error ? error.stderr : ''];
+  const text = streams.filter((stream) => typeof stream === 'string').join('\n');
+  const messages = new Set<string>();
+  for (const match of text.matchAll(/"message":"((?:[^"\\]|\\.)*)"/g)) {
+    messages.add(match[1] ?? '');
+  }
+  if (messages.size > 0) {
+    return [...messages].join(' ');
+  }
+  return text.trim() === '' ? error.message : text.trim();
 }
 
 /**
@@ -503,26 +527,40 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-syncWaveLabels(roadmap.tasks);
+try {
+  syncWaveLabels(roadmap.tasks);
 
-const issues = readTaskIssues();
-for (const task of roadmap.tasks) {
-  const issue = syncIssue(task, issues.get(task.id));
-  if (issue !== undefined) {
-    issues.set(task.id, issue);
+  const issues = readTaskIssues();
+  for (const task of roadmap.tasks) {
+    const issue = syncIssue(task, issues.get(task.id));
+    if (issue !== undefined) {
+      issues.set(task.id, issue);
+    }
   }
-}
-for (const task of roadmap.tasks) {
-  syncBlockedBy(task, issues.get(task.id), issues);
-}
+  for (const task of roadmap.tasks) {
+    syncBlockedBy(task, issues.get(task.id), issues);
+  }
 
-const projectUrl = flags['skip-project'] ? undefined : syncProject(roadmap.tasks, issues);
+  const projectUrl = flags['skip-project'] ? undefined : syncProject(roadmap.tasks, issues);
 
-const summary =
-  changes.length === 0 ? 'GitHub already matches the roadmap' : `${changes.length} changes`;
-console.log(
-  `${apply ? '✓' : '(dry run)'} ${summary}${projectUrl === undefined ? '' : ` · ${projectUrl}`}`,
-);
-if (!apply && changes.length > 0) {
-  console.log('Run with --apply to make them.');
+  const summary =
+    changes.length === 0 ? 'GitHub already matches the roadmap' : `${changes.length} changes`;
+  console.log(
+    `${apply ? '✓' : '(dry run)'} ${summary}${projectUrl === undefined ? '' : ` · ${projectUrl}`}`,
+  );
+  if (!apply && changes.length > 0) {
+    console.log('Run with --apply to make them.');
+  }
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`✗ ${message}`);
+  if (message.includes('project')) {
+    console.error(
+      'The project board needs the "project" scope: run `gh auth refresh -h github.com -s project`, or pass --skip-project.',
+    );
+  }
+  if (apply && changes.length > 0) {
+    console.error('Some changes were made before the error. Run the sync again once it is fixed.');
+  }
+  process.exit(1);
 }
