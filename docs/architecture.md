@@ -199,9 +199,10 @@ packages/core/src/
 ├── lexer/                 token.ts, lexer.ts, char-codes.ts, line-table.ts
 ├── parser/                ast.ts, parser.ts (Pratt), precedence.ts
 ├── analysis/              analyzer.ts, type-inference.ts, diagnostics.ts
-├── compiler/              compile.ts (AST → closures), lambda.ts, maybe-promise.ts, constant-fold.ts
-├── runtime/               context.ts (EvalContext, Frame), collection.ts, singleton.ts, logic.ts,
-│                          equality.ts, comparison.ts, arithmetic.ts, navigation.ts, variables.ts
+├── compiler/              compile.ts (AST → closures), lambda.ts, literal.ts (literals, constant folding)
+├── runtime/               context.ts (EvalContext, Frame), maybe-promise.ts, collection.ts, singleton.ts,
+│                          logic.ts, equality.ts, comparison.ts, arithmetic.ts, navigation.ts, node-value.ts,
+│                          type-target.ts, variables.ts
 ├── types/                 system-types.ts, type-specifier.ts, model-types.ts, conversions.ts, type-test.ts (is/as/ofType)
 ├── values/
 │   ├── decimal/           decimal.ts, math.ts
@@ -211,7 +212,7 @@ packages/core/src/
 │   └── string.ts          equivalence normalization and helpers
 ├── model/                 model-provider.ts, model-node.ts, json-navigation.ts, primitive-extensions.ts, lossless-json.ts
 ├── functions/             registry.ts, define.ts, existence.ts, filtering.ts, subsetting.ts, combining.ts,
-│                          conversion.ts, string.ts, math.ts, tree.ts, utility.ts
+│                          conversion.ts, string.ts, math.ts, tree.ts, utility.ts, types.ts, logic.ts
 └── fhir/                  functions.ts, resolve.ts, variables.ts, equivalence.ts, hooks.ts
 ```
 
