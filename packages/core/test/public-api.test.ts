@@ -153,6 +153,17 @@ describe('public synchronous model-less API', () => {
     ).toEqual([1.5]);
   });
 
+  it('propagates input accessor errors without disguising them as expression errors', () => {
+    const failure = new Error('input accessor failure');
+    const input = {
+      get value(): never {
+        throw failure;
+      },
+    };
+    expect(() => evaluate(input, 'value')).toThrow(failure);
+    expect(() => compile('value').evaluate(input)).toThrow(failure);
+  });
+
   it('keeps public types narrow without exposing deferred internal contracts', () => {
     expectTypeOf(compile('1')).toEqualTypeOf<CompiledExpression>();
     expectTypeOf(evaluate(null, '1')).toEqualTypeOf<unknown[]>();

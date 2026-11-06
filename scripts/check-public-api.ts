@@ -8,21 +8,32 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const temporary = mkdtempSync(join(tmpdir(), 'callis-public-api-'));
 try {
-  execFileSync('npm', ['pack', '--ignore-scripts', '--pack-destination', temporary], {
-    cwd: join(root, 'packages/core'),
-    stdio: 'pipe',
-  });
-  const archive = readdirSync(temporary).find((name) => name.endsWith('.tgz'));
-  if (archive === undefined) throw new Error('npm pack produced no archive');
-  const installed = join(temporary, 'node_modules/@callis/core');
-  mkdirSync(installed, { recursive: true });
-  execFileSync('tar', ['-xzf', join(temporary, archive), '--strip-components=1', '-C', installed]);
+  for (const name of ['core', 'ucum']) {
+    execFileSync('npm', ['pack', '--ignore-scripts', '--pack-destination', temporary], {
+      cwd: join(root, 'packages', name),
+      stdio: 'pipe',
+    });
+    const archive = readdirSync(temporary).find(
+      (file) => file.startsWith(`callis-${name}-`) && file.endsWith('.tgz'),
+    );
+    if (archive === undefined) throw new Error(`npm pack produced no ${name} archive`);
+    const installed = join(temporary, 'node_modules/@callis', name);
+    mkdirSync(installed, { recursive: true });
+    execFileSync('tar', [
+      '-xzf',
+      join(temporary, archive),
+      '--strip-components=1',
+      '-C',
+      installed,
+    ]);
+  }
   writeFileSync(join(temporary, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
   writeFileSync(
     join(temporary, 'consumer.mts'),
     `
 import assert from 'node:assert/strict';
 import * as core from '@callis/core';
+import { ucum } from '@callis/ucum';
 assert.deepEqual(Object.keys(core).sort(), [
   'Decimal', 'MAX_DECIMAL_DIGITS', 'minimalUnitSystem', 'compile', 'evaluate',
   'FhirPathError', 'FhirPathSyntaxError', 'FhirPathSemanticError', 'FhirPathEvaluationError'
@@ -36,9 +47,71 @@ assert.equal(JSON.stringify(core.evaluate(null, "1.200 'mg'", { decimalOutput: '
   '[{"value":"1.200","unit":"mg","system":"http://unitsofmeasure.org","code":"mg"}]');
 assert.throws(() => core.compile('where(true)'), core.FhirPathSemanticError);
 assert.throws(() => core.evaluate(null, '%missing'), core.FhirPathEvaluationError);
+assert.equal(core.Decimal.name, 'Decimal');
+const converted = ucum.convert(core.Decimal.ONE, 'kg', 'g');
+assert.ok(converted instanceof core.Decimal);
+assert.equal(converted.toString(), '1000');
+for (const [expression, ErrorClass] of [
+  ['Patient.', core.FhirPathSyntaxError],
+  ['where(true)', core.FhirPathSemanticError],
+  ['%missing', core.FhirPathEvaluationError],
+]) {
+  assert.throws(() => core.evaluate(null, expression), (error) => {
+    assert.ok(error instanceof core.FhirPathError);
+    assert.ok(error instanceof ErrorClass);
+    assert.equal(error.name, ErrorClass.name);
+    assert.equal(error.expression, expression);
+    assert.equal(error.span.line, 1);
+    assert.ok(error.format().includes(error.code));
+    return true;
+  });
+}
+assert.throws(() => core.compile(42), (error) => {
+  assert.ok(error.stack.includes('src/api/public-api.ts'));
+  return error.code === 'eval/invalid-argument';
+});
+${
+  process.argv.includes('--operators')
+    ? `
+assert.deepEqual(core.evaluate(null, '0.1 + 0.2', { decimalOutput: 'string' }), ['0.3']);
+assert.deepEqual(core.evaluate(null, "1 'kg' = 1000 'g'", { units: ucum }), [true]);
+assert.deepEqual(core.evaluate(null, '1 / 0'), []);
+assert.deepEqual(core.evaluate(null, '1 | 1 | 2'), [1, 2]);
+const temporal = core.compile('@2024-01-01T00:00 = @2024-01-01T00:00Z');
+assert.deepEqual(temporal.evaluate(null), [true]);
+assert.deepEqual(temporal.evaluate(null, { timezoneOffset: 60 }), [false]);
+assert.deepEqual(temporal.evaluate(null), [true]);
+let calls = 0;
+const units = { ...core.minimalUnitSystem, compare() {
+  assert.equal(this, units); calls++; return 0;
+} };
+const expr = "1 'custom-a' = 2 'custom-b'";
+assert.deepEqual(core.evaluate(null, expr, { units }), [true]);
+assert.deepEqual(core.compile(expr, { units }).evaluate(null), [true]);
+assert.ok(calls > 0);
+for (const [method, expression] of [
+  ['compare', expr], ['convert', expr],
+  ['multiply', "1 'custom-a' * 2 'custom-b'"],
+  ['divide', "1 'custom-a' / 2 'custom-b'"],
+]) {
+  for (const returned of [Promise.reject(new Error('rejected provider')), { then(resolve) { resolve(0); } }]) {
+    const asynchronous = { ...core.minimalUnitSystem, [method]() { return returned; } };
+    for (const run of [() => core.evaluate(null, expression, { units: asynchronous }),
+      () => core.compile(expression, { units: asynchronous }).evaluate(null)]) {
+      assert.throws(run, (error) => error instanceof core.FhirPathEvaluationError && error.code === 'eval/async-in-sync');
+    }
+  }
+}
+const failure = new Error('provider failure');
+assert.throws(() => core.evaluate(null, expr, { units: { ...core.minimalUnitSystem, compare() { throw failure; } } }), error => error === failure);
+`
+    : ''
+}
 `,
   );
-  execFileSync(process.execPath, [join(temporary, 'consumer.mts')], { stdio: 'inherit' });
+  execFileSync(process.execPath, ['--enable-source-maps', join(temporary, 'consumer.mts')], {
+    stdio: 'inherit',
+  });
   writeFileSync(
     join(temporary, 'types.mts'),
     `
@@ -94,7 +167,9 @@ const noOutput: NoOutput = true;
       stdio: 'inherit',
     },
   );
-  console.log('Packed @callis/core ESM and declaration consumer passed.');
+  console.log(
+    'Packed core/UCUM ESM, exact Decimal identity, diagnostics and declaration consumer passed.',
+  );
 } finally {
   rmSync(temporary, { recursive: true, force: true });
 }
