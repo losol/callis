@@ -10,7 +10,8 @@
     "dev": "pnpm --filter @callis/core run build && pnpm collect && react-router dev",
     "build": "pnpm --filter @callis/core run build && pnpm collect && react-router build",
     "test": "pnpm --filter @callis/core run build && vitest run",
-    "typecheck": "pnpm --filter @callis/core run build && react-router typegen && tsc -p ."
+    "typecheck": "pnpm --filter @callis/core run build && react-router typegen && tsc -p .",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "@callis/core": "workspace:*",
@@ -26,7 +27,7 @@
     "react-router": "8.5.1"
   },
   "devDependencies": {
-    "@playwright/test": "1.65.0",
+    "@playwright/test": "1.64.0",
     "@react-router/dev": "8.5.1",
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",

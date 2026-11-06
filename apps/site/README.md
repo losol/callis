@@ -65,3 +65,14 @@ Losol AS), using the site's Ratio CSS tokens. Its upstream source and license
 are linked on the page. CodeMirror uses MIT. Keep their license notices in
 bundled output; any changes to covered upstream files must retain their source
 and notices. Domain behavior and error handling stay in this app and core.
+
+After `pnpm site:build`, run `pnpm --filter @callis/site test:browser` for the
+Chromium interaction checks. Install the browser once with
+`pnpm --filter @callis/site exec playwright install chromium`. CI does this in
+the site job. The test server serves each route's prerendered HTML, including
+the `/playground/` directory route, rather than an SPA root fallback.
+
+The site's dev, build, typecheck and unit-test commands first build core so
+fresh checkouts use its real public package entry point. The editor and evaluator
+are imported only after the playground mounts; a browser regression check guards
+the documentation route against loading that client chunk.

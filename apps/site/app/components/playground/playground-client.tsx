@@ -151,7 +151,8 @@ export function PlaygroundClient() {
               MPL-2.0
             </a>
             , and CodeMirror under MIT. The site uses Lectio Docs (MIT) and Ratio UI (MPL-2.0).
-            Their license notices are retained in the distributed dependencies.
+            Their license notices are retained in the distributed dependencies.{' '}
+            <a href="/playground-notices.txt">Editor and CodeMirror license notices</a>.
           </p>
         </details>
       </aside>
