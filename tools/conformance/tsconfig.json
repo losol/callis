@@ -1,7 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@callis/core": ["../../packages/core/src/index.ts"]
+    }
   },
   "include": ["src", "scripts", "suite"]
 }

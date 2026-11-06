@@ -291,15 +291,17 @@ describe('evaluationOptions', () => {
   });
 });
 
-// T0022 acceptance: the runner runs end to end with the stub adapter; every test is run or
-// skipped with a reason, JSON inputs run, and XML inputs are skipped until T0023.
+// T0022 and T0023 acceptance: the runner runs end to end with the stub adapter; every test is run
+// or skipped with a reason. Every phase-1 and STU test runs, whatever its input, because the XML
+// inputs are converted (`name.json` next to `name.xml`).
 describe.each(SUITE_IDS)('the vendored %s suite with the stub adapter', (id) => {
-  it('runs or skips every test, and never crashes', async () => {
+  it('runs every phase-1 and STU test, skips the rest with a reason, and never crashes', async () => {
     const suite = loadSuite(id);
     const run = await createRunner({ adapter: stubAdapter }).runSuite(suite);
     expect(run.results.length).toBeGreaterThan(1000);
     for (const result of run.results) {
       const { test } = result;
+      expect(result.skipReason, test.id).not.toBe(NOT_CONVERTED);
       if (result.status === 'skip') {
         expect(result.skipReason, test.id).toMatch(/\S/);
       } else {
@@ -310,10 +312,7 @@ describe.each(SUITE_IDS)('the vendored %s suite with the stub adapter', (id) => 
       const runnable =
         classifyTest(test).phase !== 'unsupported' &&
         findException(SUITE_EXCEPTIONS, id, test.id) === undefined;
-      if (runnable && test.inputFile?.endsWith('.xml')) {
-        expect(result.skipReason, test.id).toBe(NOT_CONVERTED);
-      }
-      if (runnable && (test.inputFile === undefined || test.inputFile.endsWith('.json'))) {
+      if (runnable) {
         expect(result.status, test.id).toBe('fail');
       }
     }

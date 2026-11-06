@@ -1,0 +1,44 @@
+{
+  "files": {
+    "r4/CodeSystem-example.json": {
+      "package": "hl7.fhir.r4.examples@4.0.1",
+      "sha256": "a1c79b2e92f3fbad618be55b5394f66dc6d31988906d4a6436e2894e281c9b3c"
+    },
+    "r4/Observation-example.json": {
+      "package": "hl7.fhir.r4.examples@4.0.1",
+      "sha256": "95b2b641707cd473902670a65c20008282c09b7e71731d1010a3db6ce24fce7f"
+    },
+    "r4/Patient-example.json": {
+      "package": "hl7.fhir.r4.examples@4.0.1",
+      "sha256": "7cc6b3817264c22e722b6bc10e494d3441341032f8294db7ccec796ca7a0cf81"
+    },
+    "r4/Questionnaire-3141.json": {
+      "package": "hl7.fhir.r4.examples@4.0.1",
+      "sha256": "5c8adb2de88ad6e54bc1e923821b3f57aceae98465fc33f7954ca43f3431badc"
+    },
+    "r4/ValueSet-example-expansion.json": {
+      "package": "hl7.fhir.r4.examples@4.0.1",
+      "sha256": "ed828d18b2f564810db5e2d35a86322b63dbdb60327f73c97977a3cda2756508"
+    },
+    "r5/CodeSystem-example.json": {
+      "package": "hl7.fhir.r5.examples@5.0.0",
+      "sha256": "c9673d2485f109c9ba093e766f815cc647cc907598e532913620ffe891eb354f"
+    },
+    "r5/Observation-example.json": {
+      "package": "hl7.fhir.r5.examples@5.0.0",
+      "sha256": "8da69ca237a70a0f4c7d28ebd10a6222e4717726227a4f9c806bd812c73a5c9f"
+    },
+    "r5/Patient-example.json": {
+      "package": "hl7.fhir.r5.examples@5.0.0",
+      "sha256": "a984c68efecb60973262fc6f068a1465e2107bec8c031965786d8e7f26173811"
+    },
+    "r5/Questionnaire-3141.json": {
+      "package": "hl7.fhir.r5.examples@5.0.0",
+      "sha256": "80e662988a8698816bd0af2b77be2e67ebac94f4128f18b6404bc8fdab513d69"
+    },
+    "r5/ValueSet-example-expansion.json": {
+      "package": "hl7.fhir.r5.examples@5.0.0",
+      "sha256": "01b1b3ec7d65e82871826e62c6d5a26f4038ee7a5fcc27017f3f47caab1c93cb"
+    }
+  }
+}

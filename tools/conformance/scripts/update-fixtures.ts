@@ -63,7 +63,9 @@ const sorted = Object.fromEntries(Object.entries(files).sort(([a], [b]) => compa
 const source: FixtureSource = { repository: REPOSITORY, commit, commitDate, files: sorted };
 writeFileSync(join(FIXTURES_DIR, 'source.json'), `${JSON.stringify(source, null, 2)}\n`);
 writeFileSync(join(FIXTURES_DIR, 'SOURCE.md'), renderSourceMarkdown(source));
-console.log(`Vendored ${Object.keys(files).length} files. Now run \`pnpm conformance\`.`);
+console.log(
+  `Vendored ${Object.keys(files).length} files. Now run \`pnpm --filter @callis/conformance convert-fixtures\` and \`pnpm conformance\`.`,
+);
 
 async function resolveCommit(ref: string): Promise<{ commit: string; commitDate: string }> {
   const headers: Record<string, string> = { accept: 'application/vnd.github+json' };

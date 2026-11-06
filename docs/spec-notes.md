@@ -283,6 +283,17 @@ How the conformance runner ([T0022](tasks/T0022-conformance-runner.md), [`tools/
 - **Tests:** the tests and groups with a `mode`.
 - **Decision:** `strict`, `lenient/polymorphics`, `element`, `html` and the `semantic` group mode of `isSemanticChecks` (not in the schema) are phase 1. `tx` (`%terminologies`) is STU ([T0032](tasks/T0032-fhir-phase2.md)). `cda` and `custom` are out of scope and skipped, as are the whole `cdaTests` and `documentFunctions` groups, including their tests that have their own `mode="element"`.
 
+### Converting the XML inputs
+
+- **Spec:** [FHIR XML](https://hl7.org/fhir/R4/xml.html) and [FHIR JSON](https://hl7.org/fhir/R4/json.html) ([R5 JSON](https://hl7.org/fhir/R5/json.html#primitive)) define the two formats, and [XML 1.0](https://www.w3.org/TR/xml/) how XML is read. They do not say how the narrative XHTML is written as a JSON string.
+- **Tests:** every test with an XML input. The ten inputs that copy an official FHIR example are compared with its official JSON (`tools/conformance/src/official-examples.ts`).
+- **Decision** ([T0023](tasks/T0023-xml-fixture-conversion.md), [`tools/conformance`](../tools/conformance/README.md#converted-xml-inputs)):
+  - The narrative `div` is copied from the XML as written, with its whitespace and references (`&#39;` stays `&#39;`). The official JSON examples write the XHTML anew, which changes whitespace and references but not the XHTML. `htmlTest01`, the one test that reads a narrative, uses `patient-example.xml`, whose narrative is the same either way.
+  - Attribute values are read as [XML 1.0 §3.3.3](https://www.w3.org/TR/xml/#AVNormalize) requires: a line break written inside a `value` attribute is a space, and the indentation after it is kept (`description` in `codesystem-example.xml`).
+  - `decimal` and `integer` values keep their XML text as JSON numbers (`1.50`, `9.5e2`, `1.5E2`), because FHIRPath can see the precision. A value that is not also a JSON number (a leading `+`) is refused rather than rewritten; none of the inputs has one.
+  - R5 `integer64` is a JSON string, as R5 JSON requires. XML comments are dropped; FHIR JSON has none.
+  - `ccda.xml` is a CDA document, not FHIR, and is not converted. Only the out-of-scope `cdaTests` group uses it.
+
 ### Duplicate test names
 
 - **Tests:** the R4 file has two tests named `testEquivalent23` (R5 renamed the second to `testEquivalent24`).

@@ -57,7 +57,7 @@ export interface Failure {
 
 /**
  * Why a test was skipped: it is out of scope (`unsupported`), it is a documented suite exception
- * (`exception`), or its input is not available (`input`, for example an XML input before T0023).
+ * (`exception`), or its input is not available (`input`, for example an XML input that is not converted).
  */
 export type SkipCause = 'unsupported' | 'exception' | 'input';
 

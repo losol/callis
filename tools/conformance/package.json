@@ -7,7 +7,9 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p .",
-    "update-fixtures": "node scripts/update-fixtures.ts"
+    "convert-fixtures": "node scripts/convert-fixtures.ts",
+    "update-fixtures": "node scripts/update-fixtures.ts",
+    "update-official-examples": "node scripts/update-official-examples.ts"
   },
   "devDependencies": {
     "fast-xml-parser": "5.12.0"
