@@ -16,6 +16,8 @@ The first stable 0.1 release supports the implemented subset, not all of phase 1
 
 Before any version PR is merged, review its actual package/version inventory, peer dependencies, pending changesets and prerelease state. All packages the workflow would publish must meet their documented support, license and smoke-test requirements; publishing generated model data does not claim model-aware evaluation is ready. If an included package is unready, resolve the staging decision with the owner first. The existing workflow is not a selective core-only release gate. Do not delete changesets to exclude packages.
 
+The [first-0.1 inventory and owner checklist](docs/releases/0.1.0.md) records the current source/registry distinction, observed settings and outstanding external gates.
+
 These are release-preparation requirements, not authorization for an agent to publish, merge a version PR or change settings. Use the current files as evidence: core already has a prerelease version in the repository, so the initial `0.0.0` examples below describe first-package setup rather than current state.
 
 ## 1. Reserve the name with a placeholder
@@ -82,7 +84,7 @@ Safeguards that make an accidental release unlikely:
 
 - **The PR is a draft,** and every update turns it back into one. A draft cannot be merged, so releasing takes a deliberate *Ready for review* first.
 - **Its body lists each package with the version it will publish,** for example `@callis/core@0.1.0`, followed by its changelog entry.
-- **It gets no CI by itself,** because the workflow's token starts no workflows, and the branch rules require CI. So it must also be closed and reopened before it can be merged.
+- **It gets no CI by itself,** because the workflow's token starts no workflows, and CI must be verified before the owner merges it. It must be closed and reopened to start those checks. Do not assume branch rules enforce them: confirm current repository settings; the [0.1 audit](docs/releases/0.1.0.md#read-only-npm-and-repository-audit) did not observe a required-status-check rule.
 - **Nothing is published while changesets are pending.** The workflow then only updates the version PR, and only merging it consumes the changesets. Never delete pending changesets by hand: with nothing pending, the next push to `main` would publish what is on `main`, for example `@callis/core@0.0.0`. `pnpm exec changeset publish-plan` shows what that would be.
 
 Once, before the first release, give the `npm` environment `main` as its only deployment branch:

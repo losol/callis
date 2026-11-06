@@ -161,6 +161,8 @@ jobs:
         run: pnpm --filter @callis/site exec playwright install --with-deps chromium
       - name: Test the playground in Chromium
         run: pnpm --filter @callis/site run test:browser
+      - name: Test all four packed packages in Node and Vite
+        run: pnpm check:release
       # A build that produced an empty site, or only the fallback page, must not pass.
       - name: Check the build output
         working-directory: apps/site/build/client

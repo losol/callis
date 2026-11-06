@@ -6,7 +6,7 @@ Full [UCUM](https://ucum.org/ucum) unit conversion for [Callis](https://github.c
 
 ## Usage
 
-`ucum` is a `UnitSystem`. Pass it where Callis takes one; the evaluation API that accepts `{ units: ucum }` becomes public in T0025. It can also be called directly:
+`ucum` is a `UnitSystem`. Pass it to public `evaluate(input, expression, { units: ucum })` or `compile(expression, { units: ucum })`. For example, `evaluate(null, "1 'kg' = 1000 'g'", { units: ucum })` returns `[true]`. It can also be called directly:
 
 ```ts
 import { Decimal } from '@callis/core';

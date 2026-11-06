@@ -64,8 +64,29 @@ Catch `FhirPathError` for expression diagnostics and keep other errors separate.
 
 ## Current support and deferred API
 
-Model-less paths, literals, indexing, Boolean logic, unary polarity and type operations are available. Built-ins currently include `not`, `is`, `as` and `ofType`. Operator support follows T0010; consult the conformance report for the exact merged capability. Other standard and FHIR functions are still incremental work; an unavailable function such as `where()` raises `semantic/unknown-function`, rather than pretending to evaluate it.
+Model-less paths, literals, indexing, Boolean logic, unary polarity and type operations are available. Built-ins currently include `not`, `is`, `as` and `ofType`. Arithmetic, comparisons, equality/equivalence, membership, union and string concatenation operators from T0010 are implemented. Other standard and FHIR functions are still incremental work; an unavailable function such as `where()` raises `semantic/unknown-function`, rather than pretending to evaluate it.
 
 The public surface has no parser, AST input/property, static analyzer, typed output mode, async evaluation, hooks, model option, custom function registry, strict/lenient options or cache. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages; a model provider export does not imply a public model evaluation option.
 
 The examples are executed by the public documentation tests. Handwritten TSDoc and this small guide describe the initial API; a generated API reference is deferred with the expanded API.
+
+## First 0.1 support matrix
+
+This describes the planned 0.1.0 subset at engine revision [9b78e6e](https://github.com/losol/callis/tree/9b78e6ef0b65bf535af335677afa65dffc0f0f1d), including the playground layout fix. It does not announce npm availability.
+
+| Surface | Implemented / limit |
+| --- | --- |
+| Runtimes | CI tests Node 22, 24 and 26; packed ESM/TypeScript plus production Vite/Chromium smoke on Node 24. Deno, Bun, edge workers, Firefox and Safari unverified. |
+| Data | Model-less JSON paths, root resourceType matching, literals, indexing, variables and system type operations; no model-driven choice expansion or primitive extensions. |
+| Operators | `+ - * / div mod`, unary `+ -`, `&`, `= != ~ !~`, `< <= > >=`, `in contains`, `&#124;`, `and or xor implies`, `is as`. Applicability depends on operand types and FHIRPath empty-collection rules. |
+| Functions | `not()`, `is()`, `as()`, `ofType()` only. `where`, `select`, `exists`, `resolve` and other standard/FHIR groups are not implemented. |
+| Output | Synchronous plain arrays; exact evaluator Decimal/Quantity strings with `decimalOutput: 'string'`; parsed input numbers retain JavaScript precision limits. |
+| Errors | Public FhirPathError subclasses, codes, optional UTF-16 source spans, semantic diagnostics and formatting; caller handles invalid JSON separately. |
+| Companions | UCUM UnitSystem is usable through `units`; R4/R5 export immutable ModelProvider data, not a public engine `model` option. |
+| Deferred | Async, hooks, custom functions, parser/AST, analysis, typed output, model-aware evaluation and remaining function groups; tracked by implementation tasks and T0038. |
+
+The [playground](https://callis.losol.no/playground/) runs editable JSON and expressions locally in the browser, with exact evaluator Decimal string rendering and synthetic presets. It does not automatically transmit input JSON. Its results use the same public API; JSON.parse precision limits still apply.
+
+The committed [R4](conformance/r4.md) and [R5](conformance/r5.md) reports use the **internal API adapter**, including facilities not exposed by this public facade. Their pass counts are not public model-less API conformance. See the [0.1 inventory](releases/0.1.0.md#conformance) for per-phase counts, exceptions and source pins. Full phase 1 is a later milestone. Later 0.x additions update this matrix; T0038 completes the API later, while 1.0 scope remains an owner decision.
+
+The handwritten API guide and TSDoc are the reference decision for this small release. A generated reference is deferred to T0038. README and guide TypeScript snippets share `examples/public-api.ts`, executed by the documentation tests; the site serves this guide from the same source.

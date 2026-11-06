@@ -26,9 +26,13 @@ Existing API compatibility rules still apply before 1.0: design for extension an
 
 ## Acceptance criteria
 
-- [ ] The support/limitations matrix, public examples and playground describe the same implemented surface and engine revision.
-- [ ] Per-phase R4/R5 conformance and exceptions are documented; baseline never regresses. Full phase-1 pass rate is not required for 0.1.
-- [ ] Packed packages pass fresh Node/Vite import, type and evaluation smoke tests; all included packages pass publint, attw, dependency, size and license checks.
-- [ ] The owner has a concrete package/version inventory and release blockers, including any unsafe workflow inclusion, unresolved #82 actions or prerelease transitions. No unsupported package is implicitly approved.
-- [ ] The owner-run release path reuses the existing provenance workflow and runbook. This task ends with reviewable release preparation, not an npm publish or a merge of the version PR.
-- [ ] Later 0.x completion is linked to T0038; 1.0 scope and criteria remain open.
+- [x] The support/limitations matrix, public examples and playground describe the same implemented surface and engine revision.
+- [x] Per-phase R4/R5 conformance and exceptions are documented; baseline never regresses. Full phase-1 pass rate is not required for 0.1.
+- [x] Packed packages pass fresh Node/Vite import, type and evaluation smoke tests; all included packages pass publint, attw, dependency, size and license checks.
+- [x] The owner has a concrete package/version inventory and release blockers, including any unsafe workflow inclusion, unresolved #82 actions or prerelease transitions. No unsupported package is implicitly approved.
+- [x] The owner-run release path reuses the existing provenance workflow and runbook. This task ends with reviewable release preparation, not an npm publish or a merge of the version PR.
+- [x] Later 0.x completion is linked to T0038; 1.0 scope and criteria remain open.
+
+## Implementation notes
+
+The [0.1 release inventory](../releases/0.1.0.md) records all four contracts/versions/peers, artifact checks, support limits, conformance and a dated read-only settings audit. `pnpm check:release` tests actual tarballs in fresh Node/TypeScript and Vite/Chromium consumers; `--stable` simulates version generation in a disposable copy. The task ends at reviewable preparation, while owner-only npm/settings and exact regenerated version-PR approval remain explicit release gates.

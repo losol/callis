@@ -15,8 +15,8 @@ Callis is about finding data. It is a [FHIRPath](https://hl7.org/fhirpath/N1/) e
 | Package | Description | Status |
 | --- | --- | --- |
 | [`@callis/core`](packages/core) | The FHIRPath engine | In development |
-| `@callis/ucum` | The full UCUM unit system | Planned ([T0007](docs/tasks/T0007-ucum.md)) |
-| `@callis/fhir-r4`, `@callis/fhir-r5` | FHIR R4 and R5 models | Planned ([T0019](docs/tasks/T0019-fhir-model-generator.md)) |
+| [`@callis/ucum`](packages/ucum) | Opt-in UCUM conversion | Implemented; release preparation pending |
+| [`@callis/fhir-r4`](packages/fhir-r4), [`@callis/fhir-r5`](packages/fhir-r5) | Immutable R4 4.0.1 / R5 5.0.0 provider metadata | Implemented data packages; public model-aware evaluation deferred |
 
 ## Install
 
@@ -43,6 +43,10 @@ export const firstGiven: unknown[] = compile('name.given[0]').evaluate(patient);
 ```
 
 These return `['Ada', 'Mina']` and `['Ada']`. Default Decimal output uses potentially lossy numbers; `decimalOutput: 'string'` preserves evaluator Decimal digits, but cannot recover digits lost in input JavaScript numbers. Full phase-1 conformance and model-aware evaluation remain future work.
+
+## First 0.1 support
+
+The [support matrix](docs/guide.md#first-01-support-matrix) lists implemented operators and functions, tested runtimes and deferred APIs. Try the [browser-local playground](https://callis.losol.no/playground/); it executes locally without automatically sending input JSON. See the [release inventory and owner gates](docs/releases/0.1.0.md) before treating this preparation as a published release.
 
 ## License
 

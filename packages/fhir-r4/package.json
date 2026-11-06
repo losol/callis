@@ -28,7 +28,8 @@
   },
   "files": [
     "dist",
-    "SOURCE.md"
+    "SOURCE.md",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=22"
