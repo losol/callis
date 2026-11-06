@@ -84,7 +84,7 @@ describe('FHIR R6 September 2026 draft snapshot', () => {
       expect(r6.getType(name), name).toBeUndefined();
     }
   });
-  // https://hl7.org/fhir/6.0.0-snapshot1/dosagedetails-definitions.html#DosageDetails.step
+  // https://hl7.org/fhir/6.0.0-snapshot1/dosage-definitions.html#DosageDetails.step
   it('models DosageDetails inline steps with their Element base', () => {
     const type = r6.getType('DosageDetails');
     expect(type).toMatchObject({ kind: 'complex', baseName: 'BackboneType' });
