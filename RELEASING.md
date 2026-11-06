@@ -10,6 +10,14 @@ For the owner. Agents never publish or change anything on npm ([AGENTS.md](AGENT
 
 npm only configures a [trusted publisher](https://docs.npmjs.com/trusted-publishers/) for a package that exists. The placeholder makes the package exist, so that 0.1.0 can already come from the workflow, with provenance.
 
+## Release scope and readiness
+
+The first stable 0.1 release supports the implemented subset, not all of phase 1. [T0025](docs/tasks/T0025-public-api-release.md) supplies the small public API, [T0036](docs/tasks/T0036-playground.md) the playground and [T0037](docs/tasks/T0037-first-release-readiness.md) the release preparation. Later 0.x releases extend support and update limitations, executable examples and per-phase R4/R5 conformance. [T0038](docs/tasks/T0038-public-api-completion.md) completes the phase-1 API later. The 1.0 scope and criteria remain open.
+
+Before any version PR is merged, review its actual package/version inventory, peer dependencies, pending changesets and prerelease state. All packages the workflow would publish must meet their documented support, license and smoke-test requirements; publishing generated model data does not claim model-aware evaluation is ready. If an included package is unready, resolve the staging decision with the owner first. The existing workflow is not a selective core-only release gate. Do not delete changesets to exclude packages.
+
+These are release-preparation requirements, not authorization for an agent to publish, merge a version PR or change settings. Use the current files as evidence: core already has a prerelease version in the repository, so the initial `0.0.0` examples below describe first-package setup rather than current state.
+
 ## 1. Reserve the name with a placeholder
 
 Do this once per package, any time before the version PR that first releases the package is merged. Sign in to npm with an account that owns the `@callis` scope and has 2FA (`npm login`, then `npm whoami`).
@@ -62,7 +70,7 @@ If `npm view` returns 404 after a successful publish, check how the package was 
 **Dist-tags.** The first publish makes 0.0.1 `latest`. Until 0.1.0 is out, `npm install @callis/core` therefore installs the placeholder, with a deprecation warning, and there is nothing to import. The workflow publishes 0.1.0 under `latest` (the Changesets default), which replaces it. 0.0.1 stays deprecated.
 
 - **Never unpublish the placeholder.** npm never accepts a version number twice, and unpublishing a package's last version blocks the name for 24 hours.
-- **The first real version must be 0.1.0, not 0.0.1.** The packages in the repository stay at 0.0.0 until their first version PR. A `minor` changeset takes 0.0.0 to 0.1.0. A package with only `patch` changesets would become 0.0.1, which the placeholder already holds. That does **not** fail: `changeset publish` skips every version that is already on npm, so the release run succeeds, publishes nothing for that package, and `latest` still points to the empty placeholder. Catch it in the version PR ([3](#3-every-release), step 1).
+- **The first real version must be 0.1.0, not 0.0.1.** A new package starts at 0.0.0 until its first version PR; an existing prerelease package follows section 5. A `minor` changeset takes 0.0.0 to 0.1.0. A package with only `patch` changesets would become 0.0.1, which the placeholder already holds. That does **not** fail: `changeset publish` skips every version that is already on npm, so the release run succeeds, publishes nothing for that package, and `latest` still points to the empty placeholder. Catch it in the version PR ([3](#3-every-release), step 1).
 
 ## 2. The version PR
 

@@ -1,6 +1,6 @@
 # Callis roadmap
 
-> Status: **accepted** (owner review, 2026-11-03). This is the index of the tasks that build Callis. Each task has its own file in [`tasks/`](tasks/) with goal, scope, design notes and acceptance criteria. The big picture is in [architecture.md](architecture.md); the reasons behind decisions are in [`adr/`](adr/README.md).
+> Status: **accepted** (owner review, 2026-11-03; incremental first-release direction, 2026-11-06). This is the index of the tasks that build Callis. Each task has its own file in [`tasks/`](tasks/) with goal, scope, design notes and acceptance criteria. The big picture is in [architecture.md](architecture.md); the reasons behind decisions are in [`adr/`](adr/README.md).
 > Task IDs are four-digit and stable (`T0000`, `T0001`, …), like the ADR numbers. The file name starts with the ID (`T0000-scaffold.md`). Refer to the IDs in branch names, PR titles and commit messages; the fixed width keeps searches unambiguous (`T0001` never matches `T0010`).
 
 ## How to use this roadmap
@@ -41,17 +41,20 @@
 | [T0022](tasks/T0022-conformance-runner.md) | Conformance runner | 1 | T0000 | 1 | M |
 | [T0023](tasks/T0023-xml-fixture-conversion.md) | FHIR XML fixture conversion | 1 | T0019, T0022 | 3 | M |
 | [T0024](tasks/T0024-static-analysis.md) | Static analysis and strict mode | 1 | T0018, T0019 | 5 | L |
-| [T0025](tasks/T0025-public-api-release.md) | Public API, documentation and release 0.1.0 | 1 | T0007, T0010, T0011, T0012, T0013, T0014, T0015, T0016, T0017, T0021, T0023, T0024 | 7 | M |
-| [T0026](tasks/T0026-stu-aggregates.md) | STU: aggregates and variables | 2 | T0025 | 8 | M |
-| [T0027](tasks/T0027-stu-collections.md) | STU: collection additions | 2 | T0025 | 8 | M |
-| [T0028](tasks/T0028-stu-long.md) | STU: `Long` type | 2 | T0025 | 8 | M |
-| [T0029](tasks/T0029-stu-strings.md) | STU: string and regex additions | 2 | T0025 | 8 | M |
-| [T0030](tasks/T0030-stu-precision-datetime.md) | STU: precision, boundaries and date/time additions | 2 | T0025 | 8 | L |
-| [T0031](tasks/T0031-stu-reflection.md) | STU: reflection and instance selector | 2 | T0025 | 8 | M |
-| [T0032](tasks/T0032-fhir-phase2.md) | FHIR phase 2: structure functions and R5 service APIs | 2 | T0025 | 8 | L |
-| [T0033](tasks/T0033-performance.md) | Benchmarks and performance | 3 | T0025 | 8 | L |
-| [T0034](tasks/T0034-cli.md) | CLI (optional) | 3 | T0025 | 8 | M |
+| [T0025](tasks/T0025-public-api-release.md) | Minimal synchronous public API | 1 | T0007, T0008, T0009, T0010, T0023 | 5 | M |
+| [T0026](tasks/T0026-stu-aggregates.md) | STU: aggregates and variables | 2 | T0038 | 8 | M |
+| [T0027](tasks/T0027-stu-collections.md) | STU: collection additions | 2 | T0038 | 8 | M |
+| [T0028](tasks/T0028-stu-long.md) | STU: `Long` type | 2 | T0038 | 8 | M |
+| [T0029](tasks/T0029-stu-strings.md) | STU: string and regex additions | 2 | T0038 | 8 | M |
+| [T0030](tasks/T0030-stu-precision-datetime.md) | STU: precision, boundaries and date/time additions | 2 | T0038 | 8 | L |
+| [T0031](tasks/T0031-stu-reflection.md) | STU: reflection and instance selector | 2 | T0038 | 8 | M |
+| [T0032](tasks/T0032-fhir-phase2.md) | FHIR phase 2: structure functions and R5 service APIs | 2 | T0038 | 8 | L |
+| [T0033](tasks/T0033-performance.md) | Benchmarks and performance | 3 | T0038 | 8 | L |
+| [T0034](tasks/T0034-cli.md) | CLI (optional) | 3 | T0038 | 8 | M |
 | [T0035](tasks/T0035-docs-site.md) | Documentation site, progress page and deployment | 3 | T0022 | 2 | L |
+| [T0036](tasks/T0036-playground.md) | Simple FHIRPath playground | 3 | T0025, T0035 | 6 | M |
+| [T0037](tasks/T0037-first-release-readiness.md) | First 0.1 release readiness | 1 | T0025, T0036 | 7 | M |
+| [T0038](tasks/T0038-public-api-completion.md) | Complete the phase-1 public API and documentation | 1 | T0007, T0010, T0011, T0012, T0013, T0014, T0015, T0016, T0017, T0021, T0023, T0024, T0025 | 7 | L |
 
 ## Dependency graph
 
@@ -86,7 +89,9 @@ flowchart TD
     T0022["T0022 Conformance runner"]
     T0023["T0023 XML fixture conversion"]
     T0024["T0024 Static analysis"]
-    T0025["T0025 Public API + docs + 0.1.0"]
+    T0025["T0025 Minimal sync API"]
+    T0037["T0037 First 0.1 readiness"]
+    T0038["T0038 Complete phase-1 API + docs"]
   end
 
   subgraph P2["Phase 2: STU"]
@@ -103,6 +108,7 @@ flowchart TD
     T0033["T0033 Benchmarks + performance"]
     T0034["T0034 CLI"]
     T0035["T0035 Docs site + progress page"]
+    T0036["T0036 Playground"]
   end
 
   T0000 --> T0001 & T0003 & T0004 & T0005 & T0022
@@ -119,8 +125,11 @@ flowchart TD
   T0019 & T0022 --> T0023
   T0022 --> T0035
   T0018 & T0019 --> T0024
-  T0007 & T0010 & T0011 & T0012 & T0013 & T0014 & T0015 & T0016 & T0017 & T0021 & T0023 & T0024 --> T0025
-  T0025 --> T0026 & T0027 & T0028 & T0029 & T0030 & T0031 & T0032 & T0033 & T0034
+  T0007 & T0008 & T0009 & T0010 & T0023 --> T0025
+  T0025 & T0035 --> T0036
+  T0025 & T0036 --> T0037
+  T0007 & T0010 & T0011 & T0012 & T0013 & T0014 & T0015 & T0016 & T0017 & T0021 & T0023 & T0024 & T0025 --> T0038
+  T0038 --> T0026 & T0027 & T0028 & T0029 & T0030 & T0031 & T0032 & T0033 & T0034
 ```
 
 ## Waves (suggested order)
@@ -134,16 +143,26 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 | 2 | T0002, T0006, T0019, T0035 | 4 | T0035 is tooling and can start as soon as the conformance runner is merged. |
 | 3 | T0007, T0008, T0009, T0023 | 4 | T0008 is on the critical path; staff it first. |
 | 4 | T0010, T0011, T0012, T0013, T0014, T0015, T0016, T0017, T0018 | up to 9 | Function groups only add files in `src/functions/`, so they rarely conflict. |
-| 5 | T0020, T0024 | 2 | |
-| 6 | T0021 | 1 | |
-| 7 | T0025 | 1 | Phase 1 complete → release 0.1.0. |
+| 5 | T0020, T0024, T0025 | 3 | Minimal public API can land while the rest of phase 1 continues. |
+| 6 | T0021, T0036 | 2 | Hooks/async and the simple playground are independent. |
+| 7 | T0037, T0038 | 2 | First-release readiness and full phase-1 API completion are independent milestones. |
 | 8 | T0026–T0034 | up to 9 | STU features, FHIR phase 2, performance and CLI, all independent. |
 
-**Critical path:** T0000 → T0001 → T0002 → T0008 → T0018 → T0020 → T0021 → T0025. Delays on these tasks delay the 0.1.0 release. Everything else has slack.
+## Incremental releases
+
+The first 0.1 release does not wait for full phase 1. Wave 3 is merged (including T0008 and T0023, with #110 fixing the UCUM conformance adapter); finish T0010, expose the small synchronous model-less API in T0025, add the T0036 playground and prepare the owner-run release in T0037. T0035 is completed history and is not reopened for the playground.
+
+**First-release dependency path:** wave 3 → T0010 → T0025 → T0036 → T0037; the completed T0035 site is also a playground prerequisite. Neither the API nor the playground depends on an npm publish. T0036 records the accepted Lectio Docs/Ratio/editor research: retain the site, pin the Ratio JSON editor and use a labelled expression field.
+
+**Later 0.x releases:** function groups, model-aware evaluation, FHIR functions, hooks/async and static analysis land incrementally with updated support, limitations, examples and per-phase conformance. T0038 preserves the original T0025 completion work, including typed output, public parsing (after #107), analysis, async APIs, cache and moving full conformance onto the public API. The existing phase-1 specification target is unchanged; a phase is a scope grouping, not a release number.
+
+Every release documents exactly what is supported and what remains unimplemented, with committed R4/R5 conformance reports and exceptions. Package inclusion is explicit in T0037, since the existing workflow may version several packages together. Publishing remains an owner action under [RELEASING.md](../RELEASING.md). No version number beyond the first 0.1 is promised for a particular feature.
+
+**1.0 is open:** scope, support commitments, conformance gates, API freeze and release criteria require a later owner decision. Neither the first 0.1 nor completing phase 1 or phase 2 automatically constitutes 1.0.
 
 **Conformance becomes measurable** once T0008, T0022 and T0023 are merged (end of wave 3). From wave 4 on, every PR reports its conformance delta.
 
-**Phase 2 (T0026–T0032)** implements the STU parts of N1 and the additions in [FHIRPath 3.0.0](https://hl7.org/fhirpath/STU3/). These tasks are independent of each other and can all run in parallel after 0.1.0. Each one must make its matching conformance tests (those classified *STU*) pass, and update the scope table in [architecture.md](architecture.md#specification-baseline-and-scope).
+**Phase 2 (T0026–T0032)** implements the STU parts of N1 and the additions in [FHIRPath 3.0.0](https://hl7.org/fhirpath/STU3/). These tasks are independent of each other and can all run in parallel after T0038 completes the phase-1 API. Each one must make its matching conformance tests (those classified *STU*) pass, and update the scope table in [architecture.md](architecture.md#specification-baseline-and-scope).
 
 ## Backlog (not scheduled)
 
@@ -152,6 +171,5 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 - FHIR XML as an input format (a separate package that reuses the T0023 converter).
 - A SQL-on-FHIR `ViewDefinition` runner built on Callis.
 - A differential test harness against `fhirpath.js` and the HL7 Java engine.
-- An interactive FHIRPath playground on the documentation site ([T0035](tasks/T0035-docs-site.md)): a client-side route that imports `@callis/core` and evaluates expressions in the browser. Needs the public API of T0025.
 - An optional "compiled sync-only" build mode, if T0033 shows a significant gain.
-- API stabilisation for 1.0: review the public API surface (the `@callis/core` exports, `ModelProvider`, the conformance `EvaluatorAdapter`, the error codes) and decide what is frozen for 1.0. Until then, 0.x releases may break any of it ([T0025](tasks/T0025-public-api-release.md#public-api-sketch)).
+- API stabilisation for 1.0: review the public API surface (the `@callis/core` exports, `ModelProvider`, the conformance `EvaluatorAdapter`, the error codes) and decide what is frozen for 1.0. Until then, 0.x releases may break any of it ([T0038](tasks/T0038-public-api-completion.md#public-api-sketch)).

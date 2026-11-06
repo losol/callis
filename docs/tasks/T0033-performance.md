@@ -2,7 +2,7 @@
 
 Part of the [roadmap](../roadmap.md). Phase 3 · wave 8 · size L.
 
-- **Depends on:** [T0025](T0025-public-api-release.md)
+- **Depends on:** [T0038](T0038-public-api-completion.md)
 
 ## Goal
 

@@ -104,7 +104,7 @@ flowchart LR
 | Analyzer (optional) | Semantic checks and type inference, given a model and input type. Never changes the AST. | [T0024](tasks/T0024-static-analysis.md) |
 | Compiler | AST to a tree of closures. Functions, type specifiers and literals are resolved once. | [T0008](tasks/T0008-compiler-evaluator.md) |
 | Runtime | Evaluates the closure tree. Reentrant and safe for concurrent async evaluations. | [T0008](tasks/T0008-compiler-evaluator.md), [T0021](tasks/T0021-hooks-async.md) |
-| Output adapter | Converts internal values to plain JSON-friendly values or typed values. | [T0025](tasks/T0025-public-api-release.md) |
+| Output adapter | Converts internal values to plain JSON-friendly values or typed values. | [T0025](tasks/T0025-public-api-release.md), [T0038](tasks/T0038-public-api-completion.md) |
 
 Everything up to and including the compiler is pure and deterministic. The AST is plain, JSON-serializable data, so tools such as formatters and editor integrations can use it directly.
 
@@ -143,25 +143,20 @@ JavaScript primitives cover the most common types without wrappers, and dispatch
 
 ## Public API at a glance
 
+The first public evaluation surface is model-less and synchronous ([T0025](tasks/T0025-public-api-release.md)):
+
 ```ts
-import { compile, evaluate, evaluateAsync, parse } from '@callis/core';
-import { r4 } from '@callis/fhir-r4';
-import { ucum } from '@callis/ucum';
+import { compile, evaluate } from '@callis/core';
 
-const given = evaluate(patient, 'Patient.name.given');                     // one-off, cached
-
-const isHigh = compile("Observation.value.ofType(Quantity) > 5 'mg/dL'", { model: r4, units: ucum });
-isHigh.evaluate(observation);                                              // compile once, run many times
-
-const names = await evaluateAsync(bundle, 'Bundle.entry.resource.subject.resolve().name', {
-  model: r4,
-  hooks: { resolve: (ref) => client.read(ref) },                           // I/O-backed hook
-});
-
-const ast = parse("name.where(use = 'official').given");                   // AST for tooling
+const given = evaluate(patient, 'Patient.name.given');
+const names = compile('Patient.name.given');
+names.evaluate(patient);
+const exact = evaluate({}, '1.234', { decimalOutput: 'string' });
 ```
 
-The full sketch, including options, output modes and limits, is in [T0025](tasks/T0025-public-api-release.md#public-api-sketch). Errors are described in [T0000](tasks/T0000-scaffold.md#errors-and-diagnostics).
+This is a planned surface until T0025 lands. It exposes only implemented capabilities, preserves the existing exported provider/unit contracts and provides plain JSON-friendly results plus stable public errors. Public parsing/AST access waits for [#107](https://github.com/losol/callis/issues/107). Model options, typed output, analysis, hooks, async evaluation and compile caching remain in the [later API sketch](tasks/T0038-public-api-completion.md#public-api-sketch); their presence in the pipeline describes the target architecture, not current release support. Errors are described in [T0000](tasks/T0000-scaffold.md#errors-and-diagnostics).
+
+The first 0.1 release follows the minimal API and [simple playground](tasks/T0036-playground.md), with support, limitations and conformance documented in [T0037](tasks/T0037-first-release-readiness.md). Later 0.x releases advance toward full phase 1 without changing its specification baseline. The scope and criteria for 1.0 remain open.
 
 **Stability:** releases before 1.0 may break the public API, including `ModelProvider`, but only as a last resort: APIs are designed with later tasks in mind, and each breaking change states its reason in its PR and is called out in its changeset ([API changes](../CONTRIBUTING.md#api-changes)). Stabilising the API is a goal for 1.0, not for 0.1.0 ([roadmap backlog](roadmap.md#backlog-not-scheduled)).
 
@@ -256,7 +251,7 @@ Line coverage for the core (excluding generated code) is reported in CI with a t
   - parsing has a maximum nesting depth, and the compiler applies the same limit to the whole expression tree, including long chains such as `a.b.c…` or `x and y and …` that the parser builds in a loop (`syntax/nesting-limit`, never a stack overflow)
   - a `Decimal` has at most 10,000 digits and a scale of at most 10,000. Arithmetic beyond that is overflow or underflow and gives empty, as FHIRPath 3.0.0 requires, instead of growing without limit ([T0004](tasks/T0004-decimal.md#design-notes))
   - `repeat()` deduplicates per the spec, which only guarantees termination for projections that navigate a finite input tree. A value-generating projection such as `'x'.repeat($this & 'x')` never runs out of new items.
-  - every evaluation therefore has finite default limits (`limits.maxRepeatItems`, `limits.maxCollectionSize`), and exceeding them raises `eval/limit-exceeded` in both sync and async mode ([T0012](tasks/T0012-fn-filtering.md), [T0025](tasks/T0025-public-api-release.md#public-api-sketch))
+  - every evaluation therefore has finite default limits (`limits.maxRepeatItems`, `limits.maxCollectionSize`), and exceeding them raises `eval/limit-exceeded` in both sync and async mode ([T0012](tasks/T0012-fn-filtering.md), [T0038](tasks/T0038-public-api-completion.md#public-api-sketch))
   - async evaluations can be cancelled with a signal ([T0021](tasks/T0021-hooks-async.md#sync-and-async))
 - **Errors** never include input data beyond the expression text, so diagnostics are safe to log.
 
