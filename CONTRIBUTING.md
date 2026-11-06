@@ -168,7 +168,7 @@ Every agent-managed work PR is opened as a draft and stays a draft until all of 
 
 **Back to draft.** A new commit or a new required finding after the PR is ready turns it back into a draft until the new head meets the criteria again. CI and the native review run on drafts; never mark a PR ready for a moment to start them. Copilot reviews only after the PR is ready, so its review is not a criterion; a required finding from it sends the PR back to draft like any other.
 
-**Agent setup.** Implementation runs on Claude Opus 5.5. The native AO review runs with the Codex harness, model `gpt-6-astra`, at high effort. When the owner changes these, this paragraph changes with them.
+**Agent setup.** Implementation runs on Codex (owner authorization, 2026-11-06). The native AO review runs with the Codex harness, model `gpt-6-astra`, at high effort. When the owner changes these, this paragraph changes with them.
 
 **Contributions by people** that no agent manages follow the reviews the maintainers require; the native AO review and the orchestrator apply to agent work only.
 
