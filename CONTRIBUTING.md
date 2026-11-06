@@ -334,6 +334,7 @@ You need Node.js 22.18+, 24.11+ or 26+ (the `engines` range in `package.json`, s
 | `pnpm site:dev` | Collect the documents and run the [documentation site](#documentation-site) locally. |
 | `pnpm site:build` | Build the documentation site into `apps/site/build/client/`. Needs the whole git history for the progress page. |
 | `pnpm check:packages` | Run publint, attw, the zero-dependency check and the size report. Needs a build first. |
+| `pnpm check:release` | Test all five first-release packages in fresh packed Node/TypeScript and Vite/Chromium consumers. Model providers supply metadata; public model-aware evaluation remains separate work. |
 | `pnpm check:title "feat(core): add lexer"` | Check a PR title against the rules above, as CI does. |
 | `pnpm check:roadmap` | Check that the roadmap and the task files agree. |
 | `pnpm sync:roadmap` | Show what the [roadmap sync](#roadmap-sync) would change on GitHub. Add `--apply` to make the changes. |

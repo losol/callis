@@ -47,6 +47,7 @@ jobs:
                tools/model-gen \
                packages/fhir-r4/src/provider.ts packages/fhir-r4/src/model-data.ts \
                packages/fhir-r5/src/provider.ts packages/fhir-r5/src/model-data.ts \
+               packages/fhir-r6 \
                .github/workflows/model-gen.yml .github/workflows/ci.yml; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -161,7 +162,7 @@ jobs:
         run: pnpm --filter @callis/site exec playwright install --with-deps chromium
       - name: Test the playground in Chromium
         run: pnpm --filter @callis/site run test:browser
-      - name: Test all four packed packages in Node and Vite
+      - name: Test all five packed packages in Node and Vite
         run: pnpm check:release
       # A build that produced an empty site, or only the fallback page, must not pass.
       - name: Check the build output
