@@ -37,11 +37,11 @@ test('runs public-API presets and clears stale output on edit or reset', async (
     ['Missing field', '[]'],
     ['Boolean logic', '[\n  true\n]'],
     ['Exact decimal', '[\n  "0.3"\n]'],
-  ]) {
+  ] as const) {
     await page.getByRole('button', { name, exact: true }).click();
     await expect(output).toHaveCount(0);
     await run.click();
-    await expect(output).toHaveText(expected ?? '');
+    await expect(output).toHaveText(expected);
   }
   await page.getByLabel('FHIRPath expression').fill('Patient.active');
   await expect(output).toHaveCount(0);
