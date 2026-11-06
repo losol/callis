@@ -8,6 +8,15 @@ test('loads the editor and evaluator only after entering the playground', async 
   expect(requests.some((url) => url.includes('playground-client-'))).toBe(false);
   await page.getByRole('link', { name: 'Playground', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Input JSON', exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/playground$/);
+  await expect(page.getByRole('link', { name: 'Playground', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(page.getByRole('link', { name: 'Docs', exact: true })).not.toHaveAttribute(
+    'aria-current',
+    'page',
+  );
   expect(requests.some((url) => url.includes('playground-client-'))).toBe(true);
 });
 
@@ -18,6 +27,14 @@ test('prerenders a labelled shell and hydrates the direct route', async ({ page,
   expect(response.ok()).toBe(true);
   expect(await response.text()).toContain('Loading the JSON editor and evaluator');
   await page.goto('/playground/');
+  await expect(page.getByRole('link', { name: 'Playground', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(page.getByRole('link', { name: 'Docs', exact: true })).not.toHaveAttribute(
+    'aria-current',
+    'page',
+  );
   await expect(page.getByRole('textbox', { name: 'Input JSON', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Run expression', exact: true }).click();
   await expect(page.locator('.playground-output pre')).toContainText('Ada');
