@@ -3,6 +3,7 @@ import {
   add,
   compare,
   divide,
+  MAX_MAGNITUDE_BITS,
   MAX_RATIONAL_BITS,
   multiply,
   ONE,
@@ -47,13 +48,16 @@ describe('rational', () => {
     expect(power(r(0n) ?? ONE, -1)).toBeUndefined();
   });
 
+  // Computing these powers first would take far longer than the test timeout.
   it('rejects magnitudes beyond the size bound before computing them', () => {
-    const start = Date.now();
     expect(power(r(10n) ?? ONE, 1_000_000_000)).toBeUndefined();
     expect(power(r(3n) ?? ONE, MAX_RATIONAL_BITS)).toBeUndefined();
+    expect(power(r(10n) ?? ONE, 2_000, MAX_MAGNITUDE_BITS)).toBeUndefined();
+    expect(power(r(10n) ?? ONE, 2_000)).toBeDefined();
     expect(r(2n ** BigInt(MAX_RATIONAL_BITS))).toBeUndefined();
     expect(r(2n ** BigInt(MAX_RATIONAL_BITS - 1))).toBeDefined();
-    expect(Date.now() - start).toBeLessThan(2_000);
+    expect(rational(2n ** BigInt(MAX_MAGNITUDE_BITS), 1n, MAX_MAGNITUDE_BITS)).toBeUndefined();
+    expect(rational(2n ** BigInt(MAX_MAGNITUDE_BITS - 1), 1n, MAX_MAGNITUDE_BITS)).toBeDefined();
   });
 
   // The number format of the essence file's value attributes.

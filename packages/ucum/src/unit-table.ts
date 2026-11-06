@@ -1,7 +1,7 @@
 import type { Atom, SpecialScale, UnitLookup } from './atom.ts';
 import { axis, combineDimensions } from './dimension.ts';
 import type { EssenceData, EssenceUnit } from './essence/essence-reader.ts';
-import { multiply, ONE, parseDecimalText, type Rational } from './rational.ts';
+import { MAX_MAGNITUDE_BITS, multiply, ONE, parseDecimalText, type Rational } from './rational.ts';
 import { resolveUnit } from './resolve-unit.ts';
 
 /**
@@ -98,7 +98,7 @@ function defineAtom(definition: EssenceUnit, lookup: UnitLookup): Atom | undefin
   ) {
     return undefined;
   }
-  const magnitude = multiply(value, unit.magnitude);
+  const magnitude = multiply(value, unit.magnitude, MAX_MAGNITUDE_BITS);
   if (magnitude === undefined) return undefined;
   let special: SpecialScale | undefined;
   if (definition.function !== undefined) {

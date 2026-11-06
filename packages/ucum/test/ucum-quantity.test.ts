@@ -226,6 +226,39 @@ describe('unit conversion', () => {
   });
 });
 
+// Unit strings can come from untrusted data. Before the magnitude bound, the first two strings
+// below took about a minute and half a minute; they now fail fast, well within the test timeout.
+describe('bounded work', () => {
+  it('rejects units whose magnitude grows beyond the bound', () => {
+    expect(ucum.parse(Array.from({ length: 2_000 }, () => '[pi]').join('.'))).toBeUndefined();
+    const quotients = Array.from({ length: 5_000 }, () => '[pi]2').join('/');
+    expect(ucum.convert(Decimal.ONE, quotients, '1')).toBeUndefined();
+    expect(ucum.parse('[pi]300')).toBeUndefined();
+    expect(ucum.multiply('[pi]10', '[pi]300')).toBeUndefined();
+    expect(ucum.parse('[pi]10')?.unit).toBe('[pi]10');
+  });
+
+  it('combines long units with many different symbols', () => {
+    const symbols = ['km', 'Mm', 'mm', 'um', 'kg', 'mg', 'ug', 'kL', 'mL', 'ks', 'ms', 'kPa', 'MJ'];
+    const cancelling = Array.from(
+      { length: 2_000 },
+      (_, index) => `${symbols[index % symbols.length]}/${symbols[index % symbols.length]}`,
+    ).join('.');
+    expect(ucum.multiply(cancelling, 'g')).toEqual({ unit: 'g', factor: Decimal.ONE });
+    expect(ucum.convert(Decimal.ONE, `${cancelling}.g`, 'kg')?.toString()).toBe('0.001');
+  });
+
+  it('rejects products and quotients whose unit would leave the magnitude bound', () => {
+    expect(ucum.multiply('km200', 'km200')?.unit).toBe('km400');
+    expect(ucum.parse('km400')?.unit).toBe('km400');
+    expect(ucum.parse('km250')?.unit).toBe('km250');
+    expect(ucum.parse('km500')).toBeUndefined();
+    expect(ucum.multiply('km250', 'km250')).toBeUndefined();
+    expect(ucum.divide('km250', '/km250')).toBeUndefined();
+    expect(multiplyQuantity(q('1', 'km250'), q('1', 'km250'), ucum)).toBeUndefined();
+  });
+});
+
 describe('unit algebra', () => {
   it.each([
     ['cm', '/', 'm', "0.01 '1'"],
@@ -234,6 +267,8 @@ describe('unit algebra', () => {
     ['mg/dL', '*', 'dL', "1 'mg'"],
     ['J/kg', '*', 'g', "0.001 'J'"],
     ['m/s', '*', 'min', "60 'm'"],
+    ['kg/kg', '*', 'g', "1 'g'"],
+    ['cm/m', '*', 'mm', "0.01 'mm'"],
     ['10*3/uL', '*', 'uL', "1 '10*3'"],
     ['10*3', '*', '10*6', "1 '10*9'"],
     ['10.m', '*', 'm', "10 'm2'"],

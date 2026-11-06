@@ -1,7 +1,7 @@
 import type { Atom, SpecialScale, UnitLookup } from './atom.ts';
 import { combineDimensions, DIMENSIONLESS, type Dimension } from './dimension.ts';
 import { parseUnitExpression, type UnitTermSyntax } from './expression/unit-expression.ts';
-import { multiply, ONE, power, type Rational } from './rational.ts';
+import { MAX_MAGNITUDE_BITS, multiply, ONE, power, type Rational } from './rational.ts';
 
 /** A simple unit of an expression with its exponent, kept for unit algebra. */
 export interface UnitTerm {
@@ -48,7 +48,7 @@ interface Accumulator {
  * tables. Annotations are ignored (§12).
  *
  * @returns the unit, or `undefined` if it is invalid, uses an unknown symbol, has a zero
- *   number, or its magnitude exceeds the rational size bound.
+ *   number, or a magnitude on the way needs more than {@link MAX_MAGNITUDE_BITS} bits.
  * @see https://ucum.org/ucum#section-Semantics
  */
 export function resolveUnit(text: string, lookup: UnitLookup): ResolvedUnit | undefined {
@@ -89,11 +89,15 @@ function accumulate(
         if (!accumulate(component.term, direction, state, lookup)) return false;
         break;
       case 'number': {
-        const value = power({ numerator: component.value, denominator: 1n }, component.exponent);
+        const value = power(
+          { numerator: component.value, denominator: 1n },
+          component.exponent,
+          MAX_MAGNITUDE_BITS,
+        );
         const scaled = value === undefined ? undefined : power(value, direction);
         if (scaled === undefined || scaled.numerator === 0n) return false;
-        const magnitude = multiply(state.magnitude, scaled);
-        const scalar = multiply(state.scalar, scaled);
+        const magnitude = multiply(state.magnitude, scaled, MAX_MAGNITUDE_BITS);
+        const scalar = multiply(state.scalar, scaled, MAX_MAGNITUDE_BITS);
         if (magnitude === undefined || scalar === undefined) return false;
         state.magnitude = magnitude;
         state.scalar = scalar;
@@ -107,9 +111,11 @@ function accumulate(
           break;
         }
         const exponent = component.exponent * direction;
-        const perUnit = multiply(unit.prefix, unit.atom.magnitude);
-        const scaled = perUnit === undefined ? undefined : power(perUnit, exponent);
-        const magnitude = scaled === undefined ? undefined : multiply(state.magnitude, scaled);
+        const perUnit = multiply(unit.prefix, unit.atom.magnitude, MAX_MAGNITUDE_BITS);
+        const scaled =
+          perUnit === undefined ? undefined : power(perUnit, exponent, MAX_MAGNITUDE_BITS);
+        const magnitude =
+          scaled === undefined ? undefined : multiply(state.magnitude, scaled, MAX_MAGNITUDE_BITS);
         const dimension = combineDimensions(state.dimension, unit.atom.dimension, exponent);
         if (perUnit === undefined || magnitude === undefined || dimension === undefined) {
           return false;

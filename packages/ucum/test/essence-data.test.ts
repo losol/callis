@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { readEssence } from '../src/essence/essence-reader.ts';
 import { UCUM_ESSENCE_XML } from '../src/essence/ucum-essence-xml.ts';
+import { MAX_MAGNITUDE_BITS } from '../src/rational.ts';
 import { resolveUnit } from '../src/resolve-unit.ts';
 import { buildUnitTable, EMPTY_UNIT_LOOKUP } from '../src/unit-table.ts';
 
@@ -59,6 +60,20 @@ describe('the pinned essence file', () => {
   it('resolves every unit it defines', () => {
     const unresolved = units.filter((unit) => lookup.atom(unit.code) === undefined);
     expect(unresolved.map((unit) => unit.code)).toEqual([]);
+  });
+
+  it('needs far fewer bits for any magnitude than the magnitude bound', () => {
+    const bits = (value: bigint): number => value.toString(2).length;
+    const largest = Math.max(
+      ...units.map((unit) => {
+        const magnitude = lookup.atom(unit.code)?.magnitude;
+        return magnitude === undefined
+          ? Number.POSITIVE_INFINITY
+          : Math.max(bits(magnitude.numerator), bits(magnitude.denominator));
+      }),
+    );
+    // [cml_i] (circular mil), at 260 bits, is the largest.
+    expect(largest).toBeLessThanOrEqual(MAX_MAGNITUDE_BITS / 8);
   });
 
   it('converts only Cel and [degF] of its special units', () => {

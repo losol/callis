@@ -8,11 +8,12 @@ import {
 } from '@callis/core';
 import type { UnitLookup } from './atom.ts';
 import { decimalToRational, rationalToDecimal, rationalToScale } from './decimal-rational.ts';
-import { sameDimension } from './dimension.ts';
+import { type Dimension, sameDimension } from './dimension.ts';
 import {
   add,
   compare as compareRational,
   divide,
+  MAX_MAGNITUDE_BITS,
   multiply,
   power,
   type Rational,
@@ -79,7 +80,9 @@ export function createUcumUnitSystem(lookup: UnitLookup): UnitSystem {
     if (sign === 1 && a === '1') return { unit: b, factor: Decimal.ONE };
     if (sign === -1 && a === b) return { unit: '1', factor: Decimal.ONE };
     if (left === undefined || right === undefined) return undefined;
-    return canonicalProduct(left, right, sign);
+    const product = canonicalProduct(left, right, sign);
+    // The unit must resolve again within the same bounds, so that later operations can use it.
+    return product === undefined || resolve(product.unit) === undefined ? undefined : product;
   }
 
   return Object.freeze({
@@ -159,10 +162,10 @@ function fromBase(base: Rational, unit: ResolvedUnit): Rational | undefined {
 
 /**
  * The product or quotient of two units in canonical form. Identical simple units add their
- * exponents (`cm2 / cm` is `cm`); a simple unit commensurable with an earlier one is converted
- * into it (`m/s × min` is `m` with factor 60, and `cm / m` is `1` with factor 1/100). Arbitrary
- * and dimensionless units only combine with identical ones. Integer factors and annotations are
- * folded into the scale.
+ * exponents (`cm2 / cm` is `cm`); a simple unit commensurable with an earlier one that has not
+ * cancelled out is converted into it (`m/s × min` is `m` with factor 60, and `cm / m` is `1` with
+ * factor 1/100). Arbitrary and dimensionless units only combine with identical ones. Integer
+ * factors and annotations are folded into the scale.
  * @see https://hl7.org/fhirpath/STU3/en/index.html#multiplication
  */
 function canonicalProduct(
@@ -170,34 +173,44 @@ function canonicalProduct(
   right: ResolvedUnit,
   sign: 1 | -1,
 ): UnitProduct | undefined {
-  let scale = sign === 1 ? multiply(left.scalar, right.scalar) : divide(left.scalar, right.scalar);
+  let scale =
+    sign === 1
+      ? multiply(left.scalar, right.scalar, MAX_MAGNITUDE_BITS)
+      : divide(left.scalar, right.scalar, MAX_MAGNITUDE_BITS);
   const terms: { term: UnitTerm; exponent: number }[] = [];
+  // Maps keep this linear in the number of terms, whatever the input.
+  const bySymbol = new Map<string, { term: UnitTerm; exponent: number }>();
+  const byDimension = new Map<string, { term: UnitTerm; exponent: number }>();
   const inputs = [
     ...left.terms.map((term) => ({ term, exponent: term.exponent })),
     ...right.terms.map((term) => ({ term, exponent: term.exponent * sign })),
   ];
   for (const input of inputs) {
     if (scale === undefined) return undefined;
-    const same = terms.find((entry) => entry.term.symbol === input.term.symbol);
-    const target =
-      same ??
-      (input.term.arbitrary || input.term.dimension.size === 0
-        ? undefined
-        : terms.find(
-            (entry) =>
-              !entry.term.arbitrary && sameDimension(entry.term.dimension, input.term.dimension),
-          ));
+    const merges = !input.term.arbitrary && input.term.dimension.size > 0;
+    const key = merges ? dimensionKey(input.term.dimension) : '';
+    const same = bySymbol.get(input.term.symbol);
+    const target = same ?? (merges ? byDimension.get(key) : undefined);
     if (target === undefined) {
-      terms.push({ term: input.term, exponent: input.exponent });
+      const entry = { term: input.term, exponent: input.exponent };
+      terms.push(entry);
+      bySymbol.set(input.term.symbol, entry);
+      if (merges) byDimension.set(key, entry);
       continue;
     }
     if (target !== same) {
-      const ratio = divide(input.term.magnitude, target.term.magnitude);
-      const factor = ratio === undefined ? undefined : power(ratio, input.exponent);
-      scale = factor === undefined ? undefined : multiply(scale, factor);
+      const ratio = divide(input.term.magnitude, target.term.magnitude, MAX_MAGNITUDE_BITS);
+      const factor =
+        ratio === undefined ? undefined : power(ratio, input.exponent, MAX_MAGNITUDE_BITS);
+      scale = factor === undefined ? undefined : multiply(scale, factor, MAX_MAGNITUDE_BITS);
     }
     target.exponent += input.exponent;
     if (!Number.isSafeInteger(target.exponent)) return undefined;
+    // A unit that cancelled out no longer appears, so later units do not convert into it.
+    if (target.exponent === 0) {
+      bySymbol.delete(target.term.symbol);
+      if (byDimension.get(key) === target) byDimension.delete(key);
+    }
   }
   if (scale === undefined) return undefined;
   const parts = rationalToScale(scale);
@@ -206,6 +219,11 @@ function canonicalProduct(
   return parts.divisor === undefined
     ? { unit, factor: parts.factor }
     : { unit, factor: parts.factor, divisor: parts.divisor };
+}
+
+/** A string that two dimensions share exactly when they are the same. */
+function dimensionKey(dimension: Dimension): string {
+  return JSON.stringify([...dimension].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }
 
 /** Writes terms as `a.b2/c/d3`, or `/s` without a numerator, or `1` when nothing is left. */

@@ -15,11 +15,27 @@ export interface Rational {
  */
 export const MAX_RATIONAL_BITS = 70_000;
 
+/**
+ * The largest numerator or denominator of a unit magnitude, in bits (about 1,200 decimal digits).
+ * The largest magnitude in the essence file needs a few hundred bits, and a realistic unit term
+ * a few times more. Unit strings can come from untrusted data, and every `.` or `/` multiplies
+ * magnitudes, so this much smaller bound keeps each step cheap: without it, a 10 kB string of
+ * `[pi].[pi]…` would take about a minute of `BigInt` work before reaching the value bound.
+ */
+export const MAX_MAGNITUDE_BITS = 4_096;
+
 /** The rational 1. */
 export const ONE: Rational = Object.freeze({ numerator: 1n, denominator: 1n });
 
-/** `numerator / denominator` in lowest terms, or `undefined` for a zero denominator or overflow. */
-export function rational(numerator: bigint, denominator = 1n): Rational | undefined {
+/**
+ * `numerator / denominator` in lowest terms, or `undefined` for a zero denominator or when either
+ * part needs more than `limit` bits.
+ */
+export function rational(
+  numerator: bigint,
+  denominator = 1n,
+  limit: number = MAX_RATIONAL_BITS,
+): Rational | undefined {
   if (denominator === 0n) return undefined;
   if (denominator < 0n) {
     numerator = -numerator;
@@ -30,20 +46,28 @@ export function rational(numerator: bigint, denominator = 1n): Rational | undefi
     numerator /= divisor;
     denominator /= divisor;
   }
-  if (bitLength(numerator) > MAX_RATIONAL_BITS || bitLength(denominator) > MAX_RATIONAL_BITS) {
+  if (bitLength(numerator) > limit || bitLength(denominator) > limit) {
     return undefined;
   }
   return { numerator, denominator };
 }
 
-/** `a × b`, or `undefined` on overflow. */
-export function multiply(a: Rational, b: Rational): Rational | undefined {
-  return rational(a.numerator * b.numerator, a.denominator * b.denominator);
+/** `a × b`, or `undefined` when a part needs more than `limit` bits. */
+export function multiply(
+  a: Rational,
+  b: Rational,
+  limit: number = MAX_RATIONAL_BITS,
+): Rational | undefined {
+  return rational(a.numerator * b.numerator, a.denominator * b.denominator, limit);
 }
 
-/** `a / b`, or `undefined` when `b` is zero or on overflow. */
-export function divide(a: Rational, b: Rational): Rational | undefined {
-  return rational(a.numerator * b.denominator, a.denominator * b.numerator);
+/** `a / b`, or `undefined` when `b` is zero or a part needs more than `limit` bits. */
+export function divide(
+  a: Rational,
+  b: Rational,
+  limit: number = MAX_RATIONAL_BITS,
+): Rational | undefined {
+  return rational(a.numerator * b.denominator, a.denominator * b.numerator, limit);
 }
 
 /** `a + b`, or `undefined` on overflow. */
@@ -63,20 +87,24 @@ export function subtract(a: Rational, b: Rational): Rational | undefined {
 }
 
 /**
- * `base ^ exponent` for an integer exponent, or `undefined` for `0 ^ -n` and for results beyond
- * {@link MAX_RATIONAL_BITS}. The size is checked before the power is computed.
+ * `base ^ exponent` for an integer exponent, or `undefined` for `0 ^ -n` and for results with a
+ * part beyond `limit` bits. The size is checked before the power is computed.
  */
-export function power(base: Rational, exponent: number): Rational | undefined {
+export function power(
+  base: Rational,
+  exponent: number,
+  limit: number = MAX_RATIONAL_BITS,
+): Rational | undefined {
   if (!Number.isSafeInteger(exponent)) return undefined;
   if (exponent === 0) return ONE;
   const magnitude = Math.abs(exponent);
   const size = Math.max(bitLength(base.numerator), bitLength(base.denominator));
   // |x|^n needs at most n × bits(x) bits; 1 stays 1 for any n.
-  if (size > 1 && (size - 1) * magnitude > MAX_RATIONAL_BITS) return undefined;
+  if (size > 1 && (size - 1) * magnitude > limit) return undefined;
   const n = BigInt(magnitude);
   return exponent > 0
-    ? rational(base.numerator ** n, base.denominator ** n)
-    : rational(base.denominator ** n, base.numerator ** n);
+    ? rational(base.numerator ** n, base.denominator ** n, limit)
+    : rational(base.denominator ** n, base.numerator ** n, limit);
 }
 
 /** Orders two rationals exactly. */

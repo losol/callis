@@ -32,7 +32,7 @@ The [UCUM license](https://github.com/ucum-org/ucum/blob/main/LICENSE.md) (Versi
 - The MIT-licensed code reads that string once, on first import, and keeps the resolved tables in memory only. No generated subset, converted table or altered definition is stored or distributed.
 - `LICENSE.md` (MIT for the code, the UCUM notice for the data), `SOURCE.md` and `UCUM-LICENSE.md` ship in the package. Tests check the checksums and the byte identity of the embedded string; `check:package` checks the packed tarball, including the bundled string.
 
-The cost, measured on Node.js 24.18 on an Apple M2 (`pnpm --filter @callis/ucum measure`, 30 runs; see the [package README](../../packages/ucum/README.md#size-and-startup)): 16.6 kB minified and gzipped (4.8 kB code, 11.8 kB UCUM text), 22.1 kB gzipped as built (budget 24 kB), and a median of 9.3 ms to import the package in a fresh process, after `@callis/core`.
+The cost, measured on Node.js 24.18 on an Apple M2 (`pnpm --filter @callis/ucum measure`, 30 runs; see the [package README](../../packages/ucum/README.md#size-and-startup)): 16.7 kB minified and gzipped (4.9 kB code, 11.8 kB UCUM text), 22.7 kB gzipped as built (budget 24 kB), and a median of 9.7 ms to import the package in a fresh process, after `@callis/core` (9.3–10.0 ms across runs).
 
 ### Interpretations
 

@@ -15,7 +15,7 @@
  * Results depend on the machine and the Node.js version; they are measurements, not guarantees.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { arch, cpus, platform, release, tmpdir, totalmem } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -85,11 +85,14 @@ try {
   const tarball = readdirSync(temp).find((file) => file.endsWith('.tgz'));
   if (tarball !== undefined) {
     packedBytes = statSync(join(temp, tarball)).size;
-    unpackedBytes = execFileSync('tar', ['-tvzf', join(temp, tarball)], { encoding: 'utf8' })
-      .split('\n')
-      .map((line) => Number(line.trim().split(/\s+/)[4]))
-      .filter((value) => Number.isFinite(value))
-      .reduce((total, value) => total + value, 0);
+    // Extract and sum the files: the columns of `tar -tv` differ between BSD and GNU tar.
+    const extracted = join(temp, 'extracted');
+    mkdirSync(extracted);
+    execFileSync('tar', ['-xzf', join(temp, tarball), '-C', extracted]);
+    unpackedBytes = readdirSync(extracted, { recursive: true, encoding: 'utf8' })
+      .map((file) => statSync(join(extracted, file)))
+      .filter((entry) => entry.isFile())
+      .reduce((total, entry) => total + entry.size, 0);
   }
 } finally {
   rmSync(temp, { recursive: true, force: true });
