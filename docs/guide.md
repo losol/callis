@@ -90,3 +90,9 @@ The [playground](https://callis.losol.no/playground/) runs editable JSON and exp
 The committed [R4](conformance/r4.md) and [R5](conformance/r5.md) reports use the **internal API adapter**, including facilities not exposed by this public facade. Their pass counts are not public model-less API conformance. See the [0.1 inventory](releases/0.1.0.md#conformance) for per-phase counts, exceptions and source pins. Full phase 1 is a later milestone. Later 0.x additions update this matrix; T0038 completes the API later, while 1.0 scope remains an owner decision.
 
 The handwritten API guide and TSDoc are the reference decision for this small release. A generated reference is deferred to T0038. README and guide TypeScript snippets share `examples/public-api.ts`, executed by the documentation tests; the site serves this guide from the same source.
+
+## Planned R6 model metadata
+
+[T0039](tasks/T0039-fhir-r6-model.md) and [T0040](tasks/T0040-fhir-r6-validation.md) implement and verify a real R6 provider from the pinned HL7 `6.0.0-snapshot1` September 2026 draft source. This is planned model metadata, not final R6 stability, a supported public model evaluation option, FHIR validation or an R6 conformance result. The current public evaluator remains model-less; T0018/T0038 own model-aware evaluation and its eventual API. Existing R4/R5 conformance reports measure their named suites only.
+
+The current first-0.1 package inventory remains four. R6 delivery/release ordering requires the [pre-merge owner decision](../RELEASING.md#r6-delivery-decision-before-merge), without blocking implementation or draft review; this is neither automatic inclusion nor permanent exclusion.
