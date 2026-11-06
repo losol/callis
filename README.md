@@ -28,6 +28,22 @@ Once a supported stable release is available:
 npm install @callis/core
 ```
 
+## Quick start
+
+The source/build exports synchronous model-less evaluation. See the [guide](docs/guide.md) for supported features, errors and exact Decimal rendering; this does not announce a published release.
+
+```ts
+import { compile, evaluate, FhirPathError } from '@callis/core';
+
+export const patient: Readonly<{ resourceType: string; name: readonly { given: readonly string[] }[] }> = {
+  resourceType: 'Patient', name: [{ given: ['Ada', 'Mina'] }],
+};
+export const given: unknown[] = evaluate(patient, 'Patient.name.given');
+export const firstGiven: unknown[] = compile('name.given[0]').evaluate(patient);
+```
+
+These return `['Ada', 'Mina']` and `['Ada']`. Default Decimal output uses potentially lossy numbers; `decimalOutput: 'string'` preserves evaluator Decimal digits, but cannot recover digits lost in input JavaScript numbers. Full phase-1 conformance and model-aware evaluation remain future work.
+
 ## License
 
 [MIT](LICENSE)

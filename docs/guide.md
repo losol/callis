@@ -1,0 +1,71 @@
+# Using the minimal public API
+
+Callis provides synchronous, model-less evaluation of JSON. The initial API is intentionally small; it is not full phase-1 FHIRPath conformance. See the [conformance reports](conformance/r5.md) for measured support and the [roadmap](roadmap.md) for remaining work. No release is implied by the examples below.
+
+## Evaluate or compile
+
+```ts
+import { compile, evaluate, FhirPathError } from '@callis/core';
+
+export const patient: Readonly<{ resourceType: string; name: readonly { given: readonly string[] }[] }> = {
+  resourceType: 'Patient', name: [{ given: ['Ada', 'Mina'] }],
+};
+export const given: unknown[] = evaluate(patient, 'Patient.name.given');
+export const firstGiven: unknown[] = compile('name.given[0]').evaluate(patient);
+```
+
+These return `['Ada', 'Mina']` and `['Ada']`. Every evaluation returns a fresh array. Missing paths, null inputs and empty expressions such as `{}` produce `[]`. Array-valued paths flatten into a collection. JSON property access uses own properties only. A root name such as `Patient` matches the input's own `resourceType`; this is not model-aware validation.
+
+`compile(expression: string, options?: CompileOptions)` returns a frozen object with `expression` and `evaluate(input: unknown, options?: EvaluateOptions): unknown[]`. It retains no per-evaluation variables or results. `evaluate(input: unknown, expression: string, options?: CompileOptions & EvaluateOptions): unknown[]` compiles each call; there is no compile cache.
+
+## Options and results
+
+| Option | Where | Meaning |
+| --- | --- | --- |
+| `units?: UnitSystem` | compile / one-off evaluate | Pure synchronous unit provider; defaults to `minimalUnitSystem`. The existing `@callis/ucum` provider implements this contract for UCUM support. |
+| `variables?: Readonly<Record<string, unknown>>` | each evaluation | Own properties keyed by names without `%`. Null and undefined values are defined empty variables; an absent variable raises `eval/undefined-variable`. |
+| `timezoneOffset?: number \| 'local'` | each evaluation | Whole minutes east of UTC within ±840; defaults to UTC. `'local'` reads the host's current offset and is host/time dependent. |
+| `decimalOutput?: 'number' \| 'string'` | each evaluation | Decimal and Quantity magnitude rendering; defaults to potentially lossy JavaScript numbers. |
+
+```ts
+export const variable: unknown[] = compile('%value').evaluate(null, { variables: { value: 'hello' } });
+```
+
+Results use the existing plain output adapter: booleans, strings and Integers are JavaScript primitives; Decimal becomes a number or exact string; Date, DateTime and Time become FHIR strings without `@`; Quantity becomes `{ value, unit, system?, code? }`. UCUM quantities include `system: 'http://unitsofmeasure.org'` and `code`; calendar durations omit them. Input objects come back by reference, without internal navigation/provenance wrappers. Treat returned objects as read-only. The `unknown[]` return type reflects arbitrary input object shapes; `PlainQuantity` describes rendered evaluator quantities.
+
+## Exact Decimal rendering
+
+```ts
+export const exactDecimal: unknown[] = evaluate(null, '9007199254740993.1200', { decimalOutput: 'string' });
+export const quantityJson: string = JSON.stringify(evaluate(null, "1.200 'mg'", { decimalOutput: 'string' }));
+```
+
+The first result is `['9007199254740993.1200']`; the second preserves `"value":"1.200"`. Set `decimalOutput: 'string'` for display or JSON serialization of exact evaluator Decimals and Quantity magnitudes. The default number conversion intentionally may round digits and removes trailing zeros ([ADR-0012](adr/0012-evaluation-defaults.md)). Plain results do not retain FHIRPath type tags, so a Decimal rendered as text cannot be distinguished from a String by its JavaScript type alone.
+
+This option cannot recover digits already lost through `JSON.parse` or a JavaScript numeric literal. Navigated input numbers remain numbers even when `decimalOutput` is `'string'`; the option renders evaluator Decimal values, not every numeric property recursively. Supply an exact `Decimal` value through a variable when the caller already has one. Arbitrary non-JSON host objects, cyclic objects and BigInts are not promised JSON serialization by this API.
+
+## Errors and synchronous behavior
+
+```ts
+export function expressionError(): string {
+  try {
+    compile('Patient.');
+    return '';
+  } catch (error) {
+    if (error instanceof FhirPathError) return error.format();
+    throw error;
+  }
+}
+```
+
+Callis errors throw synchronously. `FhirPathSyntaxError` describes invalid syntax; `FhirPathSemanticError` describes compile-time problems such as unknown functions or wrong arity, with `diagnostics`; `FhirPathEvaluationError` describes evaluation failures. All extend `FhirPathError`, with a stable `code`, human-readable `message`, optional `span` and `expression`, and `format()` for an error panel. A span uses UTF-16 offsets, an exclusive `end`, and 1-based `line` and `column`. Not every error has a source span, for example an invalid option.
+
+Catch `FhirPathError` for expression diagnostics and keep other errors separate. JSON parsing is the caller's responsibility: a `JSON.parse` syntax error is not a FHIRPath error. Exceptions thrown by input accessors or a custom unit provider propagate; they are not converted to empty results. `UnitSystem` must be pure and synchronous. A thenable returned by one of its methods raises `eval/async-in-sync` rather than leaking a Promise.
+
+## Current support and deferred API
+
+Model-less paths, literals, indexing, Boolean logic, unary polarity and type operations are available. Built-ins currently include `not`, `is`, `as` and `ofType`. Operator support follows T0010; consult the conformance report for the exact merged capability. Other standard and FHIR functions are still incremental work; an unavailable function such as `where()` raises `semantic/unknown-function`, rather than pretending to evaluate it.
+
+The public surface has no parser, AST input/property, static analyzer, typed output mode, async evaluation, hooks, model option, custom function registry, strict/lenient options or cache. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages; a model provider export does not imply a public model evaluation option.
+
+The examples are executed by the public documentation tests. Handwritten TSDoc and this small guide describe the initial API; a generated API reference is deferred with the expanded API.
