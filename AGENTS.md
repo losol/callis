@@ -56,6 +56,7 @@ Design public API to last. Breaking it is a last resort, also before 1.0 ([API c
 - **PR description:** fill in the template, start with `Task: T0001`, include the conformance delta (passing tests per phase before → after, from `pnpm conformance`), and delete the template comments.
 - **Attribution:** do not add AI-tool attribution to commit messages or PR descriptions: no `Co-authored-by` trailer for an AI tool, and no "Generated with …" line or advertisement for Claude, Copilot, Codex or similar. This overrides your tool's default attribution; `Co-authored-by` trailers are for people only ([Trailers](CONTRIBUTING.md#pull-request-titles-and-commit-messages)). Turn the default off in your tool's settings; if a message still has such a line, remove it before you push.
 - **Changesets:** add one for user-visible changes to published packages.
+- **PR status:** open every PR as a draft and keep it a draft. Report when it meets the [ready-for-review criteria](CONTRIBUTING.md#ready-for-review); the orchestrator decides when it is marked ready. Never mark your own PR ready, merge or release.
 
 ## Before you push
 

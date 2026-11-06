@@ -21,10 +21,11 @@ Everything in this repository is written in English.
 
 1. **Pick a task** from the [roadmap](docs/roadmap.md) whose dependencies are merged. One task is one pull request. Small fixes outside the task list are welcome as their own PRs.
 2. **Branch** from `main`.
-3. **Open a draft PR early** and fill in the template.
-4. **Make it pass** `pnpm check` (see [Commands](#commands)).
-5. **Mark it ready for review.** Address every review comment: fix it, or reply with the reason you did not. Resolve the thread when it is done.
-6. **The owner approves and squash-merges.** Approval from an AI reviewer never replaces the owner's approval.
+3. **Open a draft PR early** and fill in the template. It stays a draft until it meets the [ready-for-review criteria](#ready-for-review).
+4. **Make it pass** `pnpm check` (see [Commands](#commands)). CI runs on the draft, and so does the native AO review of agent work.
+5. **Address every review comment:** fix it, or reply with the reason you did not. Resolve the thread when it is done.
+6. **Mark it ready for review** once it meets the [criteria](#ready-for-review). For agent work, the orchestrator decides this, never the worker.
+7. **The owner approves and squash-merges.** Approval from an AI reviewer never replaces the owner's approval.
 
 ## Branches
 
@@ -85,8 +86,30 @@ PR titles follow [Conventional Commits 1.0.0](https://www.conventionalcommits.or
 - **One task per PR.** Stay within the task's scope. Open a follow-up issue for anything else and list it in the description ([Findings during a task](#findings-during-a-task)).
 - **Keep PRs reviewable.** If hand-written changes grow far beyond a few hundred lines, split along the task's natural seams (for example `T0008a` and `T0008b`) and update the task file. Generated files do not count.
 - **Fill in the template.** The description becomes the commit body on `main`, so keep it accurate and delete the template comments. It must start with `Task: T0001` (or `Task: none`) so `git log --grep "Task: T0001"` finds the commit.
-- **Reviews:** Copilot reviews every PR automatically. An AO review can be requested for implementation PRs. The owner's approval is required to merge.
+- **Reviews:** Copilot reviews PRs automatically once they are ready for review; the repository rules skip drafts. Agent-managed PRs also need the native AO review ([Ready for review](#ready-for-review)). The owner's approval is required to merge.
 - **Stay up to date** with `main` by merging it into your branch; avoid force-pushing after review has started.
+
+## Ready for review
+
+Every agent-managed work PR is opened as a draft and stays a draft until all of these hold for its current head commit:
+
+1. The scope is done, including the docs it affects (the task file, `docs/spec-notes.md`, READMEs and guides).
+2. CI is green on the latest commit.
+3. The required native AO reviewer approved that exact commit.
+4. Every required review finding is handled, and no actionable review thread is unresolved.
+5. No task change is left unpublished: everything is committed and pushed.
+
+**Who decides.** The worker reports that its PR is ready, and the orchestrator checks the criteria and decides. The orchestrator may have another session carry out the transition once it has checked, but a worker never marks its own PR ready.
+
+**What it means.** *Ready for review* is the agents' signal that the work is complete and waits for the owner's final review. It never authorizes a merge or a release. An AO approval is not a GitHub approval and does not replace the approvals the branch rules require ([Repository settings](#repository-settings)).
+
+**Back to draft.** A new commit or a new required finding after the PR is ready turns it back into a draft until the new head meets the criteria again. CI and the native review run on drafts; never mark a PR ready for a moment to start them. Copilot reviews only after the PR is ready, so its review is not a criterion; a required finding from it sends the PR back to draft like any other.
+
+**Agent setup.** Implementation runs on Claude Opus 5.5. The native AO review runs with the Codex harness, model `gpt-6-astra`, at high effort. When the owner changes these, this paragraph changes with them.
+
+**Contributions by people** that no agent manages follow the reviews the maintainers require; the native AO review and the orchestrator apply to agent work only.
+
+**Release PRs** are not work PRs. The version PR keeps its own rules ([Releases](#releases)): it is never marked ready or merged automatically.
 
 ## Findings during a task
 
@@ -147,6 +170,7 @@ Do not change the synced data on GitHub by hand; change the roadmap instead. The
 
 A PR is ready to merge when:
 
+- it has been marked ready for review; an agent-managed PR meets the [ready-for-review criteria](#ready-for-review) on its current head
 - the acceptance criteria in its task file are met
 - `pnpm check` is green
 - new behaviour has tests that cite the spec section they cover ([testing guide](docs/guides/testing.md))
