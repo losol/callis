@@ -20,11 +20,13 @@ The [first-0.1 inventory and owner checklist](docs/releases/0.1.0.md) records th
 
 These are release-preparation requirements, not authorization for an agent to publish, merge a version PR or change settings. Use the current files as evidence: core already has a prerelease version in the repository, so the initial `0.0.0` examples below describe first-package setup rather than current state.
 
-## R6 delivery decision before merge
+## Five-package first release
 
-R6 implementation is scheduled in [T0039](docs/tasks/T0039-fhir-r6-model.md) and [T0040](docs/tasks/T0040-fhir-r6-validation.md), using published `6.0.0-snapshot1` draft model metadata. Development, verification and draft review are authorized independently of release inclusion. The [current first-0.1 inventory](docs/releases/0.1.0.md) remains exactly four packages; a local R6 placeholder does not establish npm state or authorize a fifth.
+The owner selected R6 for the first stable 0.1 release on 2026-11-06. The [target inventory](docs/releases/0.1.0.md) is `@callis/core`, `@callis/ucum`, `@callis/fhir-r4`, `@callis/fhir-r5` and `@callis/fhir-r6`, all `0.1.0`, with four companion peers `^0.1.0`. R6 supplies published `6.0.0-snapshot1` draft metadata, not final-R6 validation or a public model-aware evaluator option.
 
-Before a publishable R6 workspace package reaches main, the owner chooses either to land R6 ahead of a deliberately regenerated/reviewed version inventory, or to keep R6 branches unmerged until the current release completes. T0040 must provide isolated installed-Changesets discovery/version evidence and collision implications for that decision. The workflow can publish every unpublished workspace package, so source version `0.0.0` and a minor changeset alone are not a staging barrier. Do not silently expand #93, remove changesets, mark R6 private or add conditional release exclusions. No permanent release exclusion is decided here; npm/settings actions and publication remain owner-only.
+[T0039](docs/tasks/T0039-fhir-r6-model.md) supplies the provider; [T0040](docs/tasks/T0040-fhir-r6-validation.md) makes the default and stable release-consumer checks cover five packages. After the approved implementation and plan integrate legitimately, the existing workflow must regenerate the version PR normally. Current #93 observations and temporary five-package simulations do not validate that future candidate: review its exact five versions, peers, changelogs, archives and source/license metadata, run the actual packed consumers and require fresh hosted CI/native review on its immutable head before the owner's release decision.
+
+The existing workflow discovers unpublished workspace packages; source `0.0.0` plus a minor changeset alone does not prevent discovery, while patch-only `0.0.1` can collide with a placeholder. Do not edit #93 manually, remove changesets, mark R6 private or add conditional release exclusions. Local placeholders do not establish npm state. The owner must separately verify all five package names/versions, registry visibility/write permissions, trusted publishers and provenance requirements. Inclusion is decided; merge, npm/settings actions and publication remain separate owner decisions.
 
 ## 1. Reserve the name with a placeholder
 

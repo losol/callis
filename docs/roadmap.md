@@ -174,7 +174,7 @@ Every release documents exactly what is supported and what remains unimplemented
 
 [T0039](tasks/T0039-fhir-r6-model.md) adds real R6 provider metadata from the checksum-pinned `6.0.0-snapshot1` draft source, selected from HL7's published versions on 2026-11-06. [T0040](tasks/T0040-fhir-r6-validation.md) owns installed-package compatibility and shared CI/release-discovery evidence. These tasks extend version coverage without reopening completed T0019 or changing the FHIRPath specification baseline.
 
-R6 metadata is not model-aware evaluator support, a public `model` option, a FHIR validator or R6 conformance. T0018 and T0038 retain those existing engine/API responsibilities. The current first-0.1 inventory remains four packages. Before R6 branches merge, the owner chooses deliberate inclusion through a newly reviewed release inventory or keeping R6 unmerged until the current release completes; neither permanent exclusion nor automatic expansion of #93 is decided. Implementation and draft review proceed before that pre-merge decision.
+R6 metadata is not model-aware evaluator support, a public `model` option, a FHIR validator or R6 conformance. T0018 and T0038 retain those existing engine/API responsibilities. The owner selected R6 for the first 0.1 release on 2026-11-06: the target inventory is core, UCUM, R4, R5 and R6. Integrate the reviewed provider, five-package checks and release plan before the existing workflow regenerates a version PR; then validate and review that exact new five-package candidate. This target is distinct from the currently generated #93 and does not authorize its mutation, merge or publication. See the [inventory and owner gates](releases/0.1.0.md).
 
 ## Backlog (not scheduled)
 

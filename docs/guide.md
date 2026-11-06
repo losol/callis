@@ -82,7 +82,7 @@ This describes the planned 0.1.0 subset at engine revision [9b78e6e](https://git
 | Functions | `not()`, `is()`, `as()`, `ofType()` only. `where`, `select`, `exists`, `resolve` and other standard/FHIR groups are not implemented. |
 | Output | Synchronous plain arrays; exact evaluator Decimal/Quantity strings with `decimalOutput: 'string'`; parsed input numbers retain JavaScript precision limits. |
 | Errors | Public FhirPathError subclasses, codes, optional UTF-16 source spans, semantic diagnostics and formatting; caller handles invalid JSON separately. |
-| Companions | UCUM UnitSystem is usable through `units`; R4/R5 export immutable ModelProvider data, not a public engine `model` option. |
+| Companions | UCUM UnitSystem is usable through `units`; R4/R5 export immutable ModelProvider data. R6 is selected for the first release and is being integrated. None provides a public engine `model` option. |
 | Deferred | Async, hooks, custom functions, parser/AST, analysis, typed output, model-aware evaluation and remaining function groups; tracked by implementation tasks and T0038. |
 
 The [playground](https://callis.losol.no/playground/) runs editable JSON and expressions locally in the browser, with exact evaluator Decimal string rendering and synthetic presets. It does not automatically transmit input JSON. Its results use the same public API; JSON.parse precision limits still apply.
@@ -95,4 +95,4 @@ The handwritten API guide and TSDoc are the reference decision for this small re
 
 [T0039](tasks/T0039-fhir-r6-model.md) and [T0040](tasks/T0040-fhir-r6-validation.md) implement and verify a real R6 provider from the pinned HL7 `6.0.0-snapshot1` September 2026 draft source. This is planned model metadata, not final R6 stability, a supported public model evaluation option, FHIR validation or an R6 conformance result. The current public evaluator remains model-less; T0018/T0038 own model-aware evaluation and its eventual API. Existing R4/R5 conformance reports measure their named suites only.
 
-The current first-0.1 package inventory remains four. R6 delivery/release ordering requires the [pre-merge owner decision](../RELEASING.md#r6-delivery-decision-before-merge), without blocking implementation or draft review; this is neither automatic inclusion nor permanent exclusion.
+The owner selected R6 for the [five-package first release](../RELEASING.md#five-package-first-release). The target is distinct from the currently generated version PR and still requires exact-candidate checks and owner release approval. R4, R5 and R6 use the same named-provider API (`r4`, `r5`, `r6`), with `getType(name)` and `getElement(type, name)` for metadata lookup. These are not generated resource classes or a new evaluator API; no public API shape changes are introduced by this release-plan decision.
