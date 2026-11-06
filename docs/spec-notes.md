@@ -129,6 +129,32 @@ How Callis reads the FHIRPath specification where the text is ambiguous, silent,
 - **Error codes:** the spec only says that evaluation "will signal an error". More than one item raises `eval/singleton-expected`; a single item that does not convert raises `eval/type-mismatch`, because its type is the problem and `first()` would not help. The owner decided this on 2026-11-05.
 - **Code:** `singleton()` in `packages/core/src/runtime/singleton.ts` ([T0003](tasks/T0003-types-and-collections.md)).
 
+## Equality and ordering
+
+Implemented in `packages/core/src/runtime/` (`equality.ts`, `comparison.ts`, `operands.ts`; [T0009](tasks/T0009-equality-kernels.md)).
+
+### Model-less date convenience
+
+- **Spec:** none. This is a Callis extension. [N1 §5.5](https://hl7.org/fhirpath/N1/#conversion) has no implicit String → date/time conversion, and [N1 §6.1.1](https://hl7.org/fhirpath/N1/#equals) and [§6.2](https://hl7.org/fhirpath/N1/#comparison) need operands of the same type. Without a model, plain JSON has no date type, so `birthDate = @1974-12-25` would always be false ([T0003](tasks/T0003-types-and-collections.md#type-system), [#55](https://github.com/losol/callis/issues/55)).
+- **Tests:** no suite test covers model-less input. Direct tests in `operands.test.ts`.
+- **Decision:** only when no model is supplied, a string from untyped input data is read as a date/time when the other operand of `=`, `!=`, `~`, `!~`, `<`, `<=`, `>` or `>=` is one, in either operand order:
+  - Eligible: an input node with no model type whose JSON value is a string. String literals and computed strings never are, and neither is any node when a model is supplied, even if the model does not know the node's type.
+  - Against a Date or DateTime, text without a `T` is parsed as a Date (`parseDate()`) and text with one as a DateTime (`parseDateTime()`); against a Time, as a Time (`parseTime()`). The usual temporal rules follow: partial precision, Date → DateTime, offsets and the evaluation's default offset. So `birthDate < @2000` is true, and `=` between the input text `1974-12` and `@1974-12-25` is empty.
+  - Text that does not parse stays a String: `=` gives `false` and `<` raises `eval/type-mismatch`, as for any String against a date. It never raises `eval/invalid-literal`. Two input strings compare as strings.
+  - The node is not changed and nothing is cached on it, so later String operations on it are unaffected.
+
+### Equivalent collections pair their items one to one
+
+- **Spec:** [N1 §6.1.2](https://hl7.org/fhirpath/N1/#equivalent) says "each item must be equivalent" and that the comparison "is not order dependent", but not whether one item may match several. Equivalence is not transitive: decimals round to the less precise operand, so `1 ~ 1.2` and `1 ~ 1.4` are true but `1.2 ~ 1.4` is false.
+- **Tests:** `testEquivalent20`, `testEquivalent21`, `testEquivalent23`, `testEquivalent24` and their `testNotEquivalent` counterparts.
+- **Decision:** two collections are equivalent when they have the same length and some ordering of one is pairwise equivalent to the other, so each item is used once. `(1 | 1 | 2) ~ (1 | 2 | 2)` is false, and `(1 | 1.2) ~ (1.2 | 1.4)` is true even though pairing `1` with the first equivalent item (`1.2`) would leave `1.2` and `1.4`.
+
+### Complex values without a model
+
+- **Spec:** [N1 §6.1.1](https://hl7.org/fhirpath/N1/#equals) and [§6.1.2](https://hl7.org/fhirpath/N1/#equivalent) compare complex types by "all child properties", recursively, but plain JSON has no type definition that lists them.
+- **Tests:** `testEquality25`–`27`, `testEquivalent19`–`21` (with the FHIR model; T0018 and T0020 refine this for typed values).
+- **Decision:** the child properties are what model-less navigation sees: own properties only, arrays flattened, and `null`, an empty array and a missing property all mean "no value". The order of the properties does not matter. Each child collection is compared with `=` (repeating items in order) or `~` (in any order), so child strings compare exactly or case-insensitively and child numbers by value. Two input strings are never read as dates.
+
 ## Strings
 
 ### String equivalence
