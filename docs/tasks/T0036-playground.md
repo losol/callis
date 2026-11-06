@@ -50,3 +50,12 @@ T0025 → playground → first-release readiness. Neither the public API nor the
 - [ ] The selected pinned JSON editor works with the labelled expression field, prerendered shell and direct-route hydration; FHIRPath-specific code remains in Callis. Editor licensing/source notices are present and generic upstream improvements remain separate.
 - [ ] Keyboard traversal, run/preset focus, search shortcuts, themes, responsive layout and browser interaction checks pass; no console errors. Route chunk sizes/loading and dependency deduplication are checked; `pnpm check` and the site build pass.
 - [ ] Support/limitations and conformance links match the engine revision used by the playground. No package publication or repository/deployment setting changes.
+
+## Optional upstream follow-ups
+
+These generic proposals are separate from Callis and are not release blockers without a demonstrated implementation defect:
+
+- [Ratio #319](https://github.com/losol/ratio-ui/issues/319): accessible field attributes on the editor's editing surface.
+- [Ratio #320](https://github.com/losol/ratio-ui/issues/320): optional precise diagnostic ranges, retaining line diagnostics.
+- [Ratio #321](https://github.com/losol/ratio-ui/issues/321): clarify npm tags and parser packaging in editor documentation.
+- [Lectio #62](https://github.com/losol/lectio-docs/issues/62): configurable command-palette shortcut in React Search.
