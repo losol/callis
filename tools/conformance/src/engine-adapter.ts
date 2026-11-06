@@ -147,8 +147,8 @@ export const engineAdapter: EvaluatorAdapter = {
       return { kind: 'semantic', code: error.code, message };
     }
     if (error instanceof FhirPathEvaluationError) {
-      // An operator (T0010) or a variable that a later task adds.
-      const missing = error.code === 'eval/not-implemented' || isPlannedVariable(error);
+      // A variable that a later task adds.
+      const missing = isPlannedVariable(error);
       return { kind: missing ? 'not-implemented' : 'execution', code: error.code, message };
     }
     return { kind: 'other', code: undefined, message };

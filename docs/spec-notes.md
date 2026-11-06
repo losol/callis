@@ -307,8 +307,8 @@ How the conformance runner ([T0022](tasks/T0022-conformance-runner.md), [`tools/
 ### Features that later tasks add
 
 - **Spec:** none; this is how the runner reports an engine that is still being built ([ADR-0011](adr/0011-conformance-suite.md)).
-- **Tests:** every test that calls a spec function or uses a FHIR variable that the engine does not have yet, or evaluates an operator that T0010 adds. For example `testDollarOrderNotAllowed` (`children()`, `skip()`) and `testSubSetOf3` (`where()`, `subsetOf()`).
-- **Decision:** such a test fails as "not implemented", whatever it expects. Without this rule a test that expects a semantic or execution error would pass because the function is unknown or the operator is missing, and would fail again once the feature exists. The engine adapter checks the parsed expression for functions of the spec that later tasks own and the registry does not have yet. It also classifies `eval/not-implemented` (an operator compiled but not yet implemented) and `eval/undefined-variable` for a FHIR variable that T0020 or T0032 defines as not implemented. Both checks retire themselves as the features arrive. A genuinely unknown function or variable, which no task adds, is still a semantic or execution error.
+- **Tests:** every test that calls a spec function or uses a FHIR variable that the engine does not have yet. For example `testDollarOrderNotAllowed` (`children()`, `skip()`) and `testSubSetOf3` (`where()`, `subsetOf()`).
+- **Decision:** such a test fails as "not implemented", whatever it expects. Without this rule a test that expects a semantic or execution error would pass because the function is unknown, and would fail again once the feature exists. The engine adapter checks the parsed expression for functions of the spec that later tasks own and the registry does not have yet. It also classifies `eval/undefined-variable` for a FHIR variable that T0020 or T0032 defines as not implemented. These checks retire themselves as the features arrive. T0010 removes the temporary operator code `eval/not-implemented`, its compiler stub and its classifier branch (#104). A genuinely unknown function or variable, which no task adds, is still a semantic or execution error.
 - **Code:** `checkImplemented()` and `classifyError()` in `tools/conformance/src/engine-adapter.ts`.
 
 ### Converting the XML inputs
@@ -390,3 +390,17 @@ How the conformance runner ([T0022](tasks/T0022-conformance-runner.md), [`tools/
 - **Spec:** the [UCUM grammar](https://ucum.org/ucum#section-Syntax-Rules) allows no exponent on an integer (`<factor> ::= <digits>`), but §9 says "2+10 means 2^10 = 1024".
 - **Tests:** `parses 2+10` and `parses 10-3` in `packages/ucum/src/expression/unit-expression.test.ts`.
 - **Decision:** follow §9: an integer followed by a signed exponent is raised to that power. An unsigned exponent cannot occur, because a run of digits is one integer (§8). (T0007)
+
+## Operators
+
+### Undetermined equality in union and membership
+
+- **Spec:** [N1 union](https://hl7.org/fhirpath/N1/#union-collections), [membership](https://hl7.org/fhirpath/N1/#in-membership) and [containership](https://hl7.org/fhirpath/N1/#contains-containership) use equality semantics but do not explicitly specify how an undetermined item comparison affects these operators.
+- **Tests:** `collection operators` in `packages/core/test/operators.test.ts`, including `@2020 in @2020-01` and a later definite match after an undetermined comparison. The pinned suite has no such case.
+- **Decision:** only a `true` equality establishes a duplicate or a membership match. Union retains items with undetermined equality; membership returns `false` when no item definitely matches. A later definite match returns `true`. This keeps union’s result a collection and membership’s nonempty search result Boolean, as their definitions require. The original retained item keeps its input provenance.
+
+### Incorrect result comments in N1 ordering examples
+
+- **Spec:** [N1 less or equal](https://hl7.org/fhirpath/N1/#less-or-equal) and [greater or equal](https://hl7.org/fhirpath/N1/#greater-or-equal) define the usual ordering but reverse the result comments for `10 <= 5`, `10 <= 5.0`, `'abc' <= 'ABC'`, and their `>=` counterparts.
+- **Tests:** `ordering operators` in `packages/core/test/operators.test.ts` tests all four operators for each N1 operand pair. The pinned `testLessOrEqual`/`testGreatorOrEqual` groups also exercise numeric/String ordering.
+- **Decision:** follow the operator definitions: `10 <= 5` and `'abc' <= 'ABC'` are false; their `>=` counterparts are true. String order remains Unicode code point order, through the T0009 kernel.

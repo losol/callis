@@ -31,6 +31,7 @@ import { and, implies, or, type TruthValue, xor } from '../runtime/logic.ts';
 import { adoptResult, andThen, isThenable } from '../runtime/maybe-promise.ts';
 import { navigateMember, navigateRoot } from '../runtime/navigation.ts';
 import { toSystemValue } from '../runtime/node-value.ts';
+import { BINARY_OPERATIONS, type BinaryOperation } from '../runtime/operators.ts';
 import { singleton } from '../runtime/singleton.ts';
 import { asType, isType, resolveTypeTarget } from '../runtime/type-target.ts';
 import { lookUpVariable } from '../runtime/variables.ts';
@@ -302,7 +303,6 @@ function compileBinary(node: BinaryNode, cc: CompilerState): Evaluator {
     case 'xor':
     case 'implies':
       return compileLogic(node, LOGIC[node.op], cc);
-    // TODO(T0010): the remaining operators.
     case '*':
     case '/':
     case 'div':
@@ -321,7 +321,7 @@ function compileBinary(node: BinaryNode, cc: CompilerState): Evaluator {
     case '!~':
     case 'in':
     case 'contains':
-      return notImplemented(node, cc);
+      return compileOperation(node, BINARY_OPERATIONS[node.op], cc);
     default:
       return assertNever(node.op, 'operator');
   }
@@ -349,18 +349,19 @@ function compileLogic(
   );
 }
 
-function notImplemented(node: BinaryNode, cc: CompilerState): Evaluator {
-  // The operands are compiled anyway, so their functions and type arguments are checked now.
-  compileNode(node.left, cc);
-  compileNode(node.right, cc);
-  const options = { span: spanOf(node, cc), expression: cc.expression };
-  return () => {
-    throw new FhirPathEvaluationError(
-      'eval/not-implemented',
-      `The ${node.op} operator is not implemented yet`,
-      options,
-    );
-  };
+/** Compiles both operands once and evaluates them left to right, also in async mode. */
+function compileOperation(
+  node: BinaryNode,
+  operation: BinaryOperation,
+  cc: CompilerState,
+): Evaluator {
+  const left = compileNode(node.left, cc);
+  const right = compileNode(node.right, cc);
+  return located(spanOf(node, cc), cc.expression, (ctx, focus, frame) =>
+    andThen(left(ctx, focus, frame), (a) =>
+      andThen(right(ctx, focus, frame), (b) => operation(a, b, ctx)),
+    ),
+  );
 }
 
 /**

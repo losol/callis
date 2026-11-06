@@ -35,9 +35,7 @@ export type EvaluationErrorCode =
   | 'eval/aborted'
   | 'eval/limit-exceeded'
   | 'eval/datetime-out-of-range'
-  | 'eval/invalid-calendar-unit'
-  // TODO(T0010): remove once every operator is implemented.
-  | 'eval/not-implemented';
+  | 'eval/invalid-calendar-unit';
 
 /** Every stable error code. */
 export type ErrorCode = SyntaxErrorCode | SemanticErrorCode | EvaluationErrorCode;
