@@ -199,9 +199,10 @@ packages/core/src/
 ├── lexer/                 token.ts, lexer.ts, char-codes.ts, line-table.ts
 ├── parser/                ast.ts, parser.ts (Pratt), precedence.ts
 ├── analysis/              analyzer.ts, type-inference.ts, diagnostics.ts
-├── compiler/              compile.ts (AST → closures), lambda.ts, maybe-promise.ts, constant-fold.ts
-├── runtime/               context.ts (EvalContext, Frame), collection.ts, singleton.ts, logic.ts,
-│                          equality.ts, comparison.ts, arithmetic.ts, navigation.ts, variables.ts
+├── compiler/              compile.ts (AST → closures), lambda.ts, literal.ts (literals, constant folding)
+├── runtime/               context.ts (EvalContext, Frame), maybe-promise.ts, collection.ts, singleton.ts,
+│                          logic.ts, equality.ts, comparison.ts, arithmetic.ts, navigation.ts, node-value.ts,
+│                          type-target.ts, variables.ts
 ├── types/                 system-types.ts, type-specifier.ts, model-types.ts, conversions.ts, type-test.ts (is/as/ofType)
 ├── values/
 │   ├── decimal/           decimal.ts, math.ts
@@ -211,7 +212,7 @@ packages/core/src/
 │   └── string.ts          equivalence normalization and helpers
 ├── model/                 model-provider.ts, model-node.ts, json-navigation.ts, primitive-extensions.ts, lossless-json.ts
 ├── functions/             registry.ts, define.ts, existence.ts, filtering.ts, subsetting.ts, combining.ts,
-│                          conversion.ts, string.ts, math.ts, tree.ts, utility.ts
+│                          conversion.ts, string.ts, math.ts, tree.ts, utility.ts, types.ts, logic.ts
 └── fhir/                  functions.ts, resolve.ts, variables.ts, equivalence.ts, hooks.ts
 ```
 
@@ -252,7 +253,7 @@ Line coverage for the core (excluding generated code) is reported in CI with a t
 - **No `eval` or `new Function`**, so Callis works under a strict CSP.
 - **Regular expressions:** `matches()` and `replaceMatches()` run user-supplied patterns on JavaScript's backtracking engine, so ReDoS is possible. This is documented, and a `regex` hook lets hosts plug in a safe engine ([T0021](tasks/T0021-hooks-async.md)).
 - **Bounded work:**
-  - parsing has a maximum nesting depth
+  - parsing has a maximum nesting depth, and the compiler applies the same limit to the whole expression tree, including long chains such as `a.b.c…` or `x and y and …` that the parser builds in a loop (`syntax/nesting-limit`, never a stack overflow)
   - a `Decimal` has at most 10,000 digits and a scale of at most 10,000. Arithmetic beyond that is overflow or underflow and gives empty, as FHIRPath 3.0.0 requires, instead of growing without limit ([T0004](tasks/T0004-decimal.md#design-notes))
   - `repeat()` deduplicates per the spec, which only guarantees termination for projections that navigate a finite input tree. A value-generating projection such as `'x'.repeat($this & 'x')` never runs out of new items.
   - every evaluation therefore has finite default limits (`limits.maxRepeatItems`, `limits.maxCollectionSize`), and exceeding them raises `eval/limit-exceeded` in both sync and async mode ([T0012](tasks/T0012-fn-filtering.md), [T0025](tasks/T0025-public-api-release.md#public-api-sketch))

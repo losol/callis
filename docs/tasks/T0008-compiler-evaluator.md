@@ -14,23 +14,27 @@ Compile an AST into closures and evaluate them over plain JSON ([compiling to cl
 
 - `src/compiler/`:
   - `compileNode()` for every AST kind
-  - literal construction through the T0004/T0005/T0006 value modules. Invalid literal values (out-of-range dates, a timezone on a Time literal, a Decimal literal beyond the Decimal size bound) compile to a closure that raises `eval/invalid-literal` when evaluated, not a compile-time error ([invalid literal values](#invalid-literal-values); tests `testLiteralTimeUTC` and `testLiteralTimeTimezoneOffset`)
-  - constant folding of `-<number>`
-  - `MaybePromise` helpers (`then`, `all`, the sync guard), built on a structural `isThenable()` (a callable `then` property, never `instanceof Promise`; [T0021: sync and async](T0021-hooks-async.md#sync-and-async))
+  - literal construction through the T0004/T0005/T0006 value modules. Invalid literal values (out-of-range dates, a timezone on a Time literal, a Decimal literal beyond the Decimal size bound, an Integer literal outside the 32-bit range) compile to a closure that raises `eval/invalid-literal` when evaluated, not a compile-time error ([invalid literal values](#invalid-literal-values); tests `testLiteralTimeUTC` and `testLiteralTimeTimezoneOffset`)
+  - constant folding of `-<number>` and `-<quantity>`, so `-2147483648` is a valid Integer; folding gives the same result as evaluation, so further polarity operators overflow to empty as at runtime
   - lambda compilation for higher-order parameters
+  - a depth limit on the expression tree (`nesting.ts`), checked without recursion before compiling: the parser builds member, call and left-associative operator chains in a loop, so they can be deeper than its nesting limit, and the recursive compiler and closures would otherwise overflow the stack. Too deep raises `syntax/nesting-limit`.
 - `src/runtime/`:
-  - `EvalContext` and `Frame` (`$this`, `$index`)
-  - model-less JSON navigation: array flattening, own-property checks, `ModelNode` creation
+  - `EvalContext` and `Frame` (`$this`, `$index`, `$total`)
+  - `MaybePromise` helpers in `maybe-promise.ts`: `andThen`, `mapSequential`, and the sync guard (`adoptResult`, `requireSync`), built on a structural `isThenable()` (a callable `then` property, never `instanceof Promise`; [T0021: sync and async](T0021-hooks-async.md#sync-and-async)). They live in `runtime/`, not `compiler/`, because library functions use them and `functions` may only import `runtime` ([module rules](../architecture.md#repository-layout)). The helper that chains is not called `then`: a module that exports `then` is a thenable itself, and `import()` of it calls that function instead of returning the module. Arguments and lambda items are evaluated one after another (`mapSequential`), never overlapping, so no promise is left unobserved when one fails; concurrent hook calls are T0021.
+  - model-less JSON navigation: array flattening, own-property checks, `ModelNode` creation for every JSON value, objects and primitives alike, so later operations keep its provenance
   - the root-identifier rule against `resourceType`
   - variables: `%context`, `%ucum`, user variables, and the `eval/undefined-variable` error
-- In the compiler, the operators that do not need equality: the indexer `[]`, unary `+`/`-`, `and`/`or`/`xor`/`implies` (three-valued logic, both operands evaluated), and `is`/`as` on System types.
+  - type targets (`type-target.ts`): compile-time resolution, the model-less resource-name matcher, and `is`/`as` on collections, for T0012 to reuse in `ofType()`
+  - the shared node conversion `toSystemValue()` (`node-value.ts`), merged ahead of this task in [#98](https://github.com/losol/callis/pull/98) because T0009 needs it too
+- In the compiler, the operators that do not need equality: the indexer `[]`, unary `+`/`-`, `and`/`or`/`xor`/`implies` (three-valued logic, both operands evaluated), and `is`/`as` on System types. The other operators compile to a closure that raises the temporary `eval/not-implemented` when evaluated, until T0010 implements them; their operands are still compiled, so unknown functions and wrong arities in them fail at compile time.
 - `src/functions/registry.ts` and `define.ts`:
   - `FunctionDefinition`, `ParamSpec`, `createRegistry()`
-  - compile-time lookup with `semantic/unknown-function` and `semantic/wrong-arity`
+  - compile-time lookup with `semantic/unknown-function` and `semantic/wrong-arity`; a type argument that is not a type name is `semantic/invalid-argument`
   - helpers for value, lambda and host functions
-  - a handful of test-only functions to exercise the machinery
-- `src/api/`: internal `compile()` and `evaluate()`, plus basic `plain`/`typed` output adapters (finished in T0025).
-- The conformance runner's `EvaluatorAdapter` is wired to this internal API, replacing the runner's stub in `tools/conformance/src/engine-adapter.ts` ([T0022: adapter interface](T0022-conformance-runner.md#adapter-interface), [runner contract](../../tools/conformance/README.md#plugging-in-an-evaluator)). T0025 later switches that entry point to the public API ([#48](https://github.com/losol/callis/issues/48)).
+  - test-only functions to exercise the machinery (`packages/core/test/support/test-functions.ts`)
+  - the function forms `is(type)` and `as(type)` (`types.ts`), and `not()` (`logic.ts`) from [N1 §6.5](https://hl7.org/fhirpath/N1/#boolean-logic): it belongs with the Boolean operators, and no other task owns it
+- `src/api/`: internal `compile()`, `evaluate()` and `evaluateAsync()`, plus basic `plain`/`typed` output adapters (finished in T0025).
+- The conformance runner's `EvaluatorAdapter` is wired to this internal API, replacing the runner's stub in `tools/conformance/src/engine-adapter.ts` ([T0022: adapter interface](T0022-conformance-runner.md#adapter-interface), [runner contract](../../tools/conformance/README.md#plugging-in-an-evaluator)). It reports spec functions, FHIR variables and operators that later tasks add as "not implemented", so a test that expects an error never passes because a feature is missing ([spec notes](../spec-notes.md#features-that-later-tasks-add)). T0025 later switches that entry point to the public API ([#48](https://github.com/losol/callis/issues/48)).
 
 ## Out of scope
 
@@ -51,7 +55,7 @@ function compileNode(node: ExpressionNode, cc: CompileContext): Evaluator {
     case 'Member': {
       const target = compileNode(node.target, cc);
       const name = node.name; // resolved once
-      return (ctx, focus, frame) => then(target(ctx, focus, frame), (input) => navigate(ctx, input, name));
+      return (ctx, focus, frame) => andThen(target(ctx, focus, frame), (input) => navigate(ctx, input, name));
     }
     case 'FunctionCall': {
       const fn = cc.registry.resolve(node.name, node.args.length, node.span); // lookup and arity check once
@@ -71,7 +75,7 @@ function compileNode(node: ExpressionNode, cc: CompileContext): Evaluator {
 
 ### Invalid literal values
 
-Invalid literal values are well-formed tokens whose value is not allowed: an out-of-range date component (`@2015-02-30`), a timezone on a Time literal (`@T14:34:28Z`), or a Decimal literal beyond the Decimal size bound. The size bound is more than 10,000 significant digits, or more than 10,000 digits after the point; `Decimal.parse()` returns `undefined` for such a literal ([T0004](T0004-decimal.md#design-notes)). These do not fail at compile time. The compiler emits a closure that raises `FhirPathEvaluationError` (`eval/invalid-literal`) when it is evaluated. The suite classifies these as execution errors (`testLiteralTimeUTC` and `testLiteralTimeTimezoneOffset` are `invalid="execution"`), and the error-class checks in [T0022: conformance runner](T0022-conformance-runner.md#design-notes) depend on that. The suite has no test for an oversized Decimal literal; the owner chose the same treatment for it ([#69](https://github.com/losol/callis/issues/69)).
+Invalid literal values are well-formed tokens whose value is not allowed: an out-of-range date component (`@2015-02-30`), a timezone on a Time literal (`@T14:34:28Z`), a Decimal literal beyond the Decimal size bound, or an Integer literal outside the 32-bit range ([spec notes](../spec-notes.md#integer-literals-outside-the-32-bit-range)). The size bound is more than 10,000 significant digits, or more than 10,000 digits after the point; `Decimal.parse()` returns `undefined` for such a literal ([T0004](T0004-decimal.md#design-notes)). These do not fail at compile time. The compiler emits a closure that raises `FhirPathEvaluationError` (`eval/invalid-literal`) when it is evaluated. The suite classifies these as execution errors (`testLiteralTimeUTC` and `testLiteralTimeTimezoneOffset` are `invalid="execution"`), and the error-class checks in [T0022: conformance runner](T0022-conformance-runner.md#design-notes) depend on that. The suite has no test for an oversized Decimal literal; the owner chose the same treatment for it ([#69](https://github.com/losol/callis/issues/69)).
 
 ### Type names that do not resolve
 
@@ -101,25 +105,26 @@ interface FunctionDefinition {
   readonly params: readonly ParamSpec[];  // { kind: 'value' | 'lambda' | 'type', optional?, variadic? }
   readonly returns?: TypeHint;            // for the analyzer
   readonly async?: boolean;               // true if it may call host hooks
-  readonly impl: (call: CallContext, input: Collection, args: readonly Arg[]) => MaybePromise<Collection>;
+  // Any thenable: adopted in async mode, `eval/async-in-sync` in sync mode.
+  readonly impl: (call: CallContext, input: Collection, args: readonly Arg[]) => Collection | PromiseLike<Collection>;
 }
 ```
 
 - The **registry** maps names to definitions. Names are resolved at compile time; an unknown name is a semantic error.
 - `createRegistry({ standard: true, fhir: true })` is the default. `registry.extend([...])` adds user-defined functions. Library code builds its maps with `Object.create(null)`.
-- The standard library is split into files that mirror the spec sections: `existence`, `filtering`, `subsetting`, `combining`, `conversion`, `string`, `math`, `tree`, `utility`. The FHIR functions live in `src/fhir/`.
+- The standard library is split into files that mirror the spec sections: `existence`, `filtering`, `subsetting`, `combining`, `conversion`, `string`, `math`, `tree`, `utility`, plus `types` (`is()`, `as()`) and `logic` (`not()`) for the function forms in the operations sections. The FHIR functions live in `src/fhir/`.
 - **Operators are not in the registry**, because the grammar fixes them. They share kernels (`equality`, `comparison`, `arithmetic`) with the functions.
 - Each function file has a test file next to it containing the examples from its spec section.
 
 ## Acceptance criteria
 
-- [ ] End to end: `compile(expr).evaluate(json)` works for navigation, literals of every type, the indexer, `$this`, `$index`, variables, Boolean logic, and `is`/`as` with System types.
-- [ ] Each lambda helper is tested in sync mode, and in async mode using a test-only async function. A thenable in sync mode raises `eval/async-in-sync`, including a cross-realm promise and a custom thenable.
-- [ ] Navigating to `__proto__`, `constructor` or `toString` returns empty.
-- [ ] Unknown qualified targets (`System.Patient`, `Foo.Patient`, and model-less `FHIR.Patient`) compile, then raise `eval/unknown-type` in both `is` and `as` forms, even on empty input; valid System mismatches remain false/empty. A lazy branch that is not evaluated does not raise the error.
-- [ ] Without a model, on `{"contained": [{"resourceType": "Patient"}, {"resourceType": "Observation"}]}`, `contained[0] is Patient` is true, `contained[1] is Patient` is false, and `contained[1] as Observation` returns that item. Cover `'Patient' is Patient`, a misspelled target, System-name precedence, absent/non-string/inherited `resourceType`, lack of inheritance, and valid-target empty/multiple input rules.
-- [ ] A compiled expression can be evaluated concurrently (two overlapping async evaluations) without interference.
-- [ ] Once fixtures exist (T0023), the individual suite tests that use only T0008 features (navigation, literals, the indexer, `$this`, variables, Boolean logic, `is`/`as` on System types) pass, for example `Patient.name[-1]` and the literal parts of `testLiterals`; the PR lists them. No whole group is expected to pass with T0008 alone, because the groups also use operators and functions:
+- [x] End to end: `compile(expr).evaluate(json)` works for navigation, literals of every type, the indexer, `$this`, `$index`, variables, Boolean logic, and `is`/`as` with System types.
+- [x] Each lambda helper is tested in sync mode, and in async mode using a test-only async function. A thenable in sync mode raises `eval/async-in-sync`, including a cross-realm promise and a custom thenable.
+- [x] Navigating to `__proto__`, `constructor` or `toString` returns empty.
+- [x] Unknown qualified targets (`System.Patient`, `Foo.Patient`, and model-less `FHIR.Patient`) compile, then raise `eval/unknown-type` in both `is` and `as` forms, even on empty input; valid System mismatches remain false/empty. A lazy branch that is not evaluated does not raise the error.
+- [x] Without a model, on `{"contained": [{"resourceType": "Patient"}, {"resourceType": "Observation"}]}`, `contained[0] is Patient` is true, `contained[1] is Patient` is false, and `contained[1] as Observation` returns that item. Cover `'Patient' is Patient`, a misspelled target, System-name precedence, absent/non-string/inherited `resourceType`, lack of inheritance, and valid-target empty/multiple input rules.
+- [x] A compiled expression can be evaluated concurrently (two overlapping async evaluations) without interference.
+- [x] Once fixtures exist (T0023), the individual suite tests that use only T0008 features (navigation, literals, the indexer, `$this`, variables, Boolean logic, `is`/`as` on System types) pass, for example `Patient.name[-1]` and the literal parts of `testLiterals`; the PR lists them. No whole group is expected to pass with T0008 alone, because the groups also use operators and functions:
   - `testIndexer` needs `=` and `|` (completed by T0010)
   - `testCollectionBoolean` needs `iif()` (completed by T0014)
   - `testDollar` needs `where`, `skip`, `substring`, `length`, `children` and a semantic check (completed by T0013, with T0012, T0015, T0017 and T0024)

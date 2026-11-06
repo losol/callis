@@ -20,20 +20,24 @@ export type SemanticErrorCode =
   | 'semantic/unknown-function'
   | 'semantic/wrong-arity'
   | 'semantic/unknown-element'
-  | 'semantic/unknown-type';
+  | 'semantic/unknown-type'
+  | 'semantic/invalid-argument';
 
 /** Raised while an expression is evaluated. */
 export type EvaluationErrorCode =
   | 'eval/singleton-expected'
   | 'eval/type-mismatch'
   | 'eval/undefined-variable'
+  | 'eval/unknown-type'
   | 'eval/invalid-literal'
   | 'eval/invalid-argument'
   | 'eval/async-in-sync'
   | 'eval/aborted'
   | 'eval/limit-exceeded'
   | 'eval/datetime-out-of-range'
-  | 'eval/invalid-calendar-unit';
+  | 'eval/invalid-calendar-unit'
+  // TODO(T0010): remove once every operator is implemented.
+  | 'eval/not-implemented';
 
 /** Every stable error code. */
 export type ErrorCode = SyntaxErrorCode | SemanticErrorCode | EvaluationErrorCode;

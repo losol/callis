@@ -129,6 +129,27 @@ How Callis reads the FHIRPath specification where the text is ambiguous, silent,
 - **Error codes:** the spec only says that evaluation "will signal an error". More than one item raises `eval/singleton-expected`; a single item that does not convert raises `eval/type-mismatch`, because its type is the problem and `first()` would not help. The owner decided this on 2026-11-05.
 - **Code:** `singleton()` in `packages/core/src/runtime/singleton.ts` ([T0003](tasks/T0003-types-and-collections.md)).
 
+### Integer literals outside the 32-bit range
+
+- **Spec:** [N1 §4.1](https://hl7.org/fhirpath/N1/#literals) makes `Integer` a 32-bit signed integer, but the grammar's `NUMBER` token has no size limit, and N1 does not say what an Integer literal beyond the range means. FHIRPath 3.0.0 adds `Long` literals with an `L` suffix (STU, [T0028](tasks/T0028-stu-long.md)).
+- **Tests:** `testLiteralIntegerMax` (`2147483647`, valid); none beyond the range.
+- **Decision:** an Integer literal outside -2,147,483,648 to 2,147,483,647 is an invalid literal value: it compiles, and raises `eval/invalid-literal` when it is evaluated, like `@2015-02-30` ([T0008: invalid literal values](tasks/T0008-compiler-evaluator.md#invalid-literal-values)). It does not silently become a Decimal or a Long. A sign written directly before the literal is part of its value, so `-2147483648` is valid although `2147483648` alone is not. Any further `+` or `-` follows the ordinary Integer rules, so `-(-2147483648)` overflows to empty, exactly as `-%i` does when `%i` is the smallest Integer.
+- **Code:** `constantOf()` and `materialize()` in `packages/core/src/compiler/literal.ts`.
+
+### Function arguments are evaluated with the focus of the call
+
+- **Spec:** [N1 §5](https://hl7.org/fhirpath/N1/#functions) says how a function evaluates an expression parameter for each input item, but not what the focus of an ordinary argument is.
+- **Tests:** none specific; `testCombine` and `testUnion` rely on it, for example `name.select(use.union(given))`.
+- **Decision:** a value argument is evaluated with the same focus and iteration variables as the call itself, not with the call's input. In `name.select(use.union(given))`, `given` is evaluated on each name, as in the HL7 Java engine. Lambda arguments are evaluated per item (`where`, `select`) or lazily where the call is (`iif`), as the function decides.
+- **Code:** `evaluateArgs()` and `bindLambda()` in `packages/core/src/compiler/lambda.ts`.
+
+### Frame variables after a dot
+
+- **Spec:** the [N1 grammar](https://hl7.org/fhirpath/N1/grammar.html) allows `$this`, `$index` and `$total` as an invocation after a dot (`name.$this`) but gives that form no meaning.
+- **Tests:** none.
+- **Decision:** the expression before the dot is evaluated, so its errors surface, and the result is the frame variable, as if it were written alone. `name.select(given.$index)` is the index of each name.
+- **Code:** `compileFrameVariable()` in `packages/core/src/compiler/compile.ts`.
+
 ## Equality and ordering
 
 Implemented in `packages/core/src/runtime/` (`equality.ts`, `comparison.ts`, `operands.ts`; [T0009](tasks/T0009-equality-kernels.md)).
@@ -282,6 +303,13 @@ How the conformance runner ([T0022](tasks/T0022-conformance-runner.md), [`tools/
 - **Spec:** the `mode` values in `testSchema.xsd`.
 - **Tests:** the tests and groups with a `mode`.
 - **Decision:** `strict`, `lenient/polymorphics`, `element`, `html` and the `semantic` group mode of `isSemanticChecks` (not in the schema) are phase 1. `tx` (`%terminologies`) is STU ([T0032](tasks/T0032-fhir-phase2.md)). `cda` and `custom` are out of scope and skipped, as are the whole `cdaTests` and `documentFunctions` groups, including their tests that have their own `mode="element"`.
+
+### Features that later tasks add
+
+- **Spec:** none; this is how the runner reports an engine that is still being built ([ADR-0011](adr/0011-conformance-suite.md)).
+- **Tests:** every test that calls a spec function or uses a FHIR variable that the engine does not have yet, or evaluates an operator that T0010 adds. For example `testDollarOrderNotAllowed` (`children()`, `skip()`) and `testSubSetOf3` (`where()`, `subsetOf()`).
+- **Decision:** such a test fails as "not implemented", whatever it expects. Without this rule a test that expects a semantic or execution error would pass because the function is unknown or the operator is missing, and would fail again once the feature exists. The engine adapter checks the parsed expression for functions of the spec that later tasks own and the registry does not have yet. It also classifies `eval/not-implemented` (an operator compiled but not yet implemented) and `eval/undefined-variable` for a FHIR variable that T0020 or T0032 defines as not implemented. Both checks retire themselves as the features arrive. A genuinely unknown function or variable, which no task adds, is still a semantic or execution error.
+- **Code:** `checkImplemented()` and `classifyError()` in `tools/conformance/src/engine-adapter.ts`.
 
 ### Converting the XML inputs
 
