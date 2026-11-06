@@ -67,8 +67,11 @@ const { values: flags } = parseArgs({
 });
 const apply = flags.apply;
 const changes: string[] = [];
-/** The changes made on GitHub so far: writes that succeeded with `--apply`. */
-let applied = 0;
+/**
+ * The writes to GitHub that have succeeded so far. A change can take more than one write (creating
+ * the project also sets its description), so these are counted where the API is called.
+ */
+let writes = 0;
 
 /** Records a change, and makes it when `--apply` is given. */
 function change<T>(description: string, run: () => T): T | undefined {
@@ -78,7 +81,6 @@ function change<T>(description: string, run: () => T): T | undefined {
     return undefined;
   }
   const result = run();
-  applied++;
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, WRITE_PAUSE_MS);
   return result;
 }
@@ -173,7 +175,11 @@ function collectErrorDetails(value: unknown, details: Set<string>): void {
  * describe the documented response fields that the sync reads.
  */
 function rest<T>(method: string, path: string, body?: unknown): T {
-  return gh(['api', '--method', method, path], body) as T;
+  const result = gh(['api', '--method', method, path], body) as T;
+  if (method !== 'GET') {
+    writes++;
+  }
+  return result;
 }
 
 function restList<T>(path: string): T[] {
@@ -181,7 +187,11 @@ function restList<T>(path: string): T[] {
 }
 
 function graphql<T>(query: string, variables: Record<string, unknown> = {}): T {
-  return (gh(['api', 'graphql'], { query, variables }) as { data: T }).data;
+  const result = (gh(['api', 'graphql'], { query, variables }) as { data: T }).data;
+  if (query.trimStart().startsWith('mutation')) {
+    writes++;
+  }
+  return result;
 }
 
 // --- Issues and labels ---
@@ -616,9 +626,9 @@ try {
       'This happened while syncing the project board, which needs the "project" token scope. If the token lacks it, run `gh auth refresh -h github.com -s project`, or pass --skip-project.',
     );
   }
-  if (applied > 0) {
+  if (writes > 0) {
     console.error(
-      `${applied} ${applied === 1 ? 'change was' : 'changes were'} made before the error. Run the sync again once it is fixed.`,
+      `${writes} ${writes === 1 ? 'write' : 'writes'} to GitHub succeeded before the error. Run the sync again once it is fixed.`,
     );
   }
   process.exit(1);
