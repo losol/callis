@@ -1,7 +1,7 @@
 <!--
 Title: Conventional Commits, e.g. "feat(core): add lexer". It becomes the commit subject on main.
 This description becomes the commit body when the PR is squash-merged: replace TXXXX with the task ID (or "none"), keep the text accurate, and delete these comments.
-Keep the PR a draft until it meets the ready-for-review criteria in CONTRIBUTING.md#ready-for-review.
+An agent-managed PR stays a draft until it meets the ready-for-review criteria in CONTRIBUTING.md#ready-for-review.
 See CONTRIBUTING.md.
 -->
 
