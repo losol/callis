@@ -83,9 +83,7 @@ function appendInput(items: Item[], value: unknown, name: string): void {
     return;
   }
   if (Array.isArray(value)) {
-    for (const element of value) {
-      appendInput(items, element, name);
-    }
+    forEachOwnElement(value, (element) => appendInput(items, element, name));
     return;
   }
   if (isItemValue(value)) {
@@ -163,14 +161,28 @@ function appendChild(items: Item[], value: unknown, name: string, parent: ModelN
     items.push(new ModelNode({ value, name, parent }));
     return;
   }
-  let index = 0;
-  for (const element of value) {
+  forEachOwnElement(value, (element, index) => {
     if (Array.isArray(element)) {
       // FHIR JSON never nests arrays; if some input does, its elements are flattened in order.
       appendChild(items, element, name, parent);
     } else if (element !== undefined && element !== null) {
       items.push(new ModelNode({ value: element, name, parent, index }));
     }
-    index++;
+  });
+}
+
+/**
+ * Calls `fn` for each own element of an array, in index order, with its index. Holes and elements
+ * inherited from a prototype are skipped: an array iterator (`for...of`) would read those too.
+ */
+function forEachOwnElement(
+  array: readonly unknown[],
+  fn: (element: unknown, index: number) => void,
+): void {
+  const length = array.length;
+  for (let index = 0; index < length; index++) {
+    if (Object.hasOwn(array, index)) {
+      fn(array[index], index);
+    }
   }
 }

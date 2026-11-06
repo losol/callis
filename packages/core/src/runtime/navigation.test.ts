@@ -10,6 +10,13 @@ import {
   toInputCollection,
 } from './navigation.ts';
 
+/** An array of `length` holes whose prototype, below `Array.prototype`, has `inherited` indices. */
+function inheritingArray(length: number, inherited: Record<number, unknown>): unknown[] {
+  const array: unknown[] = new Array(length);
+  Object.setPrototypeOf(array, Object.assign(Object.create(Array.prototype), inherited));
+  return array;
+}
+
 function values(collection: Collection): unknown[] {
   return collection.map((item) => (item instanceof ModelNode ? item.value : item));
 }
@@ -41,6 +48,12 @@ describe('toInputCollection', () => {
 
   it('flattens nested arrays and skips null elements', () => {
     expect(values(toInputCollection([1, null, [2, [3]]], 'v'))).toEqual([1, 2, 3]);
+  });
+
+  it('does not read array elements inherited from a prototype', () => {
+    const array = inheritingArray(2, { 0: { inherited: true } });
+    array[1] = 'own';
+    expect(values(toInputCollection(array, 'v'))).toEqual(['own']);
   });
 
   it('keeps nodes and value classes as they are', () => {
@@ -86,6 +99,20 @@ describe('navigateMember', () => {
       expect(navigateMember(root, name)).toEqual([]);
     },
   );
+
+  it('does not read array elements inherited from a prototype, and keeps the own indices', () => {
+    const array = inheritingArray(3, { 0: 'inherited', 2: 'inherited' });
+    array[1] = 'own';
+    const [node, ...rest] = navigateMember(toInputCollection({ a: array }, 'root'), 'a');
+    expect(rest).toEqual([]);
+    expect(node).toMatchObject({ value: 'own', index: 1 });
+  });
+
+  it('skips holes in arrays', () => {
+    // biome-ignore lint/suspicious/noSparseArray: the test needs a hole.
+    const values = navigateMember(toInputCollection({ a: [1, , 3] }, 'root'), 'a');
+    expect(values.map((item) => (item as ModelNode).index)).toEqual([0, 2]);
+  });
 
   it('does not read inherited properties', () => {
     const input = toInputCollection(Object.create({ inherited: 1 }), 'root');

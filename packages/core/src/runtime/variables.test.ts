@@ -35,6 +35,12 @@ describe('createVariables', () => {
     expect(Object.hasOwn(variables, 'constructor')).toBe(false);
   });
 
+  it('does not read array elements inherited from a prototype', () => {
+    const list: unknown[] = new Array(1);
+    Object.setPrototypeOf(list, Object.assign(Object.create(Array.prototype), { 0: 'inherited' }));
+    expect(createVariables({ list }).list).toEqual([]);
+  });
+
   it('reads own properties only', () => {
     const variables = createVariables(Object.create({ inherited: 1 }));
     expect(Object.hasOwn(variables, 'inherited')).toBe(false);
