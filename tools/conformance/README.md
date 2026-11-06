@@ -29,7 +29,8 @@ Run them from the repository root.
 | `official-examples/` | Official FHIR JSON examples the converted inputs are compared with ([SOURCE.md](official-examples/SOURCE.md)). |
 | `baseline.json` | The tests that pass, per suite file. Generated. |
 | `src/adapter.ts` | The evaluator adapter interface. |
-| `src/engine-adapter.ts` | The adapter the commands use: the engine's internal API (T0008). |
+| `src/engine-adapter.ts` | The adapter the commands use: the engine's internal API (T0008), with the UCUM unit system. |
+| `src/core-source.ts` | Resolves `@callis/core` to core's source for `pnpm conformance`, so `@callis/ucum` shares the engine's copy of core. |
 | `src/parse-suite.ts`, `src/suite.ts` | The test-file parser and model. |
 | `src/classify.ts` | Phase 1, STU or unsupported. |
 | `src/compare.ts` | Typed comparison of results with expected outputs. |
@@ -41,7 +42,7 @@ Run them from the repository root.
 
 ## Plugging in an evaluator
 
-The runner never imports `@callis/core`. It calls an `EvaluatorAdapter` ([`src/adapter.ts`](src/adapter.ts)), and [`src/engine-adapter.ts`](src/engine-adapter.ts) chooses which one; it is the only file of the runner that imports the engine. Since T0008 that is an adapter over the engine's internal `compile()`/`evaluateAsync()`, without a model until T0018. It reports spec functions, FHIR variables and operators that a later task adds as "not implemented", so a test that expects an error never passes because a feature is missing ([spec notes](../../docs/spec-notes.md#features-that-later-tasks-add)). The stub adapter in `src/stub-adapter.ts`, which throws "not implemented" for every evaluation, remains for the runner's own tests. T0025 switches to the public API without changing the runner.
+The runner never imports `@callis/core`. It calls an `EvaluatorAdapter` ([`src/adapter.ts`](src/adapter.ts)), and [`src/engine-adapter.ts`](src/engine-adapter.ts) chooses which one; it is the only file of the runner that imports the engine. Since T0008 that is an adapter over the engine's internal `compile()`/`evaluateAsync()`, without a model until T0018. It compiles with the full UCUM unit system of `@callis/ucum` ([T0006](../../docs/tasks/T0006-quantity.md#design-notes)), also from source: `pnpm conformance` preloads `src/core-source.ts` and the Vitest configs have an alias, so the `@callis/core` that `@callis/ucum` imports is the engine's own source and no build is needed. It reports spec functions, FHIR variables and operators that a later task adds as "not implemented", so a test that expects an error never passes because a feature is missing ([spec notes](../../docs/spec-notes.md#features-that-later-tasks-add)). The stub adapter in `src/stub-adapter.ts`, which throws "not implemented" for every evaluation, remains for the runner's own tests. T0025 switches to the public API without changing the runner.
 
 ```ts
 interface EvaluatorAdapter {

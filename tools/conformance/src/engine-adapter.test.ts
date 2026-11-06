@@ -1,10 +1,24 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { compile } from '../../../packages/core/src/api/compile.ts';
 import { ModelNode } from '../../../packages/core/src/model/model-node.ts';
+import type { Item } from '../../../packages/core/src/runtime/collection.ts';
+import { equals } from '../../../packages/core/src/runtime/equality.ts';
 import { parseTemporalLiteral } from '../../../packages/core/src/values/datetime/parse.ts';
 import { Decimal } from '../../../packages/core/src/values/decimal/decimal.ts';
 import { Quantity } from '../../../packages/core/src/values/quantity/quantity.ts';
+import {
+  minimalUnitSystem,
+  type UnitSystem,
+} from '../../../packages/core/src/values/quantity/unit-system.ts';
+import { ucum } from '../../../packages/ucum/src/index.ts';
 import type { EvaluationOptions } from './adapter.ts';
 import { engineAdapter } from './engine-adapter.ts';
+
+// Records the options of every compile(), to check what the adapter passes.
+vi.mock('../../../packages/core/src/api/compile.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../packages/core/src/api/compile.ts')>();
+  return { ...actual, compile: vi.fn(actual.compile) };
+});
 
 const options: EvaluationOptions = {
   fhirVersion: 'r4',
@@ -54,6 +68,37 @@ describe('engineAdapter.evaluate', () => {
   it('fails as a runner problem when the context does not select one node', async () => {
     expect(await classify('given', { context: 'name' })).toMatchObject({ kind: 'other' });
     expect(await classify('given', { context: 'missing' })).toMatchObject({ kind: 'other' });
+  });
+});
+
+// The runner always uses @callis/ucum (docs/tasks/T0006-quantity.md#design-notes), so the
+// quantity groups can pass once T0010 adds the operators (docs/tasks/T0007-ucum.md). Until then no
+// expression compares quantities, so these tests check the unit system both compile() calls get.
+describe('engineAdapter units', () => {
+  it('compiles the context and the expression with the UCUM unit system', async () => {
+    vi.mocked(compile).mockClear();
+    await evaluate("1 'mg/dL'", { context: 'name[1]' });
+    const calls = vi.mocked(compile).mock.calls;
+    expect(calls.map(([expression]) => expression)).toEqual(['name[1]', "1 'mg/dL'"]);
+    for (const [, compileOptions] of calls) {
+      expect(compileOptions?.units).toBe(ucum);
+    }
+  });
+
+  it('relates UCUM units of the quantities it returns, with one copy of core', async () => {
+    const kilogram = (await evaluate("1 'kg'")) as readonly Item[];
+    const gram = (await evaluate("1000 'g'")) as readonly Item[];
+    const units = vi.mocked(compile).mock.lastCall?.[1]?.units;
+    const context = (unitSystem: UnitSystem | undefined) => ({
+      model: undefined,
+      units: unitSystem ?? minimalUnitSystem,
+      timezoneOffset: 0,
+    });
+    // https://hl7.org/fhirpath/N1/#equals: quantities of the same dimension are converted.
+    expect(equals(kilogram, gram, context(units))).toBe(true);
+    expect(equals(kilogram, gram, context(minimalUnitSystem))).toBeUndefined();
+    // UCUM resolves @callis/core to the engine's source, so its values are the engine's classes.
+    expect(ucum.convert(Decimal.ONE, 'kg', 'g')).toBeInstanceOf(Decimal);
   });
 });
 
