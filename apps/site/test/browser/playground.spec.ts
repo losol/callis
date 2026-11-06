@@ -1,5 +1,42 @@
 import { expect, test } from '@playwright/test';
 
+for (const viewportWidth of [1440, 390]) {
+  test(`keeps width and side margins stable at ${viewportWidth}px when results change`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: viewportWidth, height: 1000 });
+    await page.goto('/playground/');
+    await page.getByRole('textbox', { name: 'Input JSON', exact: true }).waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    const bounds = () =>
+      page.locator('.playground').evaluate((element) => {
+        const { x, width } = element.getBoundingClientRect();
+        return { x, width };
+      });
+    const before = await bounds();
+    const expectStable = async () => {
+      const after = await bounds();
+      // Allow subpixel rounding, but not a content-driven horizontal shift.
+      expect(after.x).toBeCloseTo(before.x, 0);
+      expect(after.width).toBeCloseTo(before.width, 0);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+    };
+    await page.getByRole('button', { name: 'Run expression', exact: true }).click();
+    await expect(page.getByRole('status')).toHaveText('3 items');
+    await expectStable();
+    await page.getByLabel('FHIRPath expression').fill('(');
+    await expectStable();
+    await page.getByRole('button', { name: 'Run expression', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('Expression error');
+    await expectStable();
+    await page.getByRole('button', { name: 'Reset example' }).click();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expectStable();
+  });
+}
+
 test('loads the editor and evaluator only after entering the playground', async ({ page }) => {
   const requests: string[] = [];
   page.on('request', (request) => requests.push(request.url()));
