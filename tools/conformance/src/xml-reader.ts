@@ -18,6 +18,9 @@
 /** The namespace bound to the `xml` prefix without a declaration. */
 const XML_NAMESPACE = 'http://www.w3.org/XML/1998/namespace';
 
+/** The namespace of the `xmlns` prefix, which is never declared. */
+const XMLNS_NAMESPACE = 'http://www.w3.org/2000/xmlns/';
+
 /** The predefined entities ([XML 1.0 §4.6](https://www.w3.org/TR/xml/#sec-predefined-ent)). */
 const PREDEFINED_ENTITIES: ReadonlyMap<string, string> = new Map([
   ['lt', '<'],
@@ -121,7 +124,8 @@ export class XmlReadError extends Error {
  * Parses an XML document.
  *
  * @throws {XmlReadError} when the document is not well-formed, has a DTD, uses an undeclared
- * prefix or an undefined entity, or uses a name outside ASCII.
+ * prefix or an undefined entity, rebinds a reserved prefix or namespace, or uses a name outside
+ * ASCII.
  */
 export function readXml(input: string): XmlDocument {
   const text = (input.startsWith('\u{FEFF}') ? input.slice(1) : input).replace(/\r\n?/g, '\n');
@@ -244,6 +248,24 @@ export function readXml(input: string): XmlDocument {
     return { localName: name.slice(colon + 1), namespace };
   };
 
+  // https://www.w3.org/TR/xml-names/#xmlReserved: `xml` may only be bound to its own namespace,
+  // `xmlns` is never declared, and neither namespace may be bound to another prefix or be the
+  // default namespace.
+  const checkReservedNamespace = (prefix: string, namespace: string, at: number): void => {
+    const isReserved =
+      prefix === 'xmlns' ||
+      namespace === XMLNS_NAMESPACE ||
+      (prefix === 'xml') !== (namespace === XML_NAMESPACE);
+    if (isReserved) {
+      const declaration = prefix === '' ? 'xmlns' : `xmlns:${prefix}`;
+      fail(
+        'xml/reserved-namespace',
+        `${declaration}="${namespace}" rebinds a reserved prefix or namespace`,
+        at,
+      );
+    }
+  };
+
   const readElement = (parentScope: ReadonlyMap<string, string>): XmlElement => {
     const start = pos;
     pos++;
@@ -280,12 +302,15 @@ export function readXml(input: string): XmlDocument {
     const declarations = new Map<string, string>();
     for (const attribute of written) {
       if (attribute.name === 'xmlns') {
+        checkReservedNamespace('', attribute.value, attribute.at);
         declarations.set('', attribute.value);
       } else if (attribute.name.startsWith('xmlns:')) {
+        const prefix = attribute.name.slice('xmlns:'.length);
         if (attribute.value === '') {
           fail('xml/invalid-namespace', `${attribute.name} is empty`, attribute.at);
         }
-        declarations.set(attribute.name.slice('xmlns:'.length), attribute.value);
+        checkReservedNamespace(prefix, attribute.value, attribute.at);
+        declarations.set(prefix, attribute.value);
       }
     }
     let scope = parentScope;
@@ -295,15 +320,24 @@ export function readXml(input: string): XmlDocument {
       if (inner.get('') === '') inner.delete('');
       scope = inner;
     }
-    const attributes = written
-      .filter((attribute) => attribute.name !== 'xmlns' && !attribute.name.startsWith('xmlns:'))
-      .map(
-        (attribute): XmlAttribute => ({
-          name: attribute.name,
-          ...resolve(attribute.name, scope, false),
-          value: attribute.value,
-        }),
-      );
+    const attributes: XmlAttribute[] = [];
+    // https://www.w3.org/TR/xml-names/#uniqAttrs: two prefixes for one namespace still make two
+    // attributes with the same expanded name.
+    const expandedNames = new Set<string>();
+    for (const attribute of written) {
+      if (attribute.name === 'xmlns' || attribute.name.startsWith('xmlns:')) continue;
+      const { localName, namespace } = resolve(attribute.name, scope, false);
+      const expandedName = `${namespace ?? ''} ${localName}`;
+      if (expandedNames.has(expandedName)) {
+        fail(
+          'xml/duplicate-attribute',
+          `<${name}> has two ${localName} attributes in one namespace`,
+          attribute.at,
+        );
+      }
+      expandedNames.add(expandedName);
+      attributes.push({ name: attribute.name, localName, namespace, value: attribute.value });
+    }
     const children = isEmpty ? [] : readContent(name, scope);
     return {
       kind: 'element',

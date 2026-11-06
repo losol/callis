@@ -109,9 +109,20 @@ describe('readXml', () => {
     expect(elements(c?.children ?? [])[0]?.namespace).toBeUndefined();
   });
 
-  it('binds the xml prefix without a declaration', () => {
+  it('accepts attributes with one local name in different namespaces', () => {
+    const { root } = readXml('<a xmlns:p="urn:p" xmlns:q="urn:q" v="0" p:v="1" q:v="2"/>');
+    expect(root.attributes.map((item) => [item.namespace, item.localName])).toEqual([
+      [undefined, 'v'],
+      ['urn:p', 'v'],
+      ['urn:q', 'v'],
+    ]);
+  });
+
+  it('binds the xml prefix without a declaration, and allows declaring it to its own namespace', () => {
     const { root } = readXml('<a xml:lang="en"/>');
     expect(root.attributes[0]?.namespace).toBe('http://www.w3.org/XML/1998/namespace');
+    const declared = readXml('<a xmlns:xml="http://www.w3.org/XML/1998/namespace" xml:lang="en"/>');
+    expect(declared.root.attributes[0]?.namespace).toBe('http://www.w3.org/XML/1998/namespace');
   });
 
   it.each([
@@ -130,11 +141,48 @@ describe('readXml', () => {
     ['a mismatched end tag', '<a><b></a></b>', 'xml/mismatched-tag'],
     ['an element that is not closed', '<a><b/>', 'xml/unclosed-element'],
     ['two attributes with one name', '<a x="1" x="2"/>', 'xml/duplicate-attribute'],
+    // https://www.w3.org/TR/xml-names/#uniqAttrs
+    [
+      'two attributes with one expanded name',
+      '<a xmlns:p="urn:x" xmlns:q="urn:x" p:v="one" q:v="two"/>',
+      'xml/duplicate-attribute',
+    ],
     ['attributes without space between them', '<a x="1"y="2"/>', 'xml/malformed-tag'],
     ['an unquoted attribute value', '<a x=1/>', 'xml/invalid-attribute'],
     ['"<" in an attribute value', '<a x="<"/>', 'xml/invalid-attribute'],
     ['an undeclared prefix', '<p:a/>', 'xml/undeclared-prefix'],
     ['an empty prefix declaration', '<a xmlns:p=""/>', 'xml/invalid-namespace'],
+    // https://www.w3.org/TR/xml-names/#xmlReserved
+    [
+      'the xml prefix bound to another namespace',
+      '<xml:a xmlns:xml="http://hl7.org/fhir"/>',
+      'xml/reserved-namespace',
+    ],
+    [
+      'another prefix bound to the xml namespace',
+      '<a xmlns:p="http://www.w3.org/XML/1998/namespace"/>',
+      'xml/reserved-namespace',
+    ],
+    [
+      'the xml namespace as the default',
+      '<a xmlns="http://www.w3.org/XML/1998/namespace"/>',
+      'xml/reserved-namespace',
+    ],
+    [
+      'a declaration of the xmlns prefix',
+      '<a xmlns:xmlns="http://www.w3.org/2000/xmlns/"/>',
+      'xml/reserved-namespace',
+    ],
+    [
+      'a prefix bound to the xmlns namespace',
+      '<a xmlns:p="http://www.w3.org/2000/xmlns/"/>',
+      'xml/reserved-namespace',
+    ],
+    [
+      'the xmlns namespace as the default',
+      '<a xmlns="http://www.w3.org/2000/xmlns/"/>',
+      'xml/reserved-namespace',
+    ],
     ['"--" in a comment', '<a><!-- a -- b --></a>', 'xml/invalid-comment'],
     ['a comment that is not closed', '<a><!-- x </a>', 'xml/unclosed-comment'],
     ['an unclosed CDATA section', '<a><![CDATA[x</a>', 'xml/unclosed-cdata'],

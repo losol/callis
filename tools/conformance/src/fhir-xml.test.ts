@@ -343,6 +343,13 @@ describe('convertFhirXml', () => {
     expect(errorOf(xml)?.code).toBe(code);
   });
 
+  // https://www.w3.org/TR/xml-names/#xmlReserved
+  it('refuses a FHIR element that rebinds the reserved xml prefix', () => {
+    expect(() => convertFhirXml('<xml:Patient xmlns:xml="http://hl7.org/fhir"/>', r4)).toThrow(
+      expect.objectContaining({ code: 'xml/reserved-namespace' }),
+    );
+  });
+
   it('says where a problem is', () => {
     const xml = `<Patient ${FHIR}><name><given value="a"/><given value="b"><foo/></given></name><name/></Patient>`;
     expect(errorOf(xml)).toEqual({
