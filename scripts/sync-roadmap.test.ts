@@ -23,6 +23,7 @@ interface Fixture {
   readonly issues?: readonly object[];
   readonly currentIssue?: object;
   readonly currentMilestone?: object;
+  readonly patchResponse?: object;
   readonly labels?: readonly object[];
   readonly blockers?: Readonly<Record<string, readonly object[]>>;
 }
@@ -61,7 +62,7 @@ else if (method === 'GET' && path === 'repos/losol/callis/labels?per_page=100') 
 else if (method === 'GET' && path.endsWith('/dependencies/blocked_by?per_page=100')) result = [data.blockers?.[path.split('/')[4]] ?? []];
 else if (method === 'GET' && path.startsWith('repos/losol/callis/milestones/')) result = data.currentMilestone ?? data.milestonePages.flat().find(value => value.number === Number(path.split('/').at(-1)));
 else if (method === 'GET' && path.startsWith('repos/losol/callis/issues/')) result = data.currentIssue ?? data.issues.find(value => value.number === Number(path.split('/').at(-1)));
-else if (method === 'PATCH' && path.startsWith('repos/losol/callis/issues/')) result = {...data.issues.find(value => value.number === Number(path.split('/').at(-1))), ...body};
+else if (method === 'PATCH' && path.startsWith('repos/losol/callis/issues/')) result = data.patchResponse ?? {...data.issues.find(value => value.number === Number(path.split('/').at(-1))), milestone: data.milestonePages.flat().find(value => value.number === body.milestone)};
 else throw new Error('Unexpected mocked gh request: ' + JSON.stringify({args, body}));
 console.log(JSON.stringify(result));
 `,
@@ -128,6 +129,17 @@ describe('roadmap milestone CLI', () => {
     expect(again.status).toBe(0);
     expect(again.output).toContain('already assigned');
     expect(writes(again.calls)).toEqual([]);
+  });
+
+  it('fails when GitHub accepts the PATCH but silently drops the milestone without push access', () => {
+    const result = run([...selection, '--apply'], { patchResponse: issue });
+    expect(result.status).toBe(1);
+    expect(result.output).toContain('GitHub did not assign milestone');
+    expect(result.output).toContain('Verify repository push access');
+    expect(result.output).not.toContain('✓ 1 changes');
+    expect(writes(result.calls)).toEqual([
+      expect.objectContaining({ method: 'PATCH', body: { milestone: 7 } }),
+    ]);
   });
 
   it.each([

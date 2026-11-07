@@ -308,9 +308,15 @@ function syncReleaseMilestone(tasks: readonly RoadmapTask[]): void {
           );
         }
         // https://docs.github.com/rest/issues/issues#update-an-issue
-        rest('PATCH', `repos/${REPOSITORY}/issues/${issue.number}`, {
+        const updated = rest<RestIssue>('PATCH', `repos/${REPOSITORY}/issues/${issue.number}`, {
           milestone: milestone.number,
         });
+        // GitHub can silently drop this field without repository push access, even on HTTP 200.
+        if (updated.milestone?.number !== milestone.number) {
+          throw new Error(
+            `GitHub did not assign milestone ${JSON.stringify(release)} to #${issue.number}. Verify repository push access, then rerun the dry run.`,
+          );
+        }
       });
     }
   }
