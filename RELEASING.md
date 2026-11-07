@@ -2,6 +2,14 @@
 
 For the owner. Agents never publish or change anything on npm ([AGENTS.md](AGENTS.md#hard-rules)). How releases work in general is in [CONTRIBUTING.md](CONTRIBUTING.md#releases).
 
+## Release tracking
+
+Release scope is the owner-selected GitHub milestone, independent of roadmap waves. The authority and assignment rules live in [CONTRIBUTING](CONTRIBUTING.md#release-scope-and-tracking); use its one-tracker-per-milestone policy rather than a second release ledger. Confirm the milestone's task/PR scope and tracking issue when preparing the version PR, and preserve unselected work and manual assignments.
+
+After the owner-authorized workflow publishes, record the actual version-PR/release commit, package release links, registry versions/provenance and fresh installed-consumer verification in the release tracker. Only then close the tracker and milestone. Merged preparation, simulated tarballs and CI/native approval alone are not published verification. Remaining policy or product follow-ups keep their own states and do not silently enter the next milestone. Future release scope and 1.0 criteria remain owner decisions.
+
+The first five-package `0.1.0` release was published from `b92db53135f9556471d9689b5315c73a10f264ea` on 2026-11-07 CET (2026-11-06 23:38–23:39 UTC). Its [closed historical milestone](https://github.com/losol/callis/milestone/1), [release tracker #115](https://github.com/losol/callis/issues/115) and [package Releases](https://github.com/losol/callis/releases) hold the history. The first-release preparation sections below record the path used; they do not announce a pending or new publication.
+
 | What | How | Provenance |
 | --- | --- | --- |
 | A placeholder `0.0.1` of each package, which only reserves the name | By hand, from an empty directory, and deprecated at once ([1](#1-reserve-the-name-with-a-placeholder)) | No, and it contains no code |
