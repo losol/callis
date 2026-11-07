@@ -29,7 +29,7 @@
 | [T0010](tasks/T0010-operators.md) | Operators | 1 | T0008, T0009 | 4 | L |
 | [T0011](tasks/T0011-fn-existence.md) | Functions: exists and count | 1 | T0008, T0009, T0012 | 5 | S |
 | [T0012](tasks/T0012-fn-filtering.md) | Functions: where | 1 | T0008, T0009 | 4 | S |
-| [T0013](tasks/T0013-fn-subsetting-combining.md) | Functions: subsetting and combining | 1 | T0008, T0009 | 4 | S |
+| [T0013](tasks/T0013-fn-subsetting-combining.md) | Functions: subsetting and combining | 1 | T0008, T0009, T0044 | 5 | S |
 | [T0014](tasks/T0014-fn-conversion.md) | Functions: conversion | 1 | T0008 | 4 | M |
 | [T0015](tasks/T0015-fn-string.md) | Functions: string manipulation | 1 | T0008 | 4 | M |
 | [T0016](tasks/T0016-fn-math.md) | Functions: math | 1 | T0008 | 4 | S |
@@ -60,6 +60,7 @@
 | [T0041](tasks/T0041-fn-existence-completion.md) | Functions: remaining existence | 1 | T0011, T0013 | 6 | S |
 | [T0042](tasks/T0042-fn-projection-completion.md) | Functions: projection and repeat | 1 | T0012 | 5 | M |
 | [T0043](tasks/T0043-playground-example-library.md) | Shared playground example library | 3 | T0036, T0011 | 7 | M |
+| [T0044](tasks/T0044-fn-first-single.md) | Functions: first and single | 1 | T0008, T0009 | 4 | S |
 
 ## Dependency graph
 
@@ -82,7 +83,8 @@ flowchart TD
     T0010["T0010 Operators"]
     T0011["T0011 exists + count"]
     T0012["T0012 where"]
-    T0013["T0013 fn: subsetting + combining"]
+    T0013["T0013 fn: subsetting + combining completion"]
+    T0044["T0044 first + single"]
     T0014["T0014 fn: conversion"]
     T0015["T0015 fn: string"]
     T0016["T0016 fn: math"]
@@ -130,7 +132,8 @@ flowchart TD
   T0039 & T0025 --> T0040
   T0002 & T0003 & T0004 & T0005 & T0006 --> T0008
   T0003 & T0004 & T0005 & T0006 --> T0009
-  T0008 & T0009 --> T0010 & T0011 & T0012 & T0013
+  T0008 & T0009 --> T0010 & T0011 & T0012 & T0013 & T0044
+  T0044 --> T0013
   T0012 --> T0011 & T0042
   T0011 & T0013 --> T0041
   T0008 --> T0014 & T0015 & T0016 & T0017 & T0018
@@ -157,8 +160,8 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 | 1 | T0001, T0003, T0004, T0005, T0022 | 5 | Independent leaf modules, plus fixture vendoring. |
 | 2 | T0002, T0006, T0019, T0035 | 4 | T0035 is tooling and can start as soon as the conformance runner is merged. |
 | 3 | T0007, T0008, T0009, T0023, T0039 | 5 | T0008 is on the engine path; T0039 supplies R6 required by the selected first release. |
-| 4 | T0010, T0012, T0013, T0014, T0015, T0016, T0017, T0018 | up to 8 | Function groups only add files in `src/functions/`, so they rarely conflict. |
-| 5 | T0011, T0020, T0024, T0025, T0042 | 5 | Minimal public API can land while the rest of phase 1 continues. |
+| 4 | T0010, T0012, T0014, T0015, T0016, T0017, T0018, T0044 | up to 8 | Function groups only add files in `src/functions/`, so they rarely conflict. |
+| 5 | T0011, T0013, T0020, T0024, T0025, T0042 | 6 | Minimal public API can land while the rest of phase 1 continues. |
 | 6 | T0021, T0036, T0040, T0041 | 4 | T0040 verifies the five-package first release; it is independent of hooks/async work. |
 | 7 | T0037, T0038, T0043 | 3 | First-release readiness and full phase-1 API completion are independent milestones. |
 | 8 | T0026–T0034 | up to 9 | STU features, FHIR phase 2, performance and CLI, all independent. |
@@ -200,3 +203,9 @@ R6 metadata is not model-aware evaluator support, a public `model` option, a FHI
 - A differential test harness against `fhirpath.js` and the HL7 Java engine.
 - An optional "compiled sync-only" build mode, if T0033 shows a significant gain.
 - API stabilisation for 1.0: review the public API surface (the `@callis/core` exports, `ModelProvider`, the conformance `EvaluatorAdapter`, the error codes) and decide what is frozen for 1.0. Until then, 0.x releases may break any of it ([T0038](tasks/T0038-public-api-completion.md#public-api-sketch)).
+
+## Bounded first/single increment
+
+The owner selected only first and single for the next implementation increment, without selecting a release version, milestone or due date. [T0044](tasks/T0044-fn-first-single.md) / [#141](https://github.com/losol/callis/issues/141) is a native child of the still-open [T0013](tasks/T0013-fn-subsetting-combining.md) / [#25](https://github.com/losol/callis/issues/25). T0044 needs only the delivered evaluator/equality kernels; T0013 depends on its child for full completion, avoiding a parent/child dependency cycle. T0041 and T0038 keep their full-completion dependencies on T0013. Only first-dependent acceptance references use the smaller child.
+
+Function progress assigns first/single only to T0044 and the other eight functions only to T0013, so each original function appears once. The additional task row represents bounded work, not an additional feature or completed parent. No retroactive migration of historical tasks, model-aware FHIR, other collection functions, public API expansion or conformance explorer is selected.

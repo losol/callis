@@ -210,6 +210,14 @@ The task files and the [roadmap](docs/roadmap.md) are the plan. Issues are the i
 - Inside a task PR, only two plan changes are allowed: correcting that task's own file and splitting that task.
 - Task IDs are never reused or renumbered.
 
+### Small child tasks
+
+When the owner selects a small slice of an unfinished task, retain the stable parent ID, issue and original completion contract. Create one new unused task ID with a bounded goal, acceptance and links in both task files; link its issue as a native GitHub sub-issue. Do not retroactively restructure unrelated tasks. Preserve every omitted function and original acceptance in the open parent.
+
+A child depends on its actual delivered prerequisites, not on its unfinished parent. The parent adds the child as a completion dependency; never add the reverse edge and form a cycle. Callers requiring only the slice may depend on the child, while full-completion callers retain the parent dependency. Keep the roadmap table, graph, waves and headers consistent.
+
+The child implementation uses its own `Task:` ID and closes only its child issue after merge. A child checklist or completed sub-issue does not complete the parent: close the parent only when all original scope and criteria are fulfilled. Keep function ownership exclusive in progress metadata (child owns delivered slice; parent owns the remainder), with narrow regression coverage when splitting an existing function group. Do not infer a release milestone, version or date from the hierarchy.
+
 ### Task issues and the project board
 
 Every task has a task issue titled like `T0001: Lexer`, labelled `task` and with its wave (`wave-1`, …), and an item on the [Callis roadmap](https://github.com/orgs/losol/projects/11) project board. The issue links the task file. The PR that implements the task closes the issue with `Closes #<issue>`. A designated release-tracking issue is the exception: record delivered preparation there, but close it only after the published release is verified ([Release scope and tracking](#release-scope-and-tracking)).
