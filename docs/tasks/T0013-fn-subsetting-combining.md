@@ -12,4 +12,4 @@ Part of the [roadmap](../roadmap.md). Phase 1 · wave 4 · size S.
 ## Acceptance criteria
 
 - [ ] The spec examples are tests. `single()` on more than one item raises `eval/singleton-expected`.
-- [ ] Conformance groups: `testSingle`, `testFirstLast`, `testTail`, `testSkip`, `testTake`, `testIntersect`, `testExclude`, `testUnion`, `testCombine()` (except the STU `preserveOrder` cases), and `testDollar` once T0012, T0015 and T0017 are merged (its `invalid="semantic"` case needs T0024 for a compile-time error; until then it counts as "detected late").
+- [ ] Conformance groups: `testSingle`, `testFirstLast`, `testTail`, `testSkip`, `testTake`, `testIntersect`, `testExclude`, `testUnion`, `testCombine()` (except the STU `preserveOrder` cases), and `testDollar` once T0012, T0042, T0015 and T0017 are merged (its `invalid="semantic"` case needs T0024 for a compile-time error; until then it counts as "detected late").

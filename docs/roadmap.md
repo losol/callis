@@ -57,7 +57,7 @@
 | [T0038](tasks/T0038-public-api-completion.md) | Complete the phase-1 public API and documentation | 1 | T0007, T0010, T0011, T0012, T0013, T0014, T0015, T0016, T0017, T0021, T0023, T0024, T0025, T0041, T0042 | 7 | L |
 | [T0039](tasks/T0039-fhir-r6-model.md) | Pinned FHIR R6 model provider | 1 | T0019 | 3 | M |
 | [T0040](tasks/T0040-fhir-r6-validation.md) | R6 package and compatibility validation | 1 | T0039, T0025 | 6 | M |
-| [T0041](tasks/T0041-fn-existence-completion.md) | Functions: remaining existence | 1 | T0011 | 6 | S |
+| [T0041](tasks/T0041-fn-existence-completion.md) | Functions: remaining existence | 1 | T0011, T0013 | 6 | S |
 | [T0042](tasks/T0042-fn-projection-completion.md) | Functions: projection and repeat | 1 | T0012 | 5 | M |
 
 ## Dependency graph
@@ -130,7 +130,7 @@ flowchart TD
   T0003 & T0004 & T0005 & T0006 --> T0009
   T0008 & T0009 --> T0010 & T0011 & T0012 & T0013
   T0012 --> T0011 & T0042
-  T0011 --> T0041
+  T0011 & T0013 --> T0041
   T0008 --> T0014 & T0015 & T0016 & T0017 & T0018
   T0009 & T0018 --> T0020
   T0020 --> T0021
