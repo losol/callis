@@ -74,6 +74,14 @@ export const filteredGiven: unknown[] = evaluate(patient, "name.where(given[0] =
 
 `where` preserves input order, duplicates and input object identity. It evaluates criteria for each item with that item as `$this` and its zero-based input position as `$index`; nested filters have independent frames. True includes the item, false/empty excludes it. Criteria follow the existing FHIRPath singleton Boolean rule: a single non-Boolean item counts as true, including `0` or `''`; this is not JavaScript truthiness or string-to-Boolean conversion. Multiple criterion items raise `eval/singleton-expected`. Empty input returns empty without evaluating the criterion. This increment adds no options, model awareness or public async surface; the version-specific 0.1 matrix below remains historical.
 
+`exists()` returns whether the input has any items, and `count()` returns its item count (including duplicates). Their empty-input results are `[false]` and `[0]`. `exists(criteria)` uses the same per-item predicate helper as `where` and stops as soon as an item matches; later criteria, including their errors, are not evaluated.
+
+```ts
+export const numberOfNames: unknown[] = evaluate(patient, 'name.count()');
+export const hasAda: unknown[] = compile("name.exists(given[0] = 'Ada')").evaluate(patient);
+export const filteredNameCount: unknown[] = evaluate(patient, "name.where(given[0] = 'Ada').count()");
+```
+
 The public surface has no parser, AST input/property, static analyzer, typed output mode, async evaluation, hooks, model option, custom function registry, strict/lenient options or cache. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages; a model provider export does not imply a public model evaluation option.
 
 The examples are executed by the public documentation tests. Handwritten TSDoc and this small guide describe the initial API; a generated API reference is deferred with the expanded API.

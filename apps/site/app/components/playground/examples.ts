@@ -7,6 +7,13 @@ export const examples = [
     expression: "Patient.name.where(family = 'Example').given",
     expected: ['Ada', 'June'],
   },
+  { name: 'Name count', expression: 'Patient.name.count()', expected: [2] },
+  { name: 'Has Ada', expression: "Patient.name.exists(given[0] = 'Ada')", expected: [true] },
+  {
+    name: 'Filtered count',
+    expression: "Patient.name.where(family = 'Example').count()",
+    expected: [1],
+  },
   { name: 'Missing field', expression: 'Patient.address', expected: [] },
   { name: 'Boolean logic', expression: 'Patient.active and true', expected: [true] },
   { name: 'Exact decimal', expression: '0.1 + 0.2', expected: ['0.3'] },

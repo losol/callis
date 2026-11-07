@@ -65,6 +65,11 @@ describe('engineAdapter.evaluate', () => {
     ]);
   });
 
+  it('evaluates existence and count through the implemented default registry', async () => {
+    expect(await evaluate("name.exists(given = 'c')")).toEqual([true]);
+    expect(await evaluate("name.where(given = 'c').count()")).toEqual([1]);
+  });
+
   it('evaluates the expression on the single node the context selects', async () => {
     const result = await evaluate('given', { context: 'name[1]' });
     expect(result.map((item) => engineAdapter.describeValue(item))).toEqual([
@@ -123,7 +128,7 @@ describe('engineAdapter.classifyError', () => {
 
   // Honest conformance: a missing feature must never pass a test that expects an error.
   it.each([
-    'name.exists()',
+    'name.empty()',
     'name.where(given.empty())',
     "'a'.matches('a')",
     'name.given.aggregate($total)',

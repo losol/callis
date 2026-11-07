@@ -32,8 +32,8 @@ import { NotImplementedError } from './stub-adapter.ts';
  * semantic error would pass for the wrong reason, and fail again once the function exists.
  */
 const PLANNED_FUNCTIONS: Readonly<Record<string, string>> = {
-  ...tasks('T0011', 'empty exists all allTrue anyTrue allFalse anyFalse subsetOf supersetOf'),
-  ...tasks('T0011', 'count distinct isDistinct'),
+  ...tasks('T0041', 'empty all allTrue anyTrue allFalse anyFalse subsetOf supersetOf'),
+  ...tasks('T0041', 'distinct isDistinct'),
   ...tasks('T0042', 'select repeat ofType'),
   ...tasks('T0013', 'single first last tail skip take intersect exclude union combine'),
   ...tasks('T0014', 'iif toBoolean convertsToBoolean toInteger convertsToInteger toDecimal'),

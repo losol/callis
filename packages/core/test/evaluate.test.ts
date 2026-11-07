@@ -265,7 +265,10 @@ describe('the indexer', () => {
   });
 
   it('raises eval/singleton-expected for more than one index', () => {
-    expect(codeOf(() => run('name[name.given.count()]'))).toBe('semantic/unknown-function');
+    expect(codeOf(() => run('name[name.given.intentionallyMissingFunction()]'))).toBe(
+      'semantic/unknown-function',
+    );
+    expect(run('name[name.given.count()]')).toEqual([]);
     expect(codeOf(() => run('name[%i]', patient, { i: [0, 1] }))).toBe('eval/singleton-expected');
   });
 

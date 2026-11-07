@@ -17,7 +17,9 @@ function caught(action: () => unknown): unknown {
 
 describe('createRegistry', () => {
   it('has the standard library by default', () => {
-    expect(createRegistry().names()).toEqual(expect.arrayContaining(['as', 'is', 'not', 'where']));
+    expect(createRegistry().names()).toEqual(
+      expect.arrayContaining(['as', 'is', 'not', 'where', 'exists', 'count']),
+    );
   });
 
   it('can leave the standard library out', () => {
