@@ -34,7 +34,7 @@ import { NotImplementedError } from './stub-adapter.ts';
 const PLANNED_FUNCTIONS: Readonly<Record<string, string>> = {
   ...tasks('T0011', 'empty exists all allTrue anyTrue allFalse anyFalse subsetOf supersetOf'),
   ...tasks('T0011', 'count distinct isDistinct'),
-  ...tasks('T0012', 'where select repeat ofType'),
+  ...tasks('T0042', 'select repeat ofType'),
   ...tasks('T0013', 'single first last tail skip take intersect exclude union combine'),
   ...tasks('T0014', 'iif toBoolean convertsToBoolean toInteger convertsToInteger toDecimal'),
   ...tasks('T0014', 'convertsToDecimal toDate convertsToDate toDateTime convertsToDateTime'),

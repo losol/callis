@@ -99,7 +99,7 @@ describe('public synchronous model-less API', () => {
   it('exposes synchronous syntax, semantic and evaluation errors for display', () => {
     for (const [expression, errorClass, code] of [
       ['Patient.', FhirPathSyntaxError, 'syntax/unexpected-token'],
-      ['where(true)', FhirPathSemanticError, 'semantic/unknown-function'],
+      ['intentionallyMissingFunction()', FhirPathSemanticError, 'semantic/unknown-function'],
       ['%missing', FhirPathEvaluationError, 'eval/undefined-variable'],
     ] as const) {
       try {

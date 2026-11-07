@@ -146,7 +146,7 @@ export function check() {
   if (!(value instanceof Decimal)) throw new Error('duplicated Decimal identity');
   equal(value.toString(), '1000');
   let rejected = false;
-  try { compile('where(true)'); } catch (error) {
+  try { compile('intentionallyMissingFunction()'); } catch (error) {
     if (!(error instanceof FhirPathError) || !(error instanceof FhirPathSemanticError)) throw error;
     equal(error.code, 'semantic/unknown-function'); rejected = true;
   }
