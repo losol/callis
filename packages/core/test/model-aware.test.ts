@@ -185,6 +185,32 @@ describe('primitive extensions', () => {
     expect(run(patient, "Patient.name[1].given.where($this = 'a')")).toEqual(['a']);
   });
 
+  // A FHIR primitive with only extensions has no value: empty in System operations, present as a node.
+  it('behaves as empty in Boolean and Integer contexts, while it exists and has extensions', () => {
+    const missing = { url: 'http://example.org/missing', valueString: 'unknown' };
+    const input = {
+      resourceType: 'Patient',
+      _active: { extension: [missing] },
+      _multipleBirthInteger: { extension: [missing] },
+      name: [{ given: ['a', 'b'] }],
+    };
+    expect(run(input, 'Patient.active')).toEqual([{ extension: [missing] }]);
+    expect(run(input, 'Patient.active.exists()')).toEqual([true]);
+    expect(run(input, 'Patient.active.count()')).toEqual([1]);
+    expect(run(input, 'Patient.active.extension.value')).toEqual(['unknown']);
+    expect(run(input, 'Patient.active is boolean')).toEqual([true]);
+    expect(run(input, 'Patient.active and true')).toEqual([]);
+    expect(run(input, 'Patient.active or false')).toEqual([]);
+    expect(run(input, 'Patient.active implies false')).toEqual([]);
+    expect(run(input, 'Patient.active.not()')).toEqual([]);
+    expect(run(input, 'Patient.active = true')).toEqual([]);
+    expect(run(input, 'Patient.name.where(Patient.active).given')).toEqual([]);
+    expect(run(input, 'Patient.name.exists(Patient.active)')).toEqual([false]);
+    expect(run(input, 'Patient.name.given[Patient.multipleBirth]')).toEqual([]);
+    expect(run(input, '-Patient.multipleBirth')).toEqual([]);
+    expect(run(input, 'Patient.multipleBirth + 1')).toEqual([]);
+  });
+
   it('navigates the extensions of a primitive', () => {
     expect(run(patient, 'Patient.birthDate.extension.url')).toEqual([birthTime.url]);
     expect(run(patient, 'Patient.birthDate.extension.value')).toEqual([birthTime.valueDateTime]);
@@ -348,6 +374,21 @@ describe('variables and compiled expressions', () => {
     expect(compiled.evaluate(patient)).toEqual([true]);
     expect(compiled.evaluate(observation)).toEqual([]);
     expect(compiled.evaluate({ resourceType: 'Patient', birthDate: '2010' })).toEqual([false]);
+  });
+
+  // https://hl7.org/fhirpath/N1/#equals, https://hl7.org/fhirpath/N1/#union-collections
+  it('never equates resources of different types, so a union keeps both', () => {
+    const variables = {
+      a: { resourceType: 'Patient', id: 'x' },
+      b: { resourceType: 'Observation', id: 'x' },
+      c: { resourceType: 'Patient', id: 'x' },
+    };
+    expect(run(patient, '%a = %b', { variables })).toEqual([false]);
+    expect(run(patient, '%a ~ %b', { variables })).toEqual([false]);
+    expect(run(patient, '%a = %c', { variables })).toEqual([true]);
+    expect(run(patient, '(%a | %b).count()', { variables })).toEqual([2]);
+    expect(run(patient, '(%a | %c).count()', { variables })).toEqual([1]);
+    expect(run(patient, '%a in %b', { variables })).toEqual([false]);
   });
 
   it('compares typed complex values by their elements', () => {

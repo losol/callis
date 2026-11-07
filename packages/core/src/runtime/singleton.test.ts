@@ -146,3 +146,42 @@ describe('singleton', () => {
     >();
   });
 });
+
+// docs/tasks/T0018-model-aware-evaluation.md#choice-types-and-primitive-extensions
+describe('input nodes without a value', () => {
+  const extensionOnly = new ModelNode({
+    value: undefined,
+    name: 'active',
+    primitiveElement: {
+      extension: [{ url: 'http://example.org/missing', valueString: 'unknown' }],
+    },
+  });
+  const nodeOnly: ItemConversion<Item> = (item) => item;
+
+  it('are empty where a Boolean is expected, not the true of a non-Boolean item', () => {
+    expect(singleton([extensionOnly], 'Boolean', toBoolean)).toBeUndefined();
+  });
+
+  it('are empty where another type is expected, not a type mismatch', () => {
+    expect(singleton([extensionOnly], 'Integer', toInteger)).toBeUndefined();
+    expect(singleton([extensionOnly], 'String', toText)).toBeUndefined();
+  });
+
+  it('are passed on where any item is accepted, so type tests still see the node', () => {
+    expect(singleton([extensionOnly], 'Any', nodeOnly)).toBe(extensionOnly);
+  });
+
+  it('still count as items for the cardinality rule', () => {
+    expectEvaluationError(
+      () => singleton([extensionOnly, extensionOnly], 'Boolean', toBoolean),
+      'eval/singleton-expected',
+    );
+  });
+
+  it('do not change a node that holds a value', () => {
+    const active = new ModelNode({ value: true, name: 'active' });
+    // This test conversion reads JavaScript Booleans only, so the node takes the step-2 fallback.
+    expect(singleton([active], 'Boolean', toBoolean)).toBe(true);
+    expect(singleton([active], 'Any', nodeOnly)).toBe(active);
+  });
+});

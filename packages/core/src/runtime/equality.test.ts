@@ -454,6 +454,29 @@ describe('equality and equivalence', () => {
       });
     });
 
+    // https://hl7.org/fhirpath/N1/#equals: operands of different types are not equal.
+    it('is false for typed nodes of different model types, even with the same elements', () => {
+      const resource = (resourceType: string): Item => {
+        const [node] = toInputCollection({ resourceType, id: 'x' }, 'r', stubModel);
+        if (node === undefined) throw new Error('no node');
+        return node;
+      };
+      expectEquality(resource('Patient'), resource('Observation'), false, false, typed);
+      expectEquality(resource('Patient'), resource('Patient'), true, true, typed);
+      // A contained resource the model does not know is typed Resource, not Patient.
+      const [patient] = toInputCollection(
+        { resourceType: 'Patient', contained: [{ resourceType: 'Foo', id: 'x' }] },
+        'p',
+        stubModel,
+      );
+      const [contained] = navigateMember(patient === undefined ? [] : [patient], 'contained', {
+        model: stubModel,
+        lenientChoiceSuffix: false,
+      });
+      if (contained === undefined) throw new Error('no contained');
+      expectEquality(contained, resource('Patient'), false, false, typed);
+    });
+
     it('compares an untyped node by its JSON properties even with a model', () => {
       const [a] = toInputCollection({ resourceType: 'Foo', x: '2016-03' }, 'f', stubModel);
       const [b] = toInputCollection({ resourceType: 'Foo', x: '2016-03-28' }, 'f', stubModel);

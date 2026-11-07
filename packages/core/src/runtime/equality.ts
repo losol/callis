@@ -6,6 +6,7 @@
  * @see https://hl7.org/fhirpath/STU3/en/index.html#equality
  */
 import { ModelNode } from '../model/model-node.ts';
+import { isSameType } from '../types/type-test.ts';
 import { temporalEquals, temporalEquivalent } from '../values/datetime/compare.ts';
 import { quantityEquals, quantityEquivalent } from '../values/quantity/operations.ts';
 import { Quantity } from '../values/quantity/quantity.ts';
@@ -307,6 +308,22 @@ function typedChildren(
 }
 
 /**
+ * Whether two typed nodes have the same model type. Complex values of different types are never
+ * equal, as [N1 §6.1.1](https://hl7.org/fhirpath/N1/#equals) requires operands of the same type
+ * (no model type converts to another): a `Patient` and a `Practitioner` with the same `id` differ,
+ * even though their populated elements coincide.
+ */
+function sameModelType(a: object, b: object): boolean {
+  return (
+    a instanceof ModelNode &&
+    b instanceof ModelNode &&
+    a.type !== undefined &&
+    b.type !== undefined &&
+    isSameType(a.type, b.type)
+  );
+}
+
+/**
  * Whether both nodes are FHIR Quantities (or specializations such as `Age`) that did not convert
  * to `System.Quantity` because they have no UCUM code; they reach the complex comparison as nodes.
  */
@@ -407,7 +424,8 @@ function appendChildItems(
 /**
  * Equality of complex values: all child properties equal, recursively
  * ([N1 §6.1.1](https://hl7.org/fhirpath/N1/#equals)). Repeating children compare in order. With
- * a model, two typed nodes compare by their elements; otherwise by their JSON properties.
+ * a model, two typed nodes of the same model type compare by their elements, and nodes of
+ * different types are not equal; otherwise the JSON properties are compared.
  */
 function complexEquals(a: object, b: object, ctx: ComparisonContext): boolean | undefined {
   const left = jsonObjectOf(a);
@@ -421,6 +439,9 @@ function complexEquals(a: object, b: object, ctx: ComparisonContext): boolean | 
   const typedLeft = typedChildren(a, ctx);
   const typedRight = typedChildren(b, ctx);
   if (typedLeft !== undefined && typedRight !== undefined) {
+    if (!sameModelType(a, b)) {
+      return false;
+    }
     if (areFhirQuantities(a, b)) {
       return fhirQuantityEquals(typedLeft, typedRight, ctx, false);
     }
@@ -482,6 +503,9 @@ function complexEquivalent(a: object, b: object, ctx: EquivalenceContext): boole
   const typedLeft = typedChildren(a, ctx);
   const typedRight = typedChildren(b, ctx);
   if (typedLeft !== undefined && typedRight !== undefined) {
+    if (!sameModelType(a, b)) {
+      return false;
+    }
     if (areFhirQuantities(a, b)) {
       return fhirQuantityEquals(typedLeft, typedRight, ctx, true) === true;
     }

@@ -1,4 +1,5 @@
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
+import { ModelNode } from '../model/model-node.ts';
 import type { SystemTypeName } from '../types/system-types.ts';
 import type { Collection, Item } from './collection.ts';
 
@@ -29,6 +30,12 @@ export type ItemConversion<T extends Item> = (item: Item) => T | undefined;
  * Boolean contexts (the criteria of `where()` and `iif()`, the operands of `and` and `or`) use
  * the Boolean overload, which gives `true`, `false` or `undefined`. When the expected type is only
  * known as a {@link SystemTypeName}, the result may also be the `true` of step 2.
+ *
+ * An input node that holds no value, a FHIR primitive with only extensions, is empty whenever a
+ * specific type is expected: it has no Boolean to use, so neither step 2 nor an error applies
+ * ([T0018](https://github.com/losol/callis/blob/main/docs/tasks/T0018-model-aware-evaluation.md#choice-types-and-primitive-extensions)).
+ * When `Any` is expected, the node itself is passed to `convert`, so type tests and callers that
+ * convert the value themselves still see it.
  *
  * The error has no source span; the compiler attaches one at the operator or function call.
  *
@@ -71,6 +78,9 @@ export function singleton(
   }
   const item = collection[0];
   if (count === 1 && item !== undefined) {
+    if (expectedType !== 'Any' && item instanceof ModelNode && item.systemValue() === undefined) {
+      return undefined;
+    }
     const value = convert(item);
     if (value !== undefined) {
       return value;

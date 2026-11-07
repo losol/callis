@@ -135,6 +135,10 @@ describe.each(PROVIDERS)(
         expect(given.map((node) => node.value)).toEqual(['Peter', undefined]);
         expect(given[1]?.primitiveElement).toEqual({ extension: [syllables] });
         expect(run(patient, 'Patient.name.given.extension.value')).toEqual(['five']);
+        // The extension-only given exists, but has no value for Boolean or String operations.
+        expect(run(patient, 'Patient.name[0].given[1].exists()')).toEqual([true]);
+        expect(run(patient, 'Patient.name[0].given[1] and true')).toEqual([]);
+        expect(run(patient, "Patient.name[0].given[1] = 'Peter'")).toEqual([]);
         expect(typed(patient, 'Patient.gender').map(typeName)).toEqual(['code']);
         expect(typed(patient, 'Patient.birthDate').map(typeName)).toEqual(['date']);
         expect(run(patient, 'Patient.birthDate.extension.url')).toEqual([birthTime.url]);
@@ -267,6 +271,23 @@ describe.each(PROVIDERS)(
         'Patient is FHIR.Boolean',
       ])('%s raises eval/unknown-type', (expression) => {
         expect(codeOf(() => run(patient, expression))).toBe('eval/unknown-type');
+      });
+    });
+
+    // https://hl7.org/fhirpath/N1/#equals: different resource types with the same populated elements.
+    describe('equality of typed resources', () => {
+      const resources = [
+        { resourceType: 'Patient', id: 'x' },
+        { resourceType: 'Practitioner', id: 'x' },
+        { resourceType: 'Patient', id: 'x' },
+      ];
+
+      it('is false across resource types, and a union keeps both resources', () => {
+        expect(run(resources, '$this[0] = $this[1]')).toEqual([false]);
+        expect(run(resources, '$this[0] ~ $this[1]')).toEqual([false]);
+        expect(run(resources, '$this[0] = $this[2]')).toEqual([true]);
+        expect(run(resources, '($this[0] | $this[1]).count()')).toEqual([2]);
+        expect(run(resources, '($this[0] | $this[2]).count()')).toEqual([1]);
       });
     });
 
