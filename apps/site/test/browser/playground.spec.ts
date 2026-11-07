@@ -19,7 +19,7 @@ const test = browserTest.extend<{ browserErrors: readonly string[] }>({
 async function chooseExample(page: Page, title: string): Promise<void> {
   await page.getByRole('button', { name: /Choose example/ }).click();
   await page.getByRole('option', { name: title, exact: true }).click();
-  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Choose example/ })).toContainText(title);
 }
 
 for (const viewportWidth of [1440, 390]) {
@@ -114,17 +114,17 @@ test('prerenders a labelled shell and hydrates the direct route', async ({ page,
   );
   await expect(page.getByRole('textbox', { name: 'Input JSON', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Run expression', exact: true }).click();
-  await expect(page.locator('.playground-output pre')).toContainText('Ada');
+  await expect(page.locator('.playground-result')).toContainText('Ada');
   await page.reload();
   await expect(page.getByLabel('FHIRPath expression')).toHaveValue('Patient.name.given');
-  await expect(page.locator('.playground-output pre')).toHaveCount(0);
+  await expect(page.locator('.playground-result')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
 test('runs public-API presets and clears stale output on edit or reset', async ({ page }) => {
   await page.goto('/playground/');
   const run = page.getByRole('button', { name: 'Run expression', exact: true });
-  const output = page.locator('.playground-output pre');
+  const output = page.locator('.playground-result');
   for (const [name, expected] of [
     ['Given names', '[\n  "Ada",\n  "June",\n  "Alex"\n]'],
     ['First name', '[\n  "Ada",\n  "June"\n]'],
@@ -173,9 +173,7 @@ test('separates JSON and expression errors, recovers, and renders result text sa
   await expression.fill('text');
   await run.click();
   await expect(page.getByRole('alert')).toHaveCount(0);
-  await expect(page.locator('.playground-output pre')).toContainText(
-    '<img src=x onerror=alert(1)>',
-  );
+  await expect(page.locator('.playground-result')).toContainText('<img src=x onerror=alert(1)>');
   await expect(page.locator('.playground-output img')).toHaveCount(0);
 });
 
@@ -186,12 +184,17 @@ test('supports keyboard exit, run and search focus in both themes and a narrow l
   const json = page.getByRole('textbox', { name: 'Input JSON', exact: true });
   const expression = page.getByLabel('FHIRPath expression');
   await json.focus();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.getByRole('button', { name: 'Reset example', exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(expression).toBeFocused();
+  await expect(json).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(json).not.toBeFocused();
+  await expect(page.locator('.playground-expected summary')).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await expect(json).toBeFocused();
   await page.keyboard.press('ControlOrMeta+Enter');
-  await expect(page.locator('.playground-output pre')).toContainText('Ada');
+  await expect(page.locator('.playground-result')).toContainText('Ada');
   await expression.focus();
   await page.keyboard.press('ControlOrMeta+k');
   await expect(page.getByRole('dialog')).toBeVisible();
@@ -213,7 +216,7 @@ test('supports keyboard exit, run and search focus in both themes and a narrow l
     true,
   );
   await page.getByRole('button', { name: 'Run expression', exact: true }).click();
-  await expect(page.locator('.playground-output pre')).toContainText('Ada');
+  await expect(page.locator('.playground-result')).toContainText('Ada');
 });
 
 test('searches the library, announces empty results and loads the selected case', async ({
@@ -229,14 +232,15 @@ test('searches the library, announces empty results and loads the selected case'
     "Bundle.entry.resource.where(resourceType = 'Observation').where(status = 'final').count()",
   );
   await expect(page.locator('.playground-expected pre')).toHaveText('[\n  1\n]');
-  await expect(page.locator('.playground-output pre')).toHaveCount(0);
+  await expect(page.locator('.playground-result')).toHaveCount(0);
   await page.getByRole('button', { name: 'Run expression', exact: true }).click();
-  await expect(page.locator('.playground-comparison')).toHaveText('Matches original expectation.');
+  await expect(page.locator('.playground-comparison')).toHaveText('Matches expected');
   await search.fill('no-example-has-this-name');
   await expect(page.locator('.playground-search-status')).toHaveText(
     'No examples match your search.',
   );
   await expect(page.getByRole('button', { name: /Choose example/ })).toBeDisabled();
+  await page.getByRole('button', { name: 'Explain', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Final observations', exact: true }),
   ).toBeVisible();
@@ -251,31 +255,29 @@ for (const [id, title, expected] of [
 ] as const) {
   test(`deep-links, compares, edits and resets ${id}`, async ({ page }) => {
     await page.goto(`/playground/?example=${id}`);
-    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Choose example/ })).toContainText(title);
     const expression = page.getByLabel('FHIRPath expression');
     const original = await expression.inputValue();
     const run = page.getByRole('button', { name: 'Run expression', exact: true });
-    await expect(page.locator('.playground-output pre')).toHaveCount(0);
+    await expect(page.locator('.playground-result')).toHaveCount(0);
     await run.click();
-    await expect(page.locator('.playground-output pre')).toHaveText(expected);
-    await expect(page.locator('.playground-comparison')).toHaveText(
-      'Matches original expectation.',
-    );
+    await expect(page.locator('.playground-result')).toHaveText(expected);
+    await expect(page.locator('.playground-comparison')).toHaveText('Matches expected');
+    await expect(page.locator('.playground-expected')).not.toHaveAttribute('open');
     await expression.fill('true');
-    await expect(page.locator('.playground-output pre')).toHaveCount(0);
-    await expect(page.locator('.playground-comparison')).toHaveText('Not compared yet.');
-    await expect(page.locator('.playground-expected')).toContainText('Modified example');
+    await expect(page.locator('.playground-result')).toHaveCount(0);
+    await expect(page.locator('.playground-comparison')).toHaveText('Not run');
+    await expect(page.locator('.playground-expected')).toContainText('Edited example');
+    await expect(page.locator('.playground-expected pre')).toHaveText(expected);
     await run.click();
-    await expect(page.locator('.playground-comparison')).toHaveText(
-      'Modified run: original expectation shown for reference.',
-    );
+    await expect(page.locator('.playground-comparison')).toHaveText('Edited example');
     await page.getByRole('button', { name: 'Reset example', exact: true }).click();
     await expect(expression).toHaveValue(original);
-    await expect(page.locator('.playground-output pre')).toHaveCount(0);
-    await expect(page.locator('.playground-comparison')).toHaveText('Not compared yet.');
+    await expect(page.locator('.playground-result')).toHaveCount(0);
+    await expect(page.locator('.playground-comparison')).toHaveText('Not run');
     await page.reload();
     await expect(expression).toHaveValue(original);
-    await expect(page.locator('.playground-output pre')).toHaveCount(0);
+    await expect(page.locator('.playground-result')).toHaveCount(0);
   });
 }
 
@@ -296,7 +298,7 @@ test('handles unknown case IDs without importing a path and keeps user edits loc
   await json.fill('{"privateExampleText":"local-only-marker"}');
   await page.getByLabel('FHIRPath expression').fill('privateExampleText');
   await page.getByRole('button', { name: 'Run expression', exact: true }).click();
-  await expect(page.locator('.playground-output pre')).toContainText('local-only-marker');
+  await expect(page.locator('.playground-result')).toContainText('local-only-marker');
   expect(requests).toEqual([]);
   expect(page.url()).not.toContain('local-only-marker');
   expect(
@@ -314,13 +316,35 @@ test('uses the searchable picker from the keyboard without stealing editor or do
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('option', { name: 'Phone entry', exact: true })).toBeVisible();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Phone entry', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Choose example/ })).toContainText('Phone entry');
   const expression = page.getByLabel('FHIRPath expression');
   await expression.focus();
   await page.keyboard.press('ControlOrMeta+Enter');
-  await expect(page.locator('.playground-output pre')).toContainText('false');
+  await expect(page.locator('.playground-result')).toContainText('false');
   await page.keyboard.press('ControlOrMeta+k');
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(expression).toBeFocused();
+});
+
+test('shows the story and notes only when explanations are switched on', async ({ page }) => {
+  await page.goto('/playground/?example=official-given-name');
+  const explain = page.getByRole('button', { name: 'Explain', exact: true });
+  const title = page.getByRole('heading', { name: 'Official given name', exact: true });
+  await expect(explain).toHaveAttribute('aria-pressed', 'false');
+  await expect(title).toHaveCount(0);
+  await explain.click();
+  await expect(explain).toHaveAttribute('aria-pressed', 'true');
+  const panel = page.locator('#playground-explain');
+  await expect(title).toBeVisible();
+  await expect(panel.getByRole('heading', { level: 3 })).toBeVisible();
+  await expect(panel.getByText('Edge cases and provenance')).toBeVisible();
+  await expect(panel.getByText('What the preview supports')).toBeVisible();
+  await expect(panel.getByRole('link', { name: 'Link to this example' })).toHaveAttribute(
+    'href',
+    '?example=official-given-name',
+  );
+  await explain.click();
+  await expect(title).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'R4 conformance' })).toBeVisible();
 });

@@ -33,12 +33,8 @@ export default function PlaygroundPage() {
   return (
     <main className="playground">
       <header className="playground-intro">
-        <p className="playground-eyebrow">Try Callis</p>
         <h1>FHIRPath playground</h1>
-        <p>
-          Explore JSON with the first supported subset of FHIRPath. Your input and expressions stay
-          in this browser.
-        </p>
+        <p>Run FHIRPath on JSON. Everything stays in this browser.</p>
       </header>
       {Client ? (
         <Client />
