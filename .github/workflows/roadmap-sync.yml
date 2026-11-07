@@ -1,6 +1,8 @@
 name: Roadmap sync
 
 # Copies docs/roadmap.md to the task issues and the project board after it changes on main.
+# Script/test maintenance must not apply unrelated GitHub drift. Only actual roadmap/task sources
+# trigger automatic writes; maintainers can review a dry run before explicitly dispatching a sync.
 # See CONTRIBUTING.md, "Roadmap sync".
 on:
   push:
@@ -8,8 +10,6 @@ on:
     paths:
       - docs/roadmap.md
       - docs/tasks/**
-      - scripts/roadmap.ts
-      - scripts/sync-roadmap.ts
   workflow_dispatch:
 
 concurrency:

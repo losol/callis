@@ -4,11 +4,15 @@
  * roadmap is the source of truth, so the sync only ever changes GitHub. It never rewrites issue
  * bodies, closes issues or deletes anything except stale wave labels and stale "blocked by" links
  * between task issues. See CONTRIBUTING.md, "Roadmap sync".
+ * An explicit --release/--task selection only assigns unassigned open issues to an existing
+ * milestone, leaving roadmap labels, project fields and all other milestone choices alone.
  *
  * Usage:
  *   pnpm sync:roadmap                  show what would change, without changing anything
  *   pnpm sync:roadmap --apply          make the changes
  *   pnpm sync:roadmap --skip-project   leave the project board alone
+ *   pnpm sync:roadmap --release "<title>" --task T0001
+ *                                     only plan an explicit milestone assignment
  *
  * Needs the GitHub CLI (`gh`) logged in with the `repo` and `project` scopes, or a token in
  * `GH_TOKEN` with the same access.
@@ -46,6 +50,13 @@ interface RestIssue {
   readonly state: 'open' | 'closed';
   readonly labels: readonly { readonly name: string }[];
   readonly pull_request?: unknown;
+  readonly milestone?: RestMilestone | null;
+}
+
+interface RestMilestone {
+  readonly number: number;
+  readonly title: string;
+  readonly state: 'open' | 'closed';
 }
 
 interface ProjectField {
@@ -63,9 +74,12 @@ const { values: flags } = parseArgs({
   options: {
     apply: { type: 'boolean', default: false },
     'skip-project': { type: 'boolean', default: false },
+    release: { type: 'string' },
+    task: { type: 'string', multiple: true },
   },
 });
 const apply = flags.apply;
+const releaseMode = flags.release !== undefined || flags.task !== undefined;
 const changes: string[] = [];
 /**
  * The writes to GitHub that have succeeded so far. A change can take more than one write (creating
@@ -228,6 +242,84 @@ function readTaskIssues(): Map<string, RestIssue> {
     issues.set(id, issue);
   }
   return issues;
+}
+
+/**
+ * Assigns only explicitly selected, unassigned open task issues to an existing open milestone.
+ * GitHub remains the release-assignment source; waves and project fields are not release scope.
+ * https://docs.github.com/rest/issues/milestones#list-milestones
+ */
+function syncReleaseMilestone(tasks: readonly RoadmapTask[]): void {
+  const release = flags.release;
+  const selected = new Set(flags.task ?? []);
+  if (release === undefined || release.trim() === '' || selected.size === 0) {
+    throw new Error('Use --release "<existing milestone title>" with at least one --task T0001.');
+  }
+  const known = new Set(tasks.map((task) => task.id));
+  const unknown = [...selected].filter((id) => !known.has(id));
+  if (unknown.length > 0) {
+    throw new Error(`Unknown roadmap tasks: ${unknown.join(', ')}.`);
+  }
+  const matches = restList<RestMilestone>(
+    `repos/${REPOSITORY}/milestones?state=all&per_page=100`,
+  ).filter((milestone) => milestone.title === release);
+  const milestone = matches[0];
+  if (milestone === undefined || matches.length !== 1) {
+    throw new Error(
+      `Release ${JSON.stringify(release)} must match exactly one existing milestone; found ${matches.length}. No milestone is created automatically.`,
+    );
+  }
+  if (milestone.state !== 'open') {
+    throw new Error(
+      `Milestone ${JSON.stringify(release)} is closed; release history is preserved.`,
+    );
+  }
+
+  const issues = readTaskIssues();
+  for (const id of selected) {
+    const issue = issues.get(id);
+    if (issue === undefined) {
+      console.log(`= skip ${id}: no existing task issue; this mode does not create issues.`);
+    } else if (issue.state === 'closed') {
+      console.log(`= skip #${issue.number} ${id}: closed issue; delivered history is preserved.`);
+    } else if (issue.milestone != null) {
+      const reason =
+        issue.milestone.number === milestone.number ? 'already assigned' : 'preserve existing';
+      console.log(
+        `= skip #${issue.number} ${id}: ${reason} milestone ${JSON.stringify(issue.milestone.title)}.`,
+      );
+    } else {
+      change(`~ #${issue.number} ${id} milestone: (none) → ${JSON.stringify(release)}`, () => {
+        // Do not overwrite an assignment or delivered state changed since the planning read.
+        const currentMilestone = rest<RestMilestone>(
+          'GET',
+          `repos/${REPOSITORY}/milestones/${milestone.number}`,
+        );
+        const currentIssue = rest<RestIssue>('GET', `repos/${REPOSITORY}/issues/${issue.number}`);
+        if (
+          currentMilestone.state !== 'open' ||
+          currentMilestone.title !== release ||
+          currentIssue.state !== 'open' ||
+          taskIdOfIssueTitle(currentIssue.title) !== id ||
+          currentIssue.milestone != null
+        ) {
+          throw new Error(
+            `Milestone or issue #${issue.number} changed after planning; rerun the dry run before applying.`,
+          );
+        }
+        // https://docs.github.com/rest/issues/issues#update-an-issue
+        const updated = rest<RestIssue>('PATCH', `repos/${REPOSITORY}/issues/${issue.number}`, {
+          milestone: milestone.number,
+        });
+        // GitHub can silently drop this field without repository push access, even on HTTP 200.
+        if (updated.milestone?.number !== milestone.number) {
+          throw new Error(
+            `GitHub did not assign milestone ${JSON.stringify(release)} to #${issue.number}. Verify repository push access, then rerun the dry run.`,
+          );
+        }
+      });
+    }
+  }
 }
 
 function syncIssue(task: RoadmapTask, issue: RestIssue | undefined): RestIssue | undefined {
@@ -593,25 +685,34 @@ if (problems.length > 0) {
 // The project board is the only part that uses GraphQL and the `project` token scope.
 let syncingProject = false;
 try {
-  syncWaveLabels(roadmap.tasks);
+  let projectUrl: string | undefined;
+  if (releaseMode) {
+    syncReleaseMilestone(roadmap.tasks);
+  } else {
+    syncWaveLabels(roadmap.tasks);
 
-  const issues = readTaskIssues();
-  for (const task of roadmap.tasks) {
-    const issue = syncIssue(task, issues.get(task.id));
-    if (issue !== undefined) {
-      issues.set(task.id, issue);
+    const issues = readTaskIssues();
+    for (const task of roadmap.tasks) {
+      const issue = syncIssue(task, issues.get(task.id));
+      if (issue !== undefined) {
+        issues.set(task.id, issue);
+      }
     }
-  }
-  for (const task of roadmap.tasks) {
-    syncBlockedBy(task, issues.get(task.id), issues);
-  }
+    for (const task of roadmap.tasks) {
+      syncBlockedBy(task, issues.get(task.id), issues);
+    }
 
-  syncingProject = !flags['skip-project'];
-  const projectUrl = syncingProject ? syncProject(roadmap.tasks, issues) : undefined;
-  syncingProject = false;
+    syncingProject = !flags['skip-project'];
+    projectUrl = syncingProject ? syncProject(roadmap.tasks, issues) : undefined;
+    syncingProject = false;
+  }
 
   const summary =
-    changes.length === 0 ? 'GitHub already matches the roadmap' : `${changes.length} changes`;
+    changes.length > 0
+      ? `${changes.length} changes`
+      : releaseMode
+        ? 'No milestone updates; see skip reasons above'
+        : 'GitHub already matches the roadmap';
   console.log(
     `${apply ? '✓' : '(dry run)'} ${summary}${projectUrl === undefined ? '' : ` · ${projectUrl}`}`,
   );
