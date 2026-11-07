@@ -88,6 +88,7 @@ test('runs public-API presets and clears stale output on edit or reset', async (
   for (const [name, expected] of [
     ['Given names', '[\n  "Ada",\n  "June",\n  "Alex"\n]'],
     ['First name', '[\n  "Ada",\n  "June"\n]'],
+    ['Filtered names', '[\n  "Ada",\n  "June"\n]'],
     ['Missing field', '[]'],
     ['Boolean logic', '[\n  true\n]'],
     ['Exact decimal', '[\n  "0.3"\n]'],

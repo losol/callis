@@ -58,6 +58,13 @@ describe('engineAdapter.evaluate', () => {
     ]);
   });
 
+  it('evaluates the implemented filter instead of classifying it as missing', async () => {
+    const result = await evaluate("name.where(given = 'c').given");
+    expect(result.map((item) => engineAdapter.describeValue(item))).toEqual([
+      { type: 'System.String', value: 'c' },
+    ]);
+  });
+
   it('evaluates the expression on the single node the context selects', async () => {
     const result = await evaluate('given', { context: 'name[1]' });
     expect(result.map((item) => engineAdapter.describeValue(item))).toEqual([
@@ -109,6 +116,7 @@ describe('engineAdapter.classifyError', () => {
     ['true.not(1)', 'semantic', 'semantic/wrong-arity'],
     ['%undefined', 'execution', 'eval/undefined-variable'],
     ['name.given is Patient', 'execution', 'eval/singleton-expected'],
+    ["name.given.where($this | 'x')", 'execution', 'eval/singleton-expected'],
   ])('classifies %s as %s', async (expression, kind, code) => {
     expect(await classify(expression)).toMatchObject({ kind, code });
   });

@@ -39,13 +39,16 @@ assert.deepEqual(Object.keys(core).sort(), [
   'FhirPathError', 'FhirPathSyntaxError', 'FhirPathSemanticError', 'FhirPathEvaluationError'
 ].sort());
 assert.deepEqual(core.evaluate({ name: [{ given: ['Ada'] }] }, 'name.given'), ['Ada']);
+assert.deepEqual(core.evaluate({ rows: [{ value: 1 }, { value: 2 }] }, 'rows.where(value > 1).value'), [2]);
+assert.deepEqual(core.compile('rows.where($index = 0).value').evaluate({ rows: [{ value: 3 }, { value: 4 }] }), [3]);
+assert.throws(() => core.evaluate({ rows: [1] }, 'rows.where(true | false)'), error => error.code === 'eval/singleton-expected');
 const compiled = core.compile('%value', { units: core.minimalUnitSystem });
 assert.deepEqual(compiled.evaluate(null, {
   variables: { value: core.Decimal.parse('9007199254740993.1200') }, decimalOutput: 'string'
 }), ['9007199254740993.1200']);
 assert.equal(JSON.stringify(core.evaluate(null, "1.200 'mg'", { decimalOutput: 'string' })),
   '[{"value":"1.200","unit":"mg","system":"http://unitsofmeasure.org","code":"mg"}]');
-assert.throws(() => core.compile('where(true)'), core.FhirPathSemanticError);
+assert.throws(() => core.compile('intentionallyMissingFunction()'), core.FhirPathSemanticError);
 assert.throws(() => core.evaluate(null, '%missing'), core.FhirPathEvaluationError);
 assert.equal(core.Decimal.name, 'Decimal');
 const converted = ucum.convert(core.Decimal.ONE, 'kg', 'g');
@@ -53,7 +56,7 @@ assert.ok(converted instanceof core.Decimal);
 assert.equal(converted.toString(), '1000');
 for (const [expression, ErrorClass] of [
   ['Patient.', core.FhirPathSyntaxError],
-  ['where(true)', core.FhirPathSemanticError],
+  ['intentionallyMissingFunction()', core.FhirPathSemanticError],
   ['%missing', core.FhirPathEvaluationError],
 ]) {
   assert.throws(() => core.evaluate(null, expression), (error) => {

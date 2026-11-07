@@ -123,8 +123,9 @@ export function PlaygroundClient() {
       <aside className="playground-notes" aria-label="Playground limitations and sources">
         <p>
           This preview supports model-less navigation, literals, indexing and the implemented
-          operators. Functions such as <code>where()</code>, <code>exists()</code> and{' '}
-          <code>resolve()</code> are not available yet. Unsupported expressions report an error.
+          operators, plus filtering with <code>where()</code>. Functions such as{' '}
+          <code>exists()</code> and <code>resolve()</code> are not available yet. Unsupported
+          expressions report an error.
         </p>
         <p>
           Computed decimals are displayed as exact strings, including quantity values. Input uses

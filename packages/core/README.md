@@ -26,6 +26,16 @@ export const firstGiven: unknown[] = compile('name.given[0]').evaluate(patient);
 
 Results are plain arrays (`['Ada', 'Mina']` and `['Ada']` here). Decimal output defaults to potentially lossy numbers. Use `decimalOutput: 'string'` for exact evaluator Decimal and Quantity magnitudes; it cannot restore digits already lost in input numbers. Errors extend `FhirPathError` and throw synchronously. See the [public API guide](https://github.com/losol/callis/blob/main/docs/guide.md) for options, errors, supported functions and deferred capabilities.
 
+## Filtering increment
+
+The current synchronous API also supports `where(criteria)` on model-less JSON:
+
+```ts
+export const filteredGiven: unknown[] = evaluate(patient, "name.where(given[0] = 'Ada').given");
+```
+
+Filtering preserves input order, duplicates and input object identity. Criteria use FHIRPath singleton Boolean semantics; false/empty excludes an item and a multi-item criterion raises `eval/singleton-expected`. The existing single non-Boolean fallback is true. No public options or async surface are added. This is an implementation update, not a publication announcement; the 0.1 subset below describes the original release.
+
 ## First 0.1 subset
 
 Paths, literals, indexing, unary polarity, arithmetic, comparisons, equality/equivalence, membership/union, Boolean logic and system type operations are implemented. The only built-in functions are `not`, `is`, `as` and `ofType`; collection/filter/string/math/FHIR function groups are deferred. Exact Decimal string output is opt-in; input JavaScript number precision cannot be recovered. No public model option, async, hooks, analyzer, parser/AST or typed-output API is included.

@@ -10,6 +10,7 @@ export const patient: Readonly<{
 };
 export const given: unknown[] = evaluate(patient, 'Patient.name.given');
 export const firstGiven: unknown[] = compile('name.given[0]').evaluate(patient);
+export const filteredGiven: unknown[] = evaluate(patient, "name.where(given[0] = 'Ada').given");
 export const exactDecimal: unknown[] = evaluate(null, '9007199254740993.1200', {
   decimalOutput: 'string',
 });

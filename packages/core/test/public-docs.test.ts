@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   exactDecimal,
   expressionError,
+  filteredGiven,
   firstGiven,
   given,
   quantityJson,
@@ -14,6 +15,7 @@ describe('public guide examples', () => {
   it('runs the quick start, exact rendering and error examples', () => {
     expect(given).toEqual(['Ada', 'Mina']);
     expect(firstGiven).toEqual(['Ada']);
+    expect(filteredGiven).toEqual(['Ada', 'Mina']);
     expect(exactDecimal).toEqual(['9007199254740993.1200']);
     expect(quantityJson).toBe(
       '[{"value":"1.200","unit":"mg","system":"http://unitsofmeasure.org","code":"mg"}]',
