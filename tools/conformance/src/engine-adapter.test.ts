@@ -70,6 +70,20 @@ describe('engineAdapter.evaluate', () => {
     expect(await evaluate("name.where(given = 'c').count()")).toEqual([1]);
   });
 
+  // https://hl7.org/fhirpath/N1/#single-collection
+  // https://hl7.org/fhirpath/N1/#first-collection
+  it('evaluates first and single without hiding cardinality errors as missing features', async () => {
+    const result = await evaluate('name.first().single().given');
+    expect(result.map((item) => engineAdapter.describeValue(item))).toEqual([
+      { type: 'System.String', value: 'a' },
+      { type: 'System.String', value: 'b' },
+    ]);
+    expect(await classify('name.single()')).toMatchObject({
+      kind: 'execution',
+      code: 'eval/singleton-expected',
+    });
+  });
+
   it('evaluates the expression on the single node the context selects', async () => {
     const result = await evaluate('given', { context: 'name[1]' });
     expect(result.map((item) => engineAdapter.describeValue(item))).toEqual([
@@ -164,7 +178,7 @@ describe('engineAdapter.classifyError', () => {
   });
 
   it('reports the context expression as not implemented when it uses such a feature', async () => {
-    expect(await classify('given', { context: 'name.first()' })).toMatchObject({
+    expect(await classify('given', { context: 'name.last()' })).toMatchObject({
       kind: 'not-implemented',
     });
   });

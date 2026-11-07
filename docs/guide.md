@@ -82,6 +82,15 @@ export const hasAda: unknown[] = compile("name.exists(given[0] = 'Ada')").evalua
 export const filteredNameCount: unknown[] = evaluate(patient, "name.where(given[0] = 'Ada').count()");
 ```
 
+`first()` returns the first item in input order. `single()` returns the item only when there is at most one; multiple items raise `eval/singleton-expected`, including duplicate items. Both return empty for empty input and preserve the selected input object and its provenance.
+
+```ts
+export const selectedGiven: unknown[] = evaluate(patient, 'name.given.first()');
+export const onlyName: unknown[] = compile('name.single()').evaluate(patient);
+```
+
+These zero-argument functions use the existing synchronous model-less API. The remaining subsetting and combining functions, including `last()`, remain deferred.
+
 The public surface has no parser, AST input/property, static analyzer, typed output mode, async evaluation, hooks, model option, custom function registry, strict/lenient options or cache. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages; a model provider export does not imply a public model evaluation option.
 
 The examples are executed by the public documentation tests. Handwritten TSDoc and this small guide describe the initial API; a generated API reference is deferred with the expanded API.

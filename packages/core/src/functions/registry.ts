@@ -7,6 +7,7 @@ import { arityOf, defineFunction, type FunctionDefinition } from './define.ts';
 import { EXISTENCE_FUNCTIONS } from './existence.ts';
 import { FILTERING_FUNCTIONS } from './filtering.ts';
 import { LOGIC_FUNCTIONS } from './logic.ts';
+import { SUBSETTING_FUNCTIONS } from './subsetting.ts';
 import { TYPE_FUNCTIONS } from './types.ts';
 
 /**
@@ -48,6 +49,7 @@ const STANDARD_FUNCTIONS: readonly FunctionDefinition[] = Object.freeze([
   ...EXISTENCE_FUNCTIONS,
   ...FILTERING_FUNCTIONS,
   ...LOGIC_FUNCTIONS,
+  ...SUBSETTING_FUNCTIONS,
   ...TYPE_FUNCTIONS,
 ]);
 
