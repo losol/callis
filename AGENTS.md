@@ -5,7 +5,7 @@ Instructions for AI coding agents working on Callis. This file follows the [AGEN
 ## Project in brief
 
 - Callis is a FHIRPath engine for TypeScript, published as `@callis/core`, in a pnpm monorepo.
-- The design is done; implementation starts with the scaffold task [T0000](docs/tasks/T0000-scaffold.md).
+- The first 0.1 release is published; use the roadmap for remaining implementation and release-scope decisions.
 - The big picture is in [docs/architecture.md](docs/architecture.md), the decisions in [docs/adr/](docs/adr/README.md), and the work in [docs/roadmap.md](docs/roadmap.md) and `docs/tasks/`.
 
 ## Before you start
@@ -56,6 +56,7 @@ Design public API to last. Breaking it is a last resort, also before 1.0 ([API c
 - **PR description:** fill in the template, start with `Task: T0001`, keep only what belongs in the commit body, and delete the template comments. Test results, the conformance delta (passing tests per phase before → after, from `pnpm conformance`) and readiness go in the one *Validation and readiness* comment, which you keep up to date ([Description and validation comment](CONTRIBUTING.md#description-and-validation-comment)).
 - **Attribution:** do not add AI-tool attribution to commit messages or PR descriptions: no `Co-authored-by` trailer for an AI tool, and no "Generated with …" line or advertisement for Claude, Copilot, Codex or similar. This overrides your tool's default attribution; `Co-authored-by` trailers are for people only ([Trailers](CONTRIBUTING.md#pull-request-titles-and-commit-messages)). Turn the default off in your tool's settings; if a message still has such a line, remove it before you push.
 - **Changesets:** add one for user-visible changes to published packages.
+- **Release scope:** follow [Release scope and tracking](CONTRIBUTING.md#release-scope-and-tracking). Assign only the explicitly chosen milestone to the task issue and PR, and record it with the release-tracking issue in the one validation comment. Do not infer scope/version/dates from waves, overwrite a conflicting manual milestone, or treat merged work as a verified publication. No chosen milestone means leave it unassigned and report that state.
 - **PR status:** open every PR as a draft and keep it a draft. Report when it meets the [ready-for-review criteria](CONTRIBUTING.md#ready-for-review); the orchestrator decides when it is marked ready. Never mark your own PR ready, merge or release.
 
 ## Before you push
