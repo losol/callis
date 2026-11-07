@@ -83,9 +83,8 @@ describe('extractItems', () => {
         'isDistinct',
       ],
       T0042: ['select', 'repeat', 'ofType'],
+      T0044: ['first', 'single'],
       T0013: [
-        'single',
-        'first',
         'last',
         'tail',
         'skip',
@@ -182,6 +181,17 @@ describe('extractItems', () => {
           .flatMap((task) => task.items.map((item) => item.name))
           .toSorted(),
       ).toEqual(['count', 'exists', 'where']);
+    });
+
+    it('keeps the parent open and counts the child functions once', () => {
+      const original = ['single', 'first', 'last', 'tail', 'skip', 'take', 'intersect', 'exclude', 'union', 'combine'];
+      const names = ['T0013', 'T0044'].flatMap((id) => extractItems(id, taskFile(id)).map((item) => item.name));
+      expect(names.toSorted()).toEqual(original.toSorted());
+      expect(new Set(names).size).toBe(original.length);
+      const roadmap = readFileSync(join(tasksDir, '../roadmap.md'), 'utf8');
+      const plan = buildPlan(roadmap, (file) => readFileSync(join(tasksDir, '..', file), 'utf8'), [{ tasks: ['T0044'] }]);
+      expect(plan.find((task) => task.id === 'T0013')?.doneAt).toBeNull();
+      expect(plan.filter((task) => task.doneAt !== null).flatMap((task) => task.items.map((item) => item.name)).toSorted()).toEqual(['first', 'single']);
     });
 
     it('has a pinned list for every task that has a source', () => {
