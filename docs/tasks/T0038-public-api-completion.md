@@ -94,7 +94,7 @@ interface EvaluateOptions {
 }
 
 interface EvaluationLimits {
-  maxRepeatItems?: number;               // items one repeat() call may produce; finite default chosen in T0012
+  maxRepeatItems?: number;               // items one repeat() call may produce; finite default chosen in T0042
   maxCollectionSize?: number;            // items in any intermediate collection; finite default
 }
 

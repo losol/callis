@@ -251,7 +251,7 @@ Line coverage for the core (excluding generated code) is reported in CI with a t
   - parsing has a maximum nesting depth, and the compiler applies the same limit to the whole expression tree, including long chains such as `a.b.c…` or `x and y and …` that the parser builds in a loop (`syntax/nesting-limit`, never a stack overflow)
   - a `Decimal` has at most 10,000 digits and a scale of at most 10,000. Arithmetic beyond that is overflow or underflow and gives empty, as FHIRPath 3.0.0 requires, instead of growing without limit ([T0004](tasks/T0004-decimal.md#design-notes))
   - `repeat()` deduplicates per the spec, which only guarantees termination for projections that navigate a finite input tree. A value-generating projection such as `'x'.repeat($this & 'x')` never runs out of new items.
-  - every evaluation therefore has finite default limits (`limits.maxRepeatItems`, `limits.maxCollectionSize`), and exceeding them raises `eval/limit-exceeded` in both sync and async mode ([T0012](tasks/T0012-fn-filtering.md), [T0038](tasks/T0038-public-api-completion.md#public-api-sketch))
+  - every evaluation therefore has finite default limits (`limits.maxRepeatItems`, `limits.maxCollectionSize`), and exceeding them raises `eval/limit-exceeded` in both sync and async mode ([T0042](tasks/T0042-fn-projection-completion.md), [T0038](tasks/T0038-public-api-completion.md#public-api-sketch))
   - async evaluations can be cancelled with a signal ([T0021](tasks/T0021-hooks-async.md#sync-and-async))
 - **Errors** never include input data beyond the expression text, so diagnostics are safe to log.
 
