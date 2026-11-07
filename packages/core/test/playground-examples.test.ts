@@ -16,6 +16,7 @@ describe('shared synthetic playground cases', () => {
   // https://hl7.org/fhirpath/N1/#path-selection
   // https://hl7.org/fhirpath/N1/#filtering-and-projection
   // https://hl7.org/fhirpath/N1/#existence
+  // https://hl7.org/fhirpath/N1/#subsetting
   it.each(cases)('$id agrees with both public compile and evaluate', (item) => {
     for (const mode of ['compile', 'evaluate']) {
       let input: unknown;
@@ -39,10 +40,13 @@ describe('shared synthetic playground cases', () => {
     }
   });
 
-  it('keeps nine original presets and exactly three clinical-data questions', () => {
-    expect(cases).toHaveLength(12);
+  it('keeps the original presets and clinical questions alongside two subsetting cases', () => {
+    expect(cases).toHaveLength(14);
     expect(
       cases.filter((item) => item.tags.includes('clinical-data')).map((item) => item.id),
     ).toEqual(['official-given-name', 'final-observation-count', 'phone-entry']);
+    expect(cases.filter((item) => item.tags.includes('subsetting')).map((item) => item.id)).toEqual(
+      ['first-recorded-value', 'single-official-name'],
+    );
   });
 });

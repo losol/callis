@@ -325,9 +325,10 @@ export function PlaygroundClient() {
                 <summary>What the preview supports</summary>
                 <p>
                   Model-less navigation, literals, indexing and the implemented operators, plus{' '}
-                  <code>where()</code>, <code>exists()</code> and <code>count()</code>. Functions
-                  such as <code>resolve()</code> are not available yet. Unsupported expressions
-                  report an error.
+                  <code>where()</code>, <code>exists()</code>, <code>count()</code>,{' '}
+                  <code>first()</code> and <code>single()</code>. Functions such as{' '}
+                  <code>resolve()</code> are not available yet. Unsupported expressions report an
+                  error.
                 </p>
                 <p>
                   Computed decimals are displayed as exact strings, including quantity values. Input

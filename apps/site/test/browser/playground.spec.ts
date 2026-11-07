@@ -245,10 +245,12 @@ test('searches the library, announces empty results and loads the selected case'
     page.getByRole('heading', { name: 'Final observations', exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Clear search', exact: true }).click();
-  await expect(page.locator('.playground-search-status')).toHaveText('12 examples found.');
+  await expect(page.locator('.playground-search-status')).toHaveText('14 examples found.');
 });
 
 for (const [id, title, expected] of [
+  ['first-recorded-value', 'First recorded value', '[\n  3\n]'],
+  ['single-official-name', 'Single official name', '[\n  "Ada"\n]'],
   ['official-given-name', 'Official given name', '[\n  "Ada"\n]'],
   ['final-observation-count', 'Final observations', '[\n  1\n]'],
   ['phone-entry', 'Phone entry', '[\n  false\n]'],
@@ -347,4 +349,25 @@ test('shows the story and notes only when explanations are switched on', async (
   await explain.click();
   await expect(title).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'R4 conformance' })).toBeVisible();
+});
+
+// https://hl7.org/fhirpath/N1/#single-collection
+// https://hl7.org/fhirpath/N1/#first-collection
+test('runs empty selections and reports single cardinality and arity errors', async ({ page }) => {
+  await page.goto('/playground/?example=first-recorded-value');
+  const expression = page.getByLabel('FHIRPath expression');
+  const run = page.getByRole('button', { name: 'Run expression', exact: true });
+  for (const selection of ['{}.first()', '{}.single()']) {
+    await expression.fill(selection);
+    await run.click();
+    await expect(page.locator('.playground-result')).toHaveText('[]');
+  }
+  for (const [text, code] of [
+    ['values.single()', 'eval/singleton-expected'],
+    ['values.first(1)', 'semantic/wrong-arity'],
+  ] as const) {
+    await expression.fill(text);
+    await run.click();
+    await expect(page.getByRole('alert')).toContainText(code);
+  }
 });
