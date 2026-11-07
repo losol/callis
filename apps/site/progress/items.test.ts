@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { extractItems, ITEM_SOURCES, sectionLines } from './items.ts';
+import { buildPlan } from './plan.ts';
 
 const tasksDir = join(fileURLToPath(new URL('.', import.meta.url)), '../../../docs/tasks');
 
@@ -67,9 +68,10 @@ describe('extractItems', () => {
         'in',
         'contains',
       ],
-      T0011: [
+      T0011: ['exists', 'count'],
+      T0012: ['where'],
+      T0041: [
         'empty',
-        'exists',
         'all',
         'allTrue',
         'anyTrue',
@@ -77,11 +79,10 @@ describe('extractItems', () => {
         'anyFalse',
         'subsetOf',
         'supersetOf',
-        'count',
         'distinct',
         'isDistinct',
       ],
-      T0012: ['where', 'select', 'repeat', 'ofType'],
+      T0042: ['select', 'repeat', 'ofType'],
       T0013: [
         'single',
         'first',
@@ -141,6 +142,47 @@ describe('extractItems', () => {
         'htmlChecks',
       ],
     };
+
+    it('preserves every original split function exactly once', () => {
+      const original = [
+        'empty',
+        'exists',
+        'all',
+        'allTrue',
+        'anyTrue',
+        'allFalse',
+        'anyFalse',
+        'subsetOf',
+        'supersetOf',
+        'count',
+        'distinct',
+        'isDistinct',
+        'where',
+        'select',
+        'repeat',
+        'ofType',
+      ];
+      const actual = ['T0011', 'T0012', 'T0041', 'T0042'].flatMap((id) =>
+        extractItems(id, taskFile(id)).map((item) => item.name),
+      );
+      expect(actual.toSorted()).toEqual(original.toSorted());
+      expect(new Set(actual).size).toBe(original.length);
+    });
+
+    it('does not mark completion functions delivered with the reduced tasks', () => {
+      const roadmap = readFileSync(join(tasksDir, '../roadmap.md'), 'utf8');
+      const plan = buildPlan(roadmap, (file) => readFileSync(join(tasksDir, '..', file), 'utf8'), [
+        { tasks: ['T0011', 'T0012'] },
+      ]);
+      expect(plan.find((task) => task.id === 'T0041')?.doneAt).toBeNull();
+      expect(plan.find((task) => task.id === 'T0042')?.doneAt).toBeNull();
+      expect(
+        plan
+          .filter((task) => task.doneAt !== null)
+          .flatMap((task) => task.items.map((item) => item.name))
+          .toSorted(),
+      ).toEqual(['count', 'exists', 'where']);
+    });
 
     it('has a pinned list for every task that has a source', () => {
       expect(Object.keys(ITEM_SOURCES).sort()).toEqual(Object.keys(expected).sort());

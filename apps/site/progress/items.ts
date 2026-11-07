@@ -31,6 +31,8 @@ export const ITEM_SOURCES: Readonly<Record<string, ItemSource>> = {
   T0015: FUNCTION_TASK,
   T0016: FUNCTION_TASK,
   T0017: FUNCTION_TASK,
+  T0041: FUNCTION_TASK,
+  T0042: FUNCTION_TASK,
   T0020: {
     kind: 'function',
     section: 'Scope',
