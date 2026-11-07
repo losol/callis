@@ -24,6 +24,6 @@ The owner narrowed 0.2 to where/exists/count. The original select/repeat/ofType 
 
 - [ ] Spec examples and edge cases cover empty input, true/false/empty predicates, canonical single non-Boolean fallback, multi-item predicate errors, arity and preserved order/provenance; tests cite the spec anchors.
 - [ ] Internal sync/async lambda tests preserve nested `$this`/`$index`; public compile/evaluate work synchronously on synthetic JSON without new options or input mutation.
-- [ ] Conformance `testWhere` and matching supported cases pass; baseline/report changes record new passes without weakening existing tests or waiving unrelated unimplemented functions.
+- [ ] Standalone where behaviour passes focused spec/public tests. The pinned `testWhere` fixtures call count, so the where-only PR records that missing-function dependency honestly; the combined T0011 head must turn the full group green. Do not add count to this task or introduce a circular dependency. Baseline/report changes record actual passes without weakening tests or waiving unrelated unimplemented functions.
 - [ ] README/guide and a synthetic playground example show model-less filtering through the public API, with a minor changeset and appropriate package/browser checks.
 - [ ] The shared predicate helper is available to T0011, with no new coercion policy or unsupported function advertised.

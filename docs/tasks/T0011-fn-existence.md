@@ -24,5 +24,5 @@ T0012 is a real dependency because it owns the shared predicate helper. Implemen
 - [ ] Spec examples for both functions are tests in `existence.test.ts`, including zero/one/many input items and false/empty/non-Boolean/multi-item criteria under the canonical predicate contract.
 - [ ] Criteria reuse the where helper and preserve nested frames/variables in internal sync/async tests; a successful existence match avoids later predicate evaluation.
 - [ ] Public compile/evaluate on synthetic JSON support the two functions and composed where/exists/count expressions, with plain output and no API-option expansion.
-- [ ] Conformance groups `testExists` and `testCount` and matching supported cases pass; the baseline may only increase. Remaining existence-group criteria stay in T0041.
+- [ ] On the combined where/exists/count head, conformance groups `testExists`, `testCount` and the inherited `testWhere` pass; the baseline may only increase. The pinned where fixtures require this task's count implementation, so do not claim their full group passed on the where-only parent. Remaining existence-group criteria stay in T0041.
 - [ ] Documentation/examples, minor changeset and relevant package/browser checks cover only the approved three-function 0.2 surface.
