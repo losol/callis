@@ -48,6 +48,11 @@ assert.deepEqual(compiled.evaluate(null, {
 }), ['9007199254740993.1200']);
 assert.equal(JSON.stringify(core.evaluate(null, "1.200 'mg'", { decimalOutput: 'string' })),
   '[{"value":"1.200","unit":"mg","system":"http://unitsofmeasure.org","code":"mg"}]');
+assert.deepEqual(core.evaluate(null, '{}.count()'), [0]);
+assert.deepEqual(core.evaluate(null, '{}.exists()'), [false]);
+const rows = { rows: [{ flag: false }, { flag: true }, { flag: [true, false] }] };
+assert.deepEqual(core.compile('rows.exists(flag)').evaluate(rows), [true]);
+assert.deepEqual(core.evaluate({ rows: [{ value: 1 }, { value: 2 }] }, 'rows.where(value > 1).count()'), [1]);
 assert.throws(() => core.compile('intentionallyMissingFunction()'), core.FhirPathSemanticError);
 assert.throws(() => core.evaluate(null, '%missing'), core.FhirPathEvaluationError);
 assert.equal(core.Decimal.name, 'Decimal');

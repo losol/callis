@@ -26,7 +26,7 @@ export const firstGiven: unknown[] = compile('name.given[0]').evaluate(patient);
 
 Results are plain arrays (`['Ada', 'Mina']` and `['Ada']` here). Decimal output defaults to potentially lossy numbers. Use `decimalOutput: 'string'` for exact evaluator Decimal and Quantity magnitudes; it cannot restore digits already lost in input numbers. Errors extend `FhirPathError` and throw synchronously. See the [public API guide](https://github.com/losol/callis/blob/main/docs/guide.md) for options, errors, supported functions and deferred capabilities.
 
-## Filtering increment
+## Filtering and existence increment
 
 The current synchronous API also supports `where(criteria)` on model-less JSON:
 
@@ -35,6 +35,16 @@ export const filteredGiven: unknown[] = evaluate(patient, "name.where(given[0] =
 ```
 
 Filtering preserves input order, duplicates and input object identity. Criteria use FHIRPath singleton Boolean semantics; false/empty excludes an item and a multi-item criterion raises `eval/singleton-expected`. The existing single non-Boolean fallback is true. No public options or async surface are added. This is an implementation update, not a publication announcement; the 0.1 subset below describes the original release.
+
+`exists([criteria])` and `count()` compose with filtering through the same public API:
+
+```ts
+export const numberOfNames: unknown[] = evaluate(patient, 'name.count()');
+export const hasAda: unknown[] = compile("name.exists(given[0] = 'Ada')").evaluate(patient);
+export const filteredNameCount: unknown[] = evaluate(patient, "name.where(given[0] = 'Ada').count()");
+```
+
+Empty input gives false for existence and zero for count. Optional existence criteria use the same singleton Boolean contract as where, and stop after the first match. These functions add no new API options, model awareness or public async behavior.
 
 ## First 0.1 subset
 

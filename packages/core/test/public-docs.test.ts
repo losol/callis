@@ -5,8 +5,11 @@ import {
   exactDecimal,
   expressionError,
   filteredGiven,
+  filteredNameCount,
   firstGiven,
   given,
+  hasAda,
+  numberOfNames,
   quantityJson,
   variable,
 } from '../../../examples/public-api.ts';
@@ -16,6 +19,9 @@ describe('public guide examples', () => {
     expect(given).toEqual(['Ada', 'Mina']);
     expect(firstGiven).toEqual(['Ada']);
     expect(filteredGiven).toEqual(['Ada', 'Mina']);
+    expect(numberOfNames).toEqual([1]);
+    expect(hasAda).toEqual([true]);
+    expect(filteredNameCount).toEqual([1]);
     expect(exactDecimal).toEqual(['9007199254740993.1200']);
     expect(quantityJson).toBe(
       '[{"value":"1.200","unit":"mg","system":"http://unitsofmeasure.org","code":"mg"}]',
