@@ -17,6 +17,8 @@ export const filteredNameCount: unknown[] = evaluate(
   patient,
   "name.where(given[0] = 'Ada').count()",
 );
+export const selectedGiven: unknown[] = evaluate(patient, 'name.given.first()');
+export const onlyName: unknown[] = compile('name.single()').evaluate(patient);
 export const exactDecimal: unknown[] = evaluate(null, '9007199254740993.1200', {
   decimalOutput: 'string',
 });

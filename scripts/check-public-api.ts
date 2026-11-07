@@ -48,6 +48,13 @@ assert.deepEqual(compiled.evaluate(null, {
 }), ['9007199254740993.1200']);
 assert.equal(JSON.stringify(core.evaluate(null, "1.200 'mg'", { decimalOutput: 'string' })),
   '[{"value":"1.200","unit":"mg","system":"http://unitsofmeasure.org","code":"mg"}]');
+assert.deepEqual(core.evaluate(null, '{}.first()'), []);
+assert.deepEqual(core.evaluate(null, '{}.single()'), []);
+const selected = { rows: [{ value: 3 }, { value: 1 }] };
+assert.equal(core.evaluate(selected, 'rows.first()')[0], selected.rows[0]);
+assert.equal(core.compile('rows.where(value = 1).single()').evaluate(selected)[0], selected.rows[1]);
+assert.throws(() => core.evaluate(selected, 'rows.single()'), error => error.code === 'eval/singleton-expected');
+assert.throws(() => core.compile('first(1)'), error => error.code === 'semantic/wrong-arity');
 assert.deepEqual(core.evaluate(null, '{}.count()'), [0]);
 assert.deepEqual(core.evaluate(null, '{}.exists()'), [false]);
 const rows = { rows: [{ flag: false }, { flag: true }, { flag: [true, false] }] };

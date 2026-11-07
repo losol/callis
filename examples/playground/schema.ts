@@ -34,7 +34,7 @@ export interface ExampleCase {
     readonly note: string;
   };
   readonly requires: {
-    readonly functions: readonly ('where' | 'exists' | 'count')[];
+    readonly functions: readonly ('where' | 'exists' | 'count' | 'first' | 'single')[];
     readonly model: 'none';
   };
 }
@@ -123,7 +123,9 @@ function example(value: unknown): value is ExampleCase {
     keys(requires, 'functions model') &&
     requires.model === 'none' &&
     texts(requires.functions) &&
-    requires.functions.every((name) => ['where', 'exists', 'count'].includes(name)) &&
+    requires.functions.every((name) =>
+      ['where', 'exists', 'count', 'first', 'single'].includes(name),
+    ) &&
     new Set(requires.functions).size === requires.functions.length
   );
 }

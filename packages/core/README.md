@@ -46,6 +46,15 @@ export const filteredNameCount: unknown[] = evaluate(patient, "name.where(given[
 
 Empty input gives false for existence and zero for count. Optional existence criteria use the same singleton Boolean contract as where, and stop after the first match. These functions add no new API options, model awareness or public async behavior.
 
+`first()` returns the first item in input order. `single()` returns the item only when there is at most one; multiple items raise `eval/singleton-expected`, including duplicate items. Both return empty for empty input and preserve the selected input object and its provenance.
+
+```ts
+export const selectedGiven: unknown[] = evaluate(patient, 'name.given.first()');
+export const onlyName: unknown[] = compile('name.single()').evaluate(patient);
+```
+
+These zero-argument functions use the existing synchronous model-less API. The remaining subsetting and combining functions, including `last()`, remain deferred.
+
 ## First 0.1 subset
 
 Paths, literals, indexing, unary polarity, arithmetic, comparisons, equality/equivalence, membership/union, Boolean logic and system type operations are implemented. The only built-in functions are `not`, `is`, `as` and `ofType`; collection/filter/string/math/FHIR function groups are deferred. Exact Decimal string output is opt-in; input JavaScript number precision cannot be recovered. No public model option, async, hooks, analyzer, parser/AST or typed-output API is included.

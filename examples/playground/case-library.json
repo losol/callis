@@ -357,6 +357,66 @@
         "functions": ["exists"],
         "model": "none"
       }
+    },
+    {
+      "id": "first-recorded-value",
+      "title": "First recorded value",
+      "summary": "Select the first value in recorded order.",
+      "narrative": "An invented collection has repeated numbers in a deliberate order.",
+      "question": "Which value is recorded first?",
+      "inputText": "{\n  \"values\": [3, 1, 3]\n}",
+      "expression": "values.first()",
+      "expected": {
+        "kind": "result",
+        "value": [3]
+      },
+      "explanation": "first returns the first item, like index zero. It does not sort or deduplicate the input.",
+      "edgeCases": [
+        "Empty input returns empty.",
+        "Changing input order can change the selected item."
+      ],
+      "tags": ["subsetting", "first", "ordering"],
+      "source": {
+        "path": "packages/core/src/functions/subsetting.test.ts",
+        "revision": "f61479dbbae7e7558c7974fe6549de6688fe1f77",
+        "test": "first and single through the public synchronous API",
+        "license": "MIT",
+        "note": "Original synthetic Callis teaching example; no real patient data."
+      },
+      "requires": {
+        "functions": ["first"],
+        "model": "none"
+      }
+    },
+    {
+      "id": "single-official-name",
+      "title": "Single official name",
+      "summary": "Require one name after filtering the recorded labels.",
+      "narrative": "An invented patient excerpt records one official name and one nickname.",
+      "question": "What given name is recorded under the single official name?",
+      "inputText": "{\n  \"resourceType\": \"Patient\",\n  \"name\": [\n    {\n      \"use\": \"official\",\n      \"given\": [\n        \"Ada\"\n      ]\n    },\n    {\n      \"use\": \"nickname\",\n      \"given\": [\n        \"AJ\"\n      ]\n    }\n  ]\n}",
+      "expression": "Patient.name.where(use = 'official').single().given",
+      "expected": {
+        "kind": "result",
+        "value": ["Ada"]
+      },
+      "explanation": "where selects the official entries; single requires at most one and preserves that entry for navigation.",
+      "edgeCases": [
+        "No matching names returns empty.",
+        "Multiple matching names raise eval/singleton-expected, even if identical."
+      ],
+      "tags": ["subsetting", "single", "filtering", "names"],
+      "source": {
+        "path": "packages/core/src/functions/subsetting.test.ts",
+        "revision": "f61479dbbae7e7558c7974fe6549de6688fe1f77",
+        "test": "first and single through the public synchronous API",
+        "license": "MIT",
+        "note": "Original synthetic Callis teaching example; no real patient data."
+      },
+      "requires": {
+        "functions": ["where", "single"],
+        "model": "none"
+      }
     }
   ]
 }

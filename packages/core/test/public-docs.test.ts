@@ -10,7 +10,10 @@ import {
   given,
   hasAda,
   numberOfNames,
+  onlyName,
+  patient,
   quantityJson,
+  selectedGiven,
   variable,
 } from '../../../examples/public-api.ts';
 
@@ -22,6 +25,9 @@ describe('public guide examples', () => {
     expect(numberOfNames).toEqual([1]);
     expect(hasAda).toEqual([true]);
     expect(filteredNameCount).toEqual([1]);
+    expect(selectedGiven).toEqual(['Ada']);
+    expect(onlyName).toEqual(patient.name);
+    expect(onlyName[0]).toBe(patient.name[0]);
     expect(exactDecimal).toEqual(['9007199254740993.1200']);
     expect(quantityJson).toBe(
       '[{"value":"1.200","unit":"mg","system":"http://unitsofmeasure.org","code":"mg"}]',
