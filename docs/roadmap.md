@@ -60,7 +60,6 @@
 | [T0041](tasks/T0041-fn-existence-completion.md) | Functions: remaining existence | 1 | T0011, T0013 | 6 | S |
 | [T0042](tasks/T0042-fn-projection-completion.md) | Functions: projection and repeat | 1 | T0012 | 5 | M |
 | [T0043](tasks/T0043-playground-example-library.md) | Shared playground example library | 3 | T0036, T0011 | 7 | M |
-
 | [T0044](tasks/T0044-fn-first-single.md) | Functions: first and single | 1 | T0008, T0009 | 4 | S |
 
 ## Dependency graph

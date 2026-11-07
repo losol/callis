@@ -5,7 +5,6 @@ Part of the [roadmap](../roadmap.md). Phase 1 · wave 5 · size S.
 - **Depends on:** [T0008](T0008-compiler-evaluator.md), [T0009](T0009-equality-kernels.md), [T0044](T0044-fn-first-single.md)
 - **Issue:** [#25](https://github.com/losol/callis/issues/25)
 - **Child:** [T0044](T0044-fn-first-single.md) / [#141](https://github.com/losol/callis/issues/141) (first and single)
-- **Parallel with:** [T0010](T0010-operators.md)–[T0012](T0012-fn-filtering.md), [T0014](T0014-fn-conversion.md)–[T0018](T0018-model-aware-evaluation.md)
 
 ## Goal
 
