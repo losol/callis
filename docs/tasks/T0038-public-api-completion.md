@@ -2,7 +2,7 @@
 
 Part of the [roadmap](../roadmap.md). Phase 1 · wave 7 · size L.
 
-- **Depends on:** [T0025](T0025-public-api-release.md), [T0007](T0007-ucum.md), [T0010](T0010-operators.md), [T0011](T0011-fn-existence.md), [T0012](T0012-fn-filtering.md), [T0013](T0013-fn-subsetting-combining.md), [T0014](T0014-fn-conversion.md), [T0015](T0015-fn-string.md), [T0016](T0016-fn-math.md), [T0017](T0017-fn-tree-utility.md), [T0021](T0021-hooks-async.md), [T0023](T0023-xml-fixture-conversion.md), [T0024](T0024-static-analysis.md) (together they cover all of phase 1)
+- **Depends on:** [T0041](T0041-fn-existence-completion.md), [T0042](T0042-fn-projection-completion.md), [T0025](T0025-public-api-release.md), [T0007](T0007-ucum.md), [T0010](T0010-operators.md), [T0011](T0011-fn-existence.md), [T0012](T0012-fn-filtering.md), [T0013](T0013-fn-subsetting-combining.md), [T0014](T0014-fn-conversion.md), [T0015](T0015-fn-string.md), [T0016](T0016-fn-math.md), [T0017](T0017-fn-tree-utility.md), [T0021](T0021-hooks-async.md), [T0023](T0023-xml-fixture-conversion.md), [T0024](T0024-static-analysis.md) (together they cover all of phase 1)
 - **Parallel with:** –
 - **Background:** [ADR-0009](../adr/0009-esm-only-zero-deps.md), [ADR-0012](../adr/0012-evaluation-defaults.md) (option and output defaults)
 
@@ -11,6 +11,8 @@ Part of the [roadmap](../roadmap.md). Phase 1 · wave 7 · size L.
 Complete the public API as the remaining phase-1 capabilities land, through later 0.x releases. This preserves the full API design deferred from T0025; it is neither a prerequisite for the first 0.1.0 nor a definition of 1.0. Read [T0025](T0025-public-api-release.md) for the initial surface and [T0037](T0037-first-release-readiness.md) for release readiness.
 
 ## Scope
+
+The narrowed T0011/T0012 deliver only exists/count/where. Full phase-1 completion still requires T0041/T0042; their omitted functions and limits are not silently dropped or pulled into 0.2.
 
 - `src/api/`:
   - final `parse`, `analyze`, `compile`, `evaluate`, `evaluateAsync` with overloads for `output: 'typed'`
@@ -92,7 +94,7 @@ interface EvaluateOptions {
 }
 
 interface EvaluationLimits {
-  maxRepeatItems?: number;               // items one repeat() call may produce; finite default chosen in T0012
+  maxRepeatItems?: number;               // items one repeat() call may produce; finite default chosen in T0042
   maxCollectionSize?: number;            // items in any intermediate collection; finite default
 }
 

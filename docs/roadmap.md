@@ -27,8 +27,8 @@
 | [T0008](tasks/T0008-compiler-evaluator.md) | Compiler and evaluator core | 1 | T0002, T0003, T0004, T0005, T0006 | 3 | L |
 | [T0009](tasks/T0009-equality-kernels.md) | Equality, equivalence and ordering kernels | 1 | T0003, T0004, T0005, T0006 | 3 | M |
 | [T0010](tasks/T0010-operators.md) | Operators | 1 | T0008, T0009 | 4 | L |
-| [T0011](tasks/T0011-fn-existence.md) | Functions: existence | 1 | T0008, T0009 | 4 | S |
-| [T0012](tasks/T0012-fn-filtering.md) | Functions: filtering and projection | 1 | T0008, T0009 | 4 | M |
+| [T0011](tasks/T0011-fn-existence.md) | Functions: exists and count | 1 | T0008, T0009, T0012 | 5 | S |
+| [T0012](tasks/T0012-fn-filtering.md) | Functions: where | 1 | T0008, T0009 | 4 | S |
 | [T0013](tasks/T0013-fn-subsetting-combining.md) | Functions: subsetting and combining | 1 | T0008, T0009 | 4 | S |
 | [T0014](tasks/T0014-fn-conversion.md) | Functions: conversion | 1 | T0008 | 4 | M |
 | [T0015](tasks/T0015-fn-string.md) | Functions: string manipulation | 1 | T0008 | 4 | M |
@@ -54,9 +54,11 @@
 | [T0035](tasks/T0035-docs-site.md) | Documentation site, progress page and deployment | 3 | T0022 | 2 | L |
 | [T0036](tasks/T0036-playground.md) | Simple FHIRPath playground | 3 | T0025, T0035 | 6 | M |
 | [T0037](tasks/T0037-first-release-readiness.md) | First 0.1 release readiness | 1 | T0025, T0036 | 7 | M |
-| [T0038](tasks/T0038-public-api-completion.md) | Complete the phase-1 public API and documentation | 1 | T0007, T0010, T0011, T0012, T0013, T0014, T0015, T0016, T0017, T0021, T0023, T0024, T0025 | 7 | L |
+| [T0038](tasks/T0038-public-api-completion.md) | Complete the phase-1 public API and documentation | 1 | T0007, T0010, T0011, T0012, T0013, T0014, T0015, T0016, T0017, T0021, T0023, T0024, T0025, T0041, T0042 | 7 | L |
 | [T0039](tasks/T0039-fhir-r6-model.md) | Pinned FHIR R6 model provider | 1 | T0019 | 3 | M |
 | [T0040](tasks/T0040-fhir-r6-validation.md) | R6 package and compatibility validation | 1 | T0039, T0025 | 6 | M |
+| [T0041](tasks/T0041-fn-existence-completion.md) | Functions: remaining existence | 1 | T0011, T0013 | 6 | S |
+| [T0042](tasks/T0042-fn-projection-completion.md) | Functions: projection and repeat | 1 | T0012 | 5 | M |
 
 ## Dependency graph
 
@@ -77,8 +79,8 @@ flowchart TD
     T0008["T0008 Compiler + evaluator"]
     T0009["T0009 Equality kernels"]
     T0010["T0010 Operators"]
-    T0011["T0011 fn: existence"]
-    T0012["T0012 fn: filtering"]
+    T0011["T0011 exists + count"]
+    T0012["T0012 where"]
     T0013["T0013 fn: subsetting + combining"]
     T0014["T0014 fn: conversion"]
     T0015["T0015 fn: string"]
@@ -96,6 +98,8 @@ flowchart TD
     T0038["T0038 Complete phase-1 API + docs"]
     T0039["T0039 Pinned R6 provider"]
     T0040["T0040 R6 package validation"]
+    T0041["T0041 Remaining existence"]
+    T0042["T0042 Projection + repeat"]
   end
 
   subgraph P2["Phase 2: STU"]
@@ -125,6 +129,8 @@ flowchart TD
   T0002 & T0003 & T0004 & T0005 & T0006 --> T0008
   T0003 & T0004 & T0005 & T0006 --> T0009
   T0008 & T0009 --> T0010 & T0011 & T0012 & T0013
+  T0012 --> T0011 & T0042
+  T0011 & T0013 --> T0041
   T0008 --> T0014 & T0015 & T0016 & T0017 & T0018
   T0009 & T0018 --> T0020
   T0020 --> T0021
@@ -134,7 +140,7 @@ flowchart TD
   T0007 & T0008 & T0009 & T0010 & T0023 --> T0025
   T0025 & T0035 --> T0036
   T0025 & T0036 --> T0037
-  T0007 & T0010 & T0011 & T0012 & T0013 & T0014 & T0015 & T0016 & T0017 & T0021 & T0023 & T0024 & T0025 --> T0038
+  T0007 & T0010 & T0011 & T0012 & T0013 & T0014 & T0015 & T0016 & T0017 & T0021 & T0023 & T0024 & T0025 & T0041 & T0042 --> T0038
   T0038 --> T0026 & T0027 & T0028 & T0029 & T0030 & T0031 & T0032 & T0033 & T0034
 ```
 
@@ -148,9 +154,9 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 | 1 | T0001, T0003, T0004, T0005, T0022 | 5 | Independent leaf modules, plus fixture vendoring. |
 | 2 | T0002, T0006, T0019, T0035 | 4 | T0035 is tooling and can start as soon as the conformance runner is merged. |
 | 3 | T0007, T0008, T0009, T0023, T0039 | 5 | T0008 is on the engine path; T0039 supplies R6 required by the selected first release. |
-| 4 | T0010, T0011, T0012, T0013, T0014, T0015, T0016, T0017, T0018 | up to 9 | Function groups only add files in `src/functions/`, so they rarely conflict. |
-| 5 | T0020, T0024, T0025 | 3 | Minimal public API can land while the rest of phase 1 continues. |
-| 6 | T0021, T0036, T0040 | 3 | T0040 verifies the five-package first release; it is independent of hooks/async work. |
+| 4 | T0010, T0012, T0013, T0014, T0015, T0016, T0017, T0018 | up to 8 | Function groups only add files in `src/functions/`, so they rarely conflict. |
+| 5 | T0011, T0020, T0024, T0025, T0042 | 5 | Minimal public API can land while the rest of phase 1 continues. |
+| 6 | T0021, T0036, T0040, T0041 | 4 | T0040 verifies the five-package first release; it is independent of hooks/async work. |
 | 7 | T0037, T0038 | 2 | First-release readiness and full phase-1 API completion are independent milestones. |
 | 8 | T0026–T0034 | up to 9 | STU features, FHIR phase 2, performance and CLI, all independent. |
 
@@ -169,6 +175,12 @@ Every release documents exactly what is supported and what remains unimplemented
 **Conformance becomes measurable** once T0008, T0022 and T0023 are merged (end of the original engine wave 3). From wave 4 on, every PR reports its conformance delta.
 
 **Phase 2 (T0026–T0032)** implements the STU parts of N1 and the additions in [FHIRPath 3.0.0](https://hl7.org/fhirpath/STU3/). These tasks are independent of each other and can all run in parallel after T0038 completes the phase-1 API. Each one must make its matching conformance tests (those classified *STU*) pass, and update the scope table in [architecture.md](architecture.md#specification-baseline-and-scope).
+
+## Approved 0.2 scope
+
+The owner approved only where, exists and count for [0.2.0](https://github.com/losol/callis/milestone/2) on 2026-11-07 (release tracker [#131](https://github.com/losol/callis/issues/131)), using the existing synchronous model-less API. T0012 implements where and its shared predicate helper first; T0011 then implements exists/count using that helper, in a separate task PR. Documentation, synthetic playground examples, stable errors, public consumer checks and the conformance ratchet are part of those tasks. No model-aware evaluation, select/repeat, lossless JSON, public async or new API options are included.
+
+The remaining original T0011/T0012 scope and acceptance are preserved in T0041/T0042, with explicit dependencies into T0038's later full phase-1 completion. Those completion tasks have no selected release. Waves reflect these real helper/completion dependencies, not release numbers. GitHub milestone assignments are the release-scope authority under [CONTRIBUTING](../CONTRIBUTING.md#release-scope-and-tracking); the target does not authorize merge or publication and sets no due date or 1.0 criteria.
 
 ## R6 model delivery
 
