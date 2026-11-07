@@ -19,6 +19,7 @@ import {
 } from '../values/string.ts';
 import type { Collection, Item } from './collection.ts';
 import type { ComparisonContext } from './comparison.ts';
+import { navigateChildren } from './navigation.ts';
 import {
   asQuantity,
   isComplex,
@@ -280,11 +281,101 @@ function sharedPropertyNames(
 }
 
 /**
+ * The children of a typed node by element name, from model navigation
+ * ([T0018: navigation rules](https://github.com/losol/callis/blob/main/docs/tasks/T0018-model-aware-evaluation.md#navigation-rules)),
+ * so a FHIR `date` child compares as a Date and a choice element by its one value. Undefined
+ * without a model or for an untyped node, which compare by their JSON properties instead.
+ */
+function typedChildren(
+  item: object,
+  ctx: ComparisonContext,
+): ReadonlyMap<string, Collection> | undefined {
+  if (ctx.model === undefined || !(item instanceof ModelNode) || item.type === undefined) {
+    return undefined;
+  }
+  const groups = new Map<string, Item[]>();
+  for (const child of navigateChildren([item], ctx)) {
+    const name = child instanceof ModelNode ? child.name : '';
+    const group = groups.get(name);
+    if (group === undefined) {
+      groups.set(name, [child]);
+    } else {
+      group.push(child);
+    }
+  }
+  return groups;
+}
+
+/**
+ * Whether both nodes are FHIR Quantities (or specializations such as `Age`) that did not convert
+ * to `System.Quantity` because they have no UCUM code; they reach the complex comparison as nodes.
+ */
+function areFhirQuantities(a: object, b: object): boolean {
+  return (
+    a instanceof ModelNode &&
+    b instanceof ModelNode &&
+    a.systemType === 'Quantity' &&
+    b.systemType === 'Quantity'
+  );
+}
+
+/**
+ * Equality (`=`) and equivalence (`~`) of two FHIR Quantities without a UCUM code, by their
+ * elements, as the HL7 Java engine compares them
+ * ([spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#fhir-quantities-without-a-ucum-code)):
+ * when either has a `code`, both must have the same code; otherwise, when either has a `unit`,
+ * both must have the same unit text. A mismatch is undetermined for `=` and false for `~`, like
+ * quantities whose units cannot be related. Then the values compare as Decimals; two quantities
+ * without a value are equal, and one without a value is undetermined.
+ */
+function fhirQuantityEquals(
+  left: ReadonlyMap<string, Collection>,
+  right: ReadonlyMap<string, Collection>,
+  ctx: ComparisonContext,
+  equivalence: boolean,
+): boolean | undefined {
+  const mismatch = equivalence ? false : undefined;
+  const unitElement = left.has('code') || right.has('code') ? 'code' : 'unit';
+  const leftUnit = left.get(unitElement) ?? [];
+  const rightUnit = right.get(unitElement) ?? [];
+  if (leftUnit.length !== rightUnit.length) {
+    return mismatch;
+  }
+  if (leftUnit.length > 0 && equals(leftUnit, rightUnit, ctx) !== true) {
+    return mismatch;
+  }
+  const leftValue = left.get('value') ?? [];
+  const rightValue = right.get('value') ?? [];
+  if (leftValue.length === 0 && rightValue.length === 0) {
+    return true;
+  }
+  if (leftValue.length === 0 || rightValue.length === 0) {
+    return mismatch;
+  }
+  return equivalence ? equivalent(leftValue, rightValue, ctx) : equals(leftValue, rightValue, ctx);
+}
+
+/** Whether two typed nodes have values for the same elements. */
+function sameElements(
+  left: ReadonlyMap<string, Collection>,
+  right: ReadonlyMap<string, Collection>,
+): boolean {
+  if (left.size !== right.size) {
+    return false;
+  }
+  for (const name of left.keys()) {
+    if (!right.has(name)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
  * The items a child property gives in model-less navigation: arrays are flattened and `null` is
  * skipped, and every value is an untyped input node.
  */
 function childItems(owner: object, json: Readonly<Record<string, unknown>>, name: string): Item[] {
-  // TODO(T0018): with a model, take typed children from model navigation.
   const parent = owner instanceof ModelNode ? owner : undefined;
   const items: Item[] = [];
   appendChildItems(items, json[name], name, parent, undefined);
@@ -315,7 +406,8 @@ function appendChildItems(
 
 /**
  * Equality of complex values: all child properties equal, recursively
- * ([N1 §6.1.1](https://hl7.org/fhirpath/N1/#equals)). Repeating children compare in order.
+ * ([N1 §6.1.1](https://hl7.org/fhirpath/N1/#equals)). Repeating children compare in order. With
+ * a model, two typed nodes compare by their elements; otherwise by their JSON properties.
  */
 function complexEquals(a: object, b: object, ctx: ComparisonContext): boolean | undefined {
   const left = jsonObjectOf(a);
@@ -326,13 +418,36 @@ function complexEquals(a: object, b: object, ctx: ComparisonContext): boolean | 
   if (left === right) {
     return true;
   }
+  const typedLeft = typedChildren(a, ctx);
+  const typedRight = typedChildren(b, ctx);
+  if (typedLeft !== undefined && typedRight !== undefined) {
+    if (areFhirQuantities(a, b)) {
+      return fhirQuantityEquals(typedLeft, typedRight, ctx, false);
+    }
+    if (!sameElements(typedLeft, typedRight)) {
+      return false;
+    }
+    return allEqual([...typedLeft.keys()], (name) =>
+      equals(typedLeft.get(name) ?? [], typedRight.get(name) ?? [], ctx),
+    );
+  }
   const names = sharedPropertyNames(left, right);
   if (names === undefined) {
     return false;
   }
+  return allEqual(names, (name) =>
+    equals(childItems(a, left, name), childItems(b, right, name), ctx),
+  );
+}
+
+/** `true` if every child is equal, `false` if one is not, otherwise undefined. */
+function allEqual(
+  names: readonly string[],
+  childEquals: (name: string) => boolean | undefined,
+): boolean | undefined {
   let result: boolean | undefined = true;
   for (const name of names) {
-    const equal = equals(childItems(a, left, name), childItems(b, right, name), ctx);
+    const equal = childEquals(name);
     if (equal === false) {
       return false;
     }
@@ -346,7 +461,8 @@ function complexEquals(a: object, b: object, ctx: ComparisonContext): boolean | 
 /**
  * Equivalence of complex values: the model's rule if it decides, otherwise all child properties
  * equivalent, recursively ([N1 §6.1.2](https://hl7.org/fhirpath/N1/#equivalent)). Repeating
- * children compare regardless of order.
+ * children compare regardless of order. Typed nodes compare by their elements, as in
+ * {@link complexEquals}.
  */
 function complexEquivalent(a: object, b: object, ctx: EquivalenceContext): boolean {
   const left = jsonObjectOf(a);
@@ -362,6 +478,22 @@ function complexEquivalent(a: object, b: object, ctx: EquivalenceContext): boole
     if (decided !== undefined) {
       return decided;
     }
+  }
+  const typedLeft = typedChildren(a, ctx);
+  const typedRight = typedChildren(b, ctx);
+  if (typedLeft !== undefined && typedRight !== undefined) {
+    if (areFhirQuantities(a, b)) {
+      return fhirQuantityEquals(typedLeft, typedRight, ctx, true) === true;
+    }
+    if (!sameElements(typedLeft, typedRight)) {
+      return false;
+    }
+    for (const name of typedLeft.keys()) {
+      if (!equivalent(typedLeft.get(name) ?? [], typedRight.get(name) ?? [], ctx)) {
+        return false;
+      }
+    }
+    return true;
   }
   const names = sharedPropertyNames(left, right);
   if (names === undefined) {

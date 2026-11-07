@@ -12,7 +12,7 @@ if (alert) {
 }
 ```
 
-Exports only `r6`, typed as the existing `ModelProvider` from peer package `@callis/core`. The provider reports `version: '6.0.0-snapshot1'`. There are no runtime dependencies or network requests. Model metadata support does not add public model-aware evaluation: the engine's model option remains T0018/T0038 work. This package makes no R6 FHIRPath conformance claim.
+Exports only `r6`, typed as the existing `ModelProvider` from peer package `@callis/core`. The provider reports `version: '6.0.0-snapshot1'`. There are no runtime dependencies or network requests. Model metadata support does not add public model-aware evaluation: the engine evaluates with a model internally (T0018), and the public model option remains T0038 work. This package makes no R6 FHIRPath conformance claim.
 
 The pinned core snapshots supply 196 roots (124 resource, 51 complex and 21 primitive types), including abstract bases, and 487 path-named backbones. [inventory.json](inventory.json) records every generated type by kind. Core constraint profiles and logical models are excluded. The package includes R6-specific types such as `DeviceAlert`, `DosageDetails` and `RelativeTime`; it does not reuse R5 data.
 

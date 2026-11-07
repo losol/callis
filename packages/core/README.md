@@ -2,20 +2,20 @@
 
 A [FHIRPath](https://hl7.org/fhirpath/N1/) engine for TypeScript.
 
-> **Work in progress.** The initial API supports synchronous model-less evaluation. Full phase-1 conformance, model-aware evaluation and async evaluation remain future work. These examples do not imply a published release; 0.x changes may extend or change the API.
+> **Work in progress.** The initial API supports synchronous model-less evaluation. Full phase-1 conformance, a public model option and async evaluation remain future work. These examples do not imply a published release; 0.x changes may extend or change the API.
 
 ## Goals
 
 - **Correct.** It follows FHIRPath N1 and the FHIR additions, and is checked against the official HL7 FHIRPath test suite.
 - **No runtime dependencies.** One ESM build (ES2022). Node 22/24/26 and a production Vite/Chromium consumer are checked; Deno, Bun and edge workers are not verified for 0.1.
 - **Compile once, evaluate many times.** It is built for repeated evaluation, such as search parameters, invariants and mappings.
-- **Works without a model, better with one.** The public API currently evaluates plain JSON only. R4/R5 provider metadata is available separately; public model-aware evaluation is deferred.
+- **Works without a model, better with one.** The public API currently evaluates plain JSON only. The engine evaluates with the R4/R5 providers internally (choice elements, FHIR primitives and their extensions, inheritance), which the conformance runner uses; the public `model` option is deferred to the expanded API.
 - **Precise values.** It uses exact decimals instead of binary floating point, keeps the precision of partial dates and times, and respects units in quantities.
 
 ## Quick start
 
 ```ts
-import { compile, evaluate, FhirPathError } from '@callis/core';
+import { compile, evaluate, FhirPathError, parseJson } from '@callis/core';
 
 export const patient: Readonly<{ resourceType: string; name: readonly { given: readonly string[] }[] }> = {
   resourceType: 'Patient', name: [{ given: ['Ada', 'Mina'] }],
@@ -54,6 +54,18 @@ export const onlyName: unknown[] = compile('name.single()').evaluate(patient);
 ```
 
 These zero-argument functions use the existing synchronous model-less API. The remaining subsetting and combining functions, including `last()`, remain deferred.
+
+## Lossless JSON input
+
+`JSON.parse` turns `1.50` into `1.5`, and FHIRPath can see the difference. `parseJson(text)` keeps every number as written, as a `JsonNumber`, and evaluation treats it as the Integer or Decimal it denotes:
+
+```ts
+export const lossless: unknown[] = evaluate(parseJson('{"value": 1.50}'), 'value', {
+  decimalOutput: 'string',
+});
+```
+
+This gives `['1.50']`; without `decimalOutput: 'string'` the result is the number `1.5`. Invalid text raises a `FhirPathEvaluationError` with the code `eval/invalid-json`. Objects in results keep their `JsonNumber` values, which `JSON.stringify` writes as numbers again.
 
 ## First 0.1 subset
 

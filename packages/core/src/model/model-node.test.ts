@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { stubType } from '../../test/support/stub-model.ts';
+import { Decimal } from '../values/decimal/decimal.ts';
 import { ModelNode } from './model-node.ts';
 
 describe('ModelNode', () => {
@@ -10,6 +11,7 @@ describe('ModelNode', () => {
       value: 'Peter',
       name: 'given',
       type: stubType('string'),
+      systemType: 'String',
       parent: patient,
       index: 1,
       primitiveElement,
@@ -18,6 +20,7 @@ describe('ModelNode', () => {
     expect(given.value).toBe('Peter');
     expect(given.name).toBe('given');
     expect(given.type).toBe(stubType('string'));
+    expect(given.systemType).toBe('String');
     expect(given.parent).toBe(patient);
     expect(given.index).toBe(1);
     expect(given.primitiveElement).toBe(primitiveElement);
@@ -27,6 +30,7 @@ describe('ModelNode', () => {
     const node = new ModelNode({ value: true, name: 'active' });
 
     expect(node.type).toBeUndefined();
+    expect(node.systemType).toBeUndefined();
     expect(node.parent).toBeUndefined();
     expect(node.index).toBeUndefined();
     expect(node.primitiveElement).toBeUndefined();
@@ -46,11 +50,20 @@ describe('ModelNode', () => {
       value: 1,
       name: 'a',
       type: stubType('integer'),
+      systemType: 'Integer',
       parent: bare,
       index: 0,
       primitiveElement: {},
     });
 
     expect(Object.keys(bare)).toEqual(Object.keys(full));
+  });
+
+  it('computes its System value once and remembers it', () => {
+    const value = new ModelNode({ value: 1.5, name: 'value' });
+    const first = value.systemValue();
+    expect(first).toBeInstanceOf(Decimal);
+    expect(value.systemValue()).toBe(first);
+    expect(value.value).toBe(1.5);
   });
 });

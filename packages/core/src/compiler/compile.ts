@@ -84,13 +84,13 @@ function compileNode(node: ExpressionNode, cc: CompilerState): Evaluator {
       return compileConstant(literalConstant(node), cc);
     case 'Identifier': {
       const name = node.name;
-      return (_ctx, focus) => navigateRoot(focus, name);
+      return (ctx, focus) => navigateRoot(focus, name, ctx);
     }
     case 'Member': {
       const target = compileNode(node.target, cc);
       const name = node.name;
       return (ctx, focus, frame) =>
-        andThen(target(ctx, focus, frame), (input) => navigateMember(input, name));
+        andThen(target(ctx, focus, frame), (input) => navigateMember(input, name, ctx));
     }
     case 'FunctionCall':
       return compileFunctionCall(node, cc);

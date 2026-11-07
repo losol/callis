@@ -12,7 +12,7 @@ if (patient) {
 }
 ```
 
-Exports only `r4`, typed as `ModelProvider` from the peer package `@callis/core`. No runtime dependencies or network access. Use this provider in the engine's `model` option when model-aware evaluation is available (T0018).
+Exports only `r4`, typed as `ModelProvider` from the peer package `@callis/core`. No runtime dependencies or network access. The engine evaluates with it through its internal `model` option, which the conformance runner uses (T0018); the public `model` option arrives with the expanded public API (T0038).
 
 Types include every core resource and datatype, abstract bases and path-named backbones such as `Questionnaire.item`. Elements include inherited fields in snapshot order. Choices use the FHIRPath name (`value`, without `[x]` or a JSON type suffix); `contentReference` resolves to the target backbone. Primitives omit implicit `value`. `date` maps to System `Date`; Quantity and its specializations map to System `Quantity` at the type level (individual values still need a UCUM code for conversion). Returned data is frozen and shared.
 

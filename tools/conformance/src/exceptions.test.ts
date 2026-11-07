@@ -31,4 +31,14 @@ describe('SUITE_EXCEPTIONS', () => {
     expect(findException(SUITE_EXCEPTIONS, 'r4', 'testPlusDate19')).toBeDefined();
     expect(findException(SUITE_EXCEPTIONS, 'r5', 'testPlusDate19')).toBeUndefined();
   });
+
+  // docs/spec-notes.md: the model-aware exceptions T0018 registers (#111), in both suites.
+  it.each(['testFHIRPathAsFunction11', 'testFHIRPathAsFunction16', 'testType22'])(
+    'excepts %s in R4 and R5',
+    (id) => {
+      for (const suite of ['r4', 'r5'] as const) {
+        expect(findException(SUITE_EXCEPTIONS, suite, id)?.tests, suite).toContain(id);
+      }
+    },
+  );
 });

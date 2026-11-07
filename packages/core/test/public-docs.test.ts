@@ -9,6 +9,7 @@ import {
   firstGiven,
   given,
   hasAda,
+  lossless,
   numberOfNames,
   onlyName,
   patient,
@@ -33,6 +34,7 @@ describe('public guide examples', () => {
       '[{"value":"1.200","unit":"mg","system":"http://unitsofmeasure.org","code":"mg"}]',
     );
     expect(variable).toEqual(['hello']);
+    expect(lossless).toEqual(['1.50']);
     expect(expressionError()).toContain('syntax/unexpected-token');
   });
 

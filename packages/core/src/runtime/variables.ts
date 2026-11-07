@@ -4,6 +4,7 @@
  * `%rootResource`, `%sct`, `%loinc`, `` %`vs-*` ``, `` %`ext-*` ``) are T0020.
  */
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
+import type { ModelProvider } from '../model/model-provider.ts';
 import type { Collection } from './collection.ts';
 import type { EvalContext } from './context.ts';
 import { toInputCollection } from './navigation.ts';
@@ -16,15 +17,19 @@ const UCUM: Collection = Object.freeze([UCUM_URL]);
 /**
  * Converts the `variables` option into collections, keyed by name without the `%`.
  *
- * Each value goes through the same conversion as the input: JSON values become input nodes, an
- * array gives one item per element, and `undefined`, `null` and `[]` are a defined but empty
- * variable ([N1 §9](https://hl7.org/fhirpath/N1/#environment-variables)). Only own properties
- * count, and the result has no prototype.
+ * Each value goes through the same conversion as the input: JSON values become input nodes, typed
+ * by the model when it recognizes them, an array gives one item per element, and `undefined`,
+ * `null` and `[]` are a defined but empty variable
+ * ([N1 §9](https://hl7.org/fhirpath/N1/#environment-variables)). Only own properties count, and
+ * the result has no prototype.
  *
  * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` if `values` is not an object or
  *   a value is not JSON data.
  */
-export function createVariables(values: unknown): Readonly<Record<string, Collection>> {
+export function createVariables(
+  values: unknown,
+  model: ModelProvider | undefined = undefined,
+): Readonly<Record<string, Collection>> {
   const variables: Record<string, Collection> = Object.create(null);
   if (values === undefined) {
     return variables;
@@ -36,7 +41,11 @@ export function createVariables(values: unknown): Readonly<Record<string, Collec
     );
   }
   for (const name of Object.keys(values)) {
-    variables[name] = toInputCollection((values as Readonly<Record<string, unknown>>)[name], name);
+    variables[name] = toInputCollection(
+      (values as Readonly<Record<string, unknown>>)[name],
+      name,
+      model,
+    );
   }
   return variables;
 }

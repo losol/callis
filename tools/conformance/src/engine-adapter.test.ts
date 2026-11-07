@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { compile } from '../../../packages/core/src/api/compile.ts';
+import { JsonNumber } from '../../../packages/core/src/model/lossless-json.ts';
 import { ModelNode } from '../../../packages/core/src/model/model-node.ts';
 import type { Item } from '../../../packages/core/src/runtime/collection.ts';
 import { equals } from '../../../packages/core/src/runtime/equality.ts';
@@ -10,6 +11,8 @@ import {
   minimalUnitSystem,
   type UnitSystem,
 } from '../../../packages/core/src/values/quantity/unit-system.ts';
+import { r4 } from '../../../packages/fhir-r4/src/index.ts';
+import { r5 } from '../../../packages/fhir-r5/src/index.ts';
 import { ucum } from '../../../packages/ucum/src/index.ts';
 import type { EvaluationOptions } from './adapter.ts';
 import { engineAdapter } from './engine-adapter.ts';
@@ -49,19 +52,59 @@ async function classify(expression: string, extra: Partial<EvaluationOptions> = 
 
 // tools/conformance/README.md#plugging-in-an-evaluator
 describe('engineAdapter.evaluate', () => {
-  it('evaluates with the internal API and gives typed items', async () => {
+  it('evaluates with the internal API and the FHIR model, and gives typed items', async () => {
     const result = await evaluate('name.given');
     expect(result.map((item) => engineAdapter.describeValue(item))).toEqual([
-      { type: 'System.String', value: 'a' },
-      { type: 'System.String', value: 'b' },
-      { type: 'System.String', value: 'c' },
+      { type: 'FHIR.string', value: 'a' },
+      { type: 'FHIR.string', value: 'b' },
+      { type: 'FHIR.string', value: 'c' },
     ]);
   });
 
   it('evaluates the implemented filter instead of classifying it as missing', async () => {
     const result = await evaluate("name.where(given = 'c').given");
     expect(result.map((item) => engineAdapter.describeValue(item))).toEqual([
-      { type: 'System.String', value: 'c' },
+      { type: 'FHIR.string', value: 'c' },
+    ]);
+  });
+
+  // docs/tasks/T0018-model-aware-evaluation.md: the model of the suite's FHIR version.
+  it('uses the R4 or R5 model by the suite, with the choice suffix only in lenient mode', async () => {
+    const observation = {
+      resourceType: 'Observation',
+      valueQuantity: {
+        value: 185,
+        unit: 'lbs',
+        system: 'http://unitsofmeasure.org',
+        code: '[lb_av]',
+      },
+    };
+    const run = (expression: string, extra: Partial<EvaluationOptions> = {}) =>
+      engineAdapter.evaluate(observation, expression, { ...options, ...extra });
+    expect(await run('Observation.value.unit')).toEqual([
+      expect.objectContaining({ value: 'lbs' }),
+    ]);
+    expect(await run('Observation.valueQuantity.unit')).toEqual([]);
+    expect(await run('Observation.valueQuantity.unit', { lenientChoiceSuffix: true })).toEqual([
+      expect.objectContaining({ value: 'lbs' }),
+    ]);
+    expect(await run('Observation.value is Quantity', { fhirVersion: 'r5' })).toEqual([true]);
+    vi.mocked(compile).mockClear();
+    await run('1', { fhirVersion: 'r5' });
+    await run('1', { fhirVersion: 'r4' });
+    expect(
+      vi.mocked(compile).mock.calls.map(([, compileOptions]) => compileOptions?.model),
+    ).toEqual([r5, r4]);
+  });
+
+  it('parses inputs losslessly and evaluates them with their precision', async () => {
+    const input = engineAdapter.parseInput?.(
+      '{"resourceType": "Observation", "valueQuantity": {"value": 1.50}}',
+    );
+    expect(input).toMatchObject({ valueQuantity: { value: new JsonNumber('1.50') } });
+    const result = await engineAdapter.evaluate(input, 'Observation.value.value', options);
+    expect(result.map((item) => engineAdapter.describeValue(item))).toEqual([
+      { type: 'FHIR.decimal', value: '1.50' },
     ]);
   });
 
@@ -75,8 +118,8 @@ describe('engineAdapter.evaluate', () => {
   it('evaluates first and single without hiding cardinality errors as missing features', async () => {
     const result = await evaluate('name.first().single().given');
     expect(result.map((item) => engineAdapter.describeValue(item))).toEqual([
-      { type: 'System.String', value: 'a' },
-      { type: 'System.String', value: 'b' },
+      { type: 'FHIR.string', value: 'a' },
+      { type: 'FHIR.string', value: 'b' },
     ]);
     expect(await classify('name.single()')).toMatchObject({
       kind: 'execution',
@@ -87,7 +130,7 @@ describe('engineAdapter.evaluate', () => {
   it('evaluates the expression on the single node the context selects', async () => {
     const result = await evaluate('given', { context: 'name[1]' });
     expect(result.map((item) => engineAdapter.describeValue(item))).toEqual([
-      { type: 'System.String', value: 'c' },
+      { type: 'FHIR.string', value: 'c' },
     ]);
   });
 
@@ -214,5 +257,30 @@ describe('engineAdapter.describeValue', () => {
     expect(engineAdapter.describeValue(new ModelNode({ value: { a: 1 }, name: 'x' }))).toEqual({
       type: 'Object',
     });
+  });
+
+  // tools/conformance/README.md: FHIR types are described by their own name.
+  it('describes typed nodes by their model type and System value', async () => {
+    const input = {
+      resourceType: 'Patient',
+      birthDate: '1974-12-25',
+      name: [{ given: [null], _given: [{ id: 'g' }] }],
+      extension: [
+        {
+          url: 'http://example.org/age',
+          valueAge: { value: 41, system: 'http://unitsofmeasure.org', code: 'a' },
+        },
+      ],
+    };
+    const describe = async (expression: string) =>
+      (await engineAdapter.evaluate(input, expression, options)).map((item) =>
+        engineAdapter.describeValue(item),
+      );
+    expect(await describe('birthDate')).toEqual([{ type: 'FHIR.date', value: '1974-12-25' }]);
+    expect(await describe('name')).toEqual([{ type: 'FHIR.HumanName' }]);
+    expect(await describe('name.given')).toEqual([{ type: 'FHIR.string' }]);
+    expect(await describe('extension.value')).toEqual([
+      { type: 'FHIR.Age', value: '41', unit: 'year' },
+    ]);
   });
 });

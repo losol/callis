@@ -31,6 +31,7 @@ export type EvaluationErrorCode =
   | 'eval/unknown-type'
   | 'eval/invalid-literal'
   | 'eval/invalid-argument'
+  | 'eval/invalid-json'
   | 'eval/async-in-sync'
   | 'eval/aborted'
   | 'eval/limit-exceeded'

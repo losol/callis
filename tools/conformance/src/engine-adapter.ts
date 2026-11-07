@@ -1,11 +1,13 @@
 /**
  * The adapter that `pnpm conformance` and `pnpm test:conformance` use: the engine's internal
- * `compile()`/`evaluate()` (T0008). T0025 switches it to the public API, and T0018 adds the FHIR
- * models and the lossless `parseInput`. See `tools/conformance/README.md` for the contract.
+ * `compile()`/`evaluate()` (T0008) with the generated FHIR model of each suite file and the
+ * lossless JSON parser (T0018). T0038 switches it to the public API. See
+ * `tools/conformance/README.md` for the contract.
  *
  * This is the only file of the runner that imports the engine. It imports engine sources directly,
  * because the internal API is not part of the published package. It evaluates with the full UCUM
- * unit system of `@callis/ucum`, also from source, as T0006 requires of the runner.
+ * unit system of `@callis/ucum` and the `@callis/fhir-r4` and `@callis/fhir-r5` providers, also
+ * from source, as T0006 requires of the runner.
  */
 import { type CompileOptions, compile } from '../../../packages/core/src/api/compile.ts';
 import { childNodes } from '../../../packages/core/src/compiler/nesting.ts';
@@ -15,16 +17,26 @@ import {
   FhirPathSyntaxError,
 } from '../../../packages/core/src/errors/fhirpath-error.ts';
 import { createRegistry } from '../../../packages/core/src/functions/registry.ts';
+import { parseJson } from '../../../packages/core/src/model/lossless-json.ts';
 import { ModelNode } from '../../../packages/core/src/model/model-node.ts';
+import type { ModelProvider } from '../../../packages/core/src/model/model-provider.ts';
 import type { ExpressionNode } from '../../../packages/core/src/parser/ast.ts';
 import { parse } from '../../../packages/core/src/parser/parser.ts';
 import type { Item } from '../../../packages/core/src/runtime/collection.ts';
 import { toSystemValue } from '../../../packages/core/src/runtime/node-value.ts';
 import { systemTypeOf } from '../../../packages/core/src/runtime/type-target.ts';
 import { Quantity } from '../../../packages/core/src/values/quantity/quantity.ts';
+import { r4 } from '../../../packages/fhir-r4/src/index.ts';
+import { r5 } from '../../../packages/fhir-r5/src/index.ts';
 import { ucum } from '../../../packages/ucum/src/index.ts';
-import type { ClassifiedError, EvaluatorAdapter, ResultItem } from './adapter.ts';
+import type {
+  ClassifiedError,
+  EvaluationOptions,
+  EvaluatorAdapter,
+  ResultItem,
+} from './adapter.ts';
 import { NotImplementedError } from './stub-adapter.ts';
+import type { SuiteId } from './suite.ts';
 
 /**
  * Functions of the spec that later tasks implement, with the task. A test that calls one of them
@@ -74,8 +86,21 @@ function tasks(task: string, names: string): Record<string, string> {
 
 const REGISTRY = createRegistry();
 
-/** The options of every compile(): the suite's quantities use UCUM units. */
-const COMPILE_OPTIONS: CompileOptions = { units: ucum };
+/** The generated model of each suite file ([ADR-0008](../../../docs/adr/0008-model-provider.md)). */
+const MODELS: Readonly<Record<SuiteId, ModelProvider>> = { r4, r5 };
+
+/**
+ * The options of every compile() for a test: UCUM units for the suite's quantities, the model of
+ * the suite's FHIR version, and the choice-type suffix only for `mode="lenient/polymorphics"`
+ * ([ADR-0012](../../../docs/adr/0012-evaluation-defaults.md)).
+ */
+function compileOptionsFor(options: EvaluationOptions): CompileOptions {
+  return {
+    units: ucum,
+    model: MODELS[options.fhirVersion],
+    lenient: { choiceSuffix: options.lenientChoiceSuffix },
+  };
+}
 
 /**
  * Throws {@link NotImplementedError} when the expression calls a function of the spec that the
@@ -116,12 +141,15 @@ function nodesOf(expression: string): ExpressionNode[] {
 
 export const engineAdapter: EvaluatorAdapter = {
   name: '@callis/core (internal API)',
+  // The converted inputs keep the precision of decimals (T0023); so does the evaluation.
+  parseInput: parseJson,
   async evaluate(input, expression, options): Promise<readonly unknown[]> {
     checkImplemented(expression);
+    const compileOptions = compileOptionsFor(options);
     let focus = input;
     if (options.context !== undefined) {
       checkImplemented(options.context);
-      const selected = await compile(options.context, COMPILE_OPTIONS).evaluateAsync(input, {
+      const selected = await compile(options.context, compileOptions).evaluateAsync(input, {
         output: 'typed',
       });
       if (selected.length !== 1) {
@@ -130,8 +158,7 @@ export const engineAdapter: EvaluatorAdapter = {
       // TODO(T0020): keep %resource and %rootResource as the whole input.
       focus = selected[0];
     }
-    // TODO(T0018): evaluate with the R4 or R5 model, by options.fhirVersion.
-    return compile(expression, COMPILE_OPTIONS).evaluateAsync(focus, { output: 'typed' });
+    return compile(expression, compileOptions).evaluateAsync(focus, { output: 'typed' });
   },
   describeValue(value: unknown): ResultItem {
     return describeItem(value as Item);
@@ -176,8 +203,9 @@ function isPlannedVariable(error: FhirPathEvaluationError): boolean {
 }
 
 /**
- * One result item for comparison. Without a model, input nodes are described by the System type
- * of their JSON value; an object has no type the suite names.
+ * One result item for comparison. A typed node is described by its model type (`FHIR.code`), with
+ * its System value as text when it has one. An untyped node, from data the model does not know,
+ * is described by the System type of its JSON value; an object has no type the suite names.
  */
 function describeItem(item: Item): ResultItem {
   if (item instanceof ModelNode) {

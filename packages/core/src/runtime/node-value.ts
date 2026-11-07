@@ -1,30 +1,21 @@
 import { ModelNode } from '../model/model-node.ts';
-import { Decimal } from '../values/decimal/decimal.ts';
 import type { Item } from './collection.ts';
-
-/** The 32-bit range of `System.Integer` ([N1 §4.1](https://hl7.org/fhirpath/N1/#literals)). */
-const MIN_INTEGER = -(2 ** 31);
-const MAX_INTEGER = 2 ** 31 - 1;
 
 /**
  * The System value of a collection item, for operators and functions that work on System values.
  *
  * Literals and computed values are already System values and are returned unchanged. An input
- * node is converted from its JSON value, following the model-less mapping
- * ([T0003: model principles](https://github.com/losol/callis/blob/main/docs/tasks/T0003-types-and-collections.md#model-principles)):
- *
- * | JSON value | Result |
- * | --- | --- |
- * | string | `String` |
- * | boolean | `Boolean` |
- * | whole number in the 32-bit range | `Integer` (`-0` becomes `0`) |
- * | any other finite number | `Decimal`, through its shortest round-trip text |
- * | object (a resource or complex value) | the node itself |
- * | none (a primitive with only extensions) | `undefined`, which callers treat as empty |
+ * node gives its {@link ModelNode.systemValue}: a FHIR primitive converts by the System type the
+ * model gives it (`FHIR.date` → `DateValue`), a plain JSON value by its JavaScript type, and a
+ * resource or complex value is the node itself. The rules, including lossless JSON numbers, are in
+ * `model/node-conversion.ts`. The result is computed once per node and remembered; the node is
+ * otherwise never changed.
  *
  * Callers that depend on where a value came from, such as the model-less date convenience in the
- * equality kernels, check the node before calling this. The node is never changed, and nothing is
- * cached on it.
+ * equality kernels, check the node before calling this.
+ *
+ * @returns the System value, or undefined for a node that holds nothing (a primitive with only
+ *   extensions), which callers treat as empty.
  *
  * @example
  * ```ts
@@ -34,24 +25,5 @@ const MAX_INTEGER = 2 ** 31 - 1;
  * ```
  */
 export function toSystemValue(item: Item): Item | undefined {
-  if (!(item instanceof ModelNode)) {
-    return item;
-  }
-  // TODO(T0018): convert typed nodes through the model (FHIR.date → System.Date, …).
-  const value = item.value;
-  switch (typeof value) {
-    case 'string':
-    case 'boolean':
-      return value;
-    case 'number':
-      if (Number.isInteger(value) && value >= MIN_INTEGER && value <= MAX_INTEGER) {
-        // `-0 + 0` is `0`, so a JSON `-0` does not leak a negative zero.
-        return value + 0;
-      }
-      return Decimal.fromNumber(value);
-    case 'object':
-      return value === null ? undefined : item;
-    default:
-      return undefined;
-  }
+  return item instanceof ModelNode ? item.systemValue() : item;
 }

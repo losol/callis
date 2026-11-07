@@ -1,5 +1,5 @@
 /** Executable quick start, shared by the README and guide; imported by public-docs.test.ts. */
-import { compile, evaluate, FhirPathError } from '@callis/core';
+import { compile, evaluate, FhirPathError, parseJson } from '@callis/core';
 
 export const patient: Readonly<{
   resourceType: string;
@@ -27,6 +27,9 @@ export const quantityJson: string = JSON.stringify(
 );
 export const variable: unknown[] = compile('%value').evaluate(null, {
   variables: { value: 'hello' },
+});
+export const lossless: unknown[] = evaluate(parseJson('{"value": 1.50}'), 'value', {
+  decimalOutput: 'string',
 });
 
 /** Keep non-expression errors distinguishable from FHIRPath diagnostics. */

@@ -82,7 +82,7 @@ How Callis reads the FHIRPath specification where the text is ambiguous, silent,
 - **Pinned tests:** both R4 and R5 at [`cb4eac4`](../tools/conformance/fixtures/SOURCE.md) classify `testFHIRPathAsFunction23` (`Patient.gender.as(string1)`) and `24` (`Patient.gender.ofType(string1)`) as `invalid="execution"`. `testType22` (`Patient.is(System.Patient).not()`) instead expects true. These are all phase-1 tests under the runner's per-test classifier; the surrounding group's reflection tests are STU. R5's description explicitly permits a resolution error for `System.Patient`; R4 lacks that description but has the same positive assertion.
 - **Decision:** an unresolved type is an execution error (`FhirPathEvaluationError`, `eval/unknown-type`) for `is`/`as` and their function forms and for `ofType()`. Resolution is still performed once during compilation; an unresolved result compiles to a closure that raises at the evaluated use site, before matching or empty-input handling. Constant folding must preserve this timing. Unreached lazy branches do not raise it. Analysis can emit a `semantic/unknown-type` warning, including in strict mode, without preventing compilation. This agrees with the execution-error fixtures and closure architecture.
 - **No namespace exemption:** `System.Patient`, `FHIR.Boolean` with a FHIR model, unknown namespaces and unknown unqualified names with a model all error. A known namespace does not define all possible type names. Resolved nonmatching targets still give false/empty under the ordinary operator rules. The separate model-less unqualified extension below is the only resource-name fallback.
-- **Narrow suite exception:** follow the normative error rule rather than making `System.Patient` a special always-false target. Under [ADR-0011](adr/0011-conformance-suite.md), T0018 will register only `testType22` in R4 and R5 in `tools/conformance/src/exceptions.ts` when model-aware conformance execution is wired, with this heading as its note. Keep vendored tests unchanged; report the exception as skipped, not passed. No exception is activated by this docs-only plan change, and no passing baseline entry is removed. `testFHIRPathAsFunction23`/`24` remain ordinary phase-1 tests expecting execution errors.
+- **Narrow suite exception:** follow the normative error rule rather than making `System.Patient` a special always-false target. Under [ADR-0011](adr/0011-conformance-suite.md), only `testType22` is registered, for R4 and R5, in `tools/conformance/src/exceptions.ts` with this heading as its note, since the conformance runner evaluates with a model ([T0018](tasks/T0018-model-aware-evaluation.md)). The vendored tests are unchanged, and the exception is reported as skipped, not passed. `testFHIRPathAsFunction23`/`24` remain ordinary phase-1 tests expecting execution errors, and pass.
 - **Ownership:** [T0008](tasks/T0008-compiler-evaluator.md#type-names-that-do-not-resolve) implements target handling and adds the evaluation error code; T0012 reuses it for filtering, T0018 integrates model types and the named exception, T0024 preserves error timing in diagnostics. T0003's pure resolver and System/model subtype helpers remain unchanged. This resolves the planning choice in [#58](https://github.com/losol/callis/issues/58), not its future implementation.
 
 ### Resource type names without a model
@@ -108,7 +108,7 @@ How Callis reads the FHIRPath specification where the text is ambiguous, silent,
 - **Decision:**
   - `is` does not treat a FHIR primitive as the System type it converts to: `Patient.active.is(System.Boolean)` is false. R5 lifts this restriction for `ofType()` only, so `as` behaves like `is`, and `Patient.name.given.ofType(System.String)` keeps the given names.
   - All three accept subtypes through the model's inheritance, as N1 says for each of them. `Patient.gender.is(string)` is true because `code` derives from `string`.
-  - The suite marks `testFHIRPathAsFunction11` (`Patient.gender.as(string)`) and `testFHIRPathAsFunction16` (`Patient.gender.ofType(string)`) as contested and expects them to be empty. Callis follows the spec and returns the code. These two tests become exceptions when the conformance runner first runs them with a model ([T0018](tasks/T0018-model-aware-evaluation.md)).
+  - The suite marks `testFHIRPathAsFunction11` (`Patient.gender.as(string)`) and `testFHIRPathAsFunction16` (`Patient.gender.ofType(string)`) as contested and expects them to be empty. Callis follows the spec and returns the code. Both are registered as exceptions for R4 and R5 in `tools/conformance/src/exceptions.ts`, since the conformance runner evaluates with a model ([T0018](tasks/T0018-model-aware-evaluation.md), [#111](https://github.com/losol/callis/issues/111)); `testFHIRPathAsFunction11` left the baseline that way.
 - **Code:** `isOfType()` and `matchesOfType()` in `packages/core/src/types/type-test.ts` ([T0003](tasks/T0003-types-and-collections.md)).
 
 ### `FHIR.date` maps to `System.Date`
@@ -150,6 +150,34 @@ How Callis reads the FHIRPath specification where the text is ambiguous, silent,
 - **Decision:** the expression before the dot is evaluated, so its errors surface, and the result is the frame variable, as if it were written alone. `name.select(given.$index)` is the index of each name.
 - **Code:** `compileFrameVariable()` in `packages/core/src/compiler/compile.ts`.
 
+## Navigation
+
+Implemented in `packages/core/src/runtime/navigation.ts` ([T0008](tasks/T0008-compiler-evaluator.md) without a model, [T0018](tasks/T0018-model-aware-evaluation.md) with one).
+
+### Root identifiers with a model
+
+- **Spec:** [N1 §10.1](https://hl7.org/fhirpath/N1/#models) and [R5 §2.1.9.1](https://hl7.org/fhir/R5/fhirpath.html#rules): a path may start with the type of the root node, and `Patient.name` on an input that is not a Patient is empty. Neither says how an identifier that is both a type name and an element name is read.
+- **Tests:** `testSimpleWithContext`, `testSimpleBackTick1`, `testEscapedIdentifierUnicode`; `testSimpleWithWrongContext` expects a semantic error in strict mode ([T0024](tasks/T0024-static-analysis.md)).
+- **Decision:** with a model, a leading identifier names a type when the model has a resource, complex or backbone type of that name. The result is each focus item whose model type is that type or a subtype of it (`DomainResource.contained` on a Patient), and empty for the other items. The data's `resourceType` is never consulted, so an object the model does not know (`resourceType: "Foo"`) matches no type name, and `Foo.name` is an ordinary path. A primitive type name is always an element name, because FHIR's primitives share their spelling with elements (`id`, `code`, `date`, `url`); so is any name the model does not know. Without a model the [model-less rule](tasks/T0008-compiler-evaluator.md#resource-type-names-without-a-model) applies: the identifier matches the item's own `resourceType` exactly. (T0018)
+
+### Choice elements written with a type suffix
+
+- **Spec:** [R5 §2.1.9.1.1](https://hl7.org/fhir/R5/fhirpath.html#polymorphism): a choice element is addressed by its name without `[x]`, and `Observation.valueQuantity` is not valid FHIRPath. [ADR-0012](adr/0012-evaluation-defaults.md) keeps the suffix form as an opt-in for compatibility.
+- **Tests:** `testPolymorphismA`, `testPolymorphicsA`, `testPolymorphicsC` and `testPolymorphicsD` (`mode="lenient/polymorphics"`); `testPolymorphismB` and `testPolymorphicsB` expect a semantic error ([T0024](tasks/T0024-static-analysis.md)).
+- **Decision:** `Observation.value` gives the one `value[x]` that is present, typed by its JSON key (`valueQuantity` is a `Quantity`, `valueString` a `string`), with its `_value[x]` extensions for a primitive. The suffix form is not an element: at runtime it is empty, like any element the type does not have, and static analysis will report it. With `lenient: { choiceSuffix: true }`, `Observation.valueQuantity` gives the value only when its type is `Quantity`, so `valueString` on the same observation is empty; the node is still named `value`. Without a model the suffix form is an ordinary JSON key. (T0018)
+
+### Typed primitives that do not parse
+
+- **Spec:** [R5 §2.1.9.1.2](https://hl7.org/fhir/R5/fhirpath.html#types) maps FHIR primitives to System types; it does not say what a value that is not valid for its type is.
+- **Tests:** none in the suite; `node-value.test.ts`.
+- **Decision:** a FHIR primitive whose JSON value is not valid for its type (a `date` written as `not a date` or with a time, a `boolean` written as `"true"`, a fraction where an `integer` is declared) keeps the plain JSON mapping of its value (`String`, `Decimal`, …) instead of raising an error: FHIRPath navigates the data it is given and does not validate it. Its model type is unchanged, so `is date` is still true. A FHIR `Quantity` without a UCUM `system` and `code` stays a complex value. (T0018)
+
+### Children without a model
+
+- **Spec:** [N1 §5.8](https://hl7.org/fhirpath/N1/#children-collection) lists the "immediate child nodes"; plain JSON has no element definitions.
+- **Tests:** none in the suite; `navigation.test.ts`. The functions themselves are [T0017](tasks/T0017-fn-tree-utility.md).
+- **Decision:** with a model, the children of a typed node are its elements in definition order, with the `_name` extensions folded into their primitives, and the children of a FHIR primitive are its `id` and `extension`. Without a model, or for a node the model does not know, the children are the own JSON properties in document order, except `resourceType`, which names the type rather than holding data, and keys starting with `_`, which hold the extensions of a primitive and are not elements themselves. (T0018)
+
 ## Equality and ordering
 
 Implemented in `packages/core/src/runtime/` (`equality.ts`, `comparison.ts`, `operands.ts`; [T0009](tasks/T0009-equality-kernels.md)).
@@ -173,8 +201,9 @@ Implemented in `packages/core/src/runtime/` (`equality.ts`, `comparison.ts`, `op
 ### Complex values without a model
 
 - **Spec:** [N1 §6.1.1](https://hl7.org/fhirpath/N1/#equals) and [§6.1.2](https://hl7.org/fhirpath/N1/#equivalent) compare complex types by "all child properties", recursively, but plain JSON has no type definition that lists them.
-- **Tests:** `testEquality25`–`27`, `testEquivalent19`–`21` (with the FHIR model; T0018 and T0020 refine this for typed values).
+- **Tests:** `testEquality25`–`27`, `testEquivalent19`–`21` (with the FHIR model; T0020 refines this with FHIR's equivalence rules).
 - **Decision:** the child properties are what model-less navigation sees: own properties only, arrays flattened, and `null`, an empty array and a missing property all mean "no value". The order of the properties does not matter. Each child collection is compared with `=` (repeating items in order) or `~` (in any order), so child strings compare exactly or case-insensitively and child numbers by value. Two input strings are never read as dates.
+- **With a model:** two typed nodes compare by their elements instead of their JSON keys, so a choice element compares by its one value, a FHIR `date` by the date rules, and `_name` extensions and keys that are not elements are ignored. A node the model does not know keeps the JSON rules, also against a typed node. FHIR Quantities without a UCUM code have [their own rule](#fhir-quantities-without-a-ucum-code). (T0018)
 
 ## Strings
 
@@ -354,6 +383,13 @@ How the conformance runner ([T0022](tasks/T0022-conformance-runner.md), [`tools/
 - **Spec:** [3.0.0 comparison](https://hl7.org/fhirpath/STU3/en/index.html#comparison) explicitly gives `6 months > 1 year` as `false` after converting to years. [Quantity equality](https://hl7.org/fhirpath/STU3/en/index.html#quantity-equality) requires time comparison in the least granular unit while retaining each code system.
 - **Pinned suites:** FHIR/fhir-test-cases commit `cb4eac4` (see `tools/conformance/fixtures/source.json`), both R4 and R5: `testLessThan29` (`1 year < 2 months`), `testGreaterThan29` (`1 year > 2 months`) and `testLessOrEqual28` (`1 year <= 2 days`) all expect empty.
 - **Decision:** follow 3.0.0 ([ADR-0001](adr/0001-spec-baseline.md)): its comparison section gives `6 months > 1 year` as `false` after converting to years, so those expressions return `false`, `true` and `false`, respectively. Calendar-to-calendar year/month ordering is supported; calendar year/month against definite UCUM counterparts remains empty. The six suite cases are narrowly enumerated conformance exceptions (#88). Direct kernel tests cover these results and reverse operand orders. (T0006)
+
+### FHIR Quantities without a UCUM code
+
+- **Spec:** [R5 §2.1.9.1.3](https://hl7.org/fhir/R5/fhirpath.html#quantity) converts a FHIR `Quantity` to `System.Quantity` only when it has a UCUM `system` and `code`. For any other Quantity, [N1 §6.1.1](https://hl7.org/fhirpath/N1/#equals) would compare the children, so a unit on one side only would make `=` false.
+- **Tests:** group `testQuantityUnitComparison`: `testQuantityUnitVsNoUnitEqual` and `testQuantityNoUnitVsUnitEqual` expect empty, and the matching equivalence tests expect `false`.
+- **Decision:** two FHIR Quantities that do not convert compare as the HL7 Java engine compares them: when either has a `code`, both must have the same code; otherwise, when either has a `unit`, both must have the same unit text. A mismatch makes `=` empty and `~` false, as for quantities whose units cannot be related. Then the values compare as Decimals; two quantities without a value are equal, and one without a value is undetermined. A Quantity with a UCUM code against one without is a type mismatch and `false`; [T0020](tasks/T0020-fhir-functions.md) owns that case and the ordering of such quantities (`testLessThan33`). (T0018)
+- **Code:** `fhirQuantityEquals()` in `packages/core/src/runtime/equality.ts`.
 
 ### Equivalence of unsupported or incompatible quantities
 
