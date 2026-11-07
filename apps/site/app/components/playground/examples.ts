@@ -1,32 +1,9 @@
-/** Synthetic examples for the initial model-less public API; each runs in tests. */
-export const examples = [
-  { name: 'Given names', expression: 'Patient.name.given', expected: ['Ada', 'June', 'Alex'] },
-  { name: 'First name', expression: 'Patient.name[0].given', expected: ['Ada', 'June'] },
-  {
-    name: 'Filtered names',
-    expression: "Patient.name.where(family = 'Example').given",
-    expected: ['Ada', 'June'],
-  },
-  { name: 'Name count', expression: 'Patient.name.count()', expected: [2] },
-  { name: 'Has Ada', expression: "Patient.name.exists(given[0] = 'Ada')", expected: [true] },
-  {
-    name: 'Filtered count',
-    expression: "Patient.name.where(family = 'Example').count()",
-    expected: [1],
-  },
-  { name: 'Missing field', expression: 'Patient.address', expected: [] },
-  { name: 'Boolean logic', expression: 'Patient.active and true', expected: [true] },
-  { name: 'Exact decimal', expression: '0.1 + 0.2', expected: ['0.3'] },
-] as const;
+import { type ExampleCase, readExamples } from '../../../../../examples/playground/schema';
 
-/** The patient is invented and contains no real patient data. */
-export const exampleInput = JSON.stringify(
-  {
-    resourceType: 'Patient',
-    id: 'example',
-    active: true,
-    name: [{ family: 'Example', given: ['Ada', 'June'] }, { given: ['Alex'] }],
-  },
-  null,
-  2,
-);
+/** Twelve small cases share one separately loaded data chunk, with no duplicated picker catalog. */
+export async function loadExamples(): Promise<readonly ExampleCase[]> {
+  const { default: text } = await import(
+    '../../../../../examples/playground/case-library.json?raw'
+  );
+  return readExamples(JSON.parse(text));
+}

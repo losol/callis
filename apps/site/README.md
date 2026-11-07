@@ -76,3 +76,7 @@ The site's dev, build, typecheck and unit-test commands first build core so
 fresh checkouts use its real public package entry point. The editor and evaluator
 are imported only after the playground mounts; a browser regression check guards
 the documentation route against loading that client chunk.
+
+## Example library
+
+The [shared synthetic case library](../../examples/playground/README.md) drives public-API CI and the playground. Its searchable picker, explanations and original expected-versus-actual output run in the existing client-only route. Only stable case IDs are linkable; input and expressions remain local. No upstream component or published package API is changed.
