@@ -59,6 +59,7 @@
 | [T0040](tasks/T0040-fhir-r6-validation.md) | R6 package and compatibility validation | 1 | T0039, T0025 | 6 | M |
 | [T0041](tasks/T0041-fn-existence-completion.md) | Functions: remaining existence | 1 | T0011, T0013 | 6 | S |
 | [T0042](tasks/T0042-fn-projection-completion.md) | Functions: projection and repeat | 1 | T0012 | 5 | M |
+| [T0043](tasks/T0043-playground-example-library.md) | Shared playground example library | 3 | T0036, T0011 | 7 | M |
 
 ## Dependency graph
 
@@ -117,6 +118,7 @@ flowchart TD
     T0034["T0034 CLI"]
     T0035["T0035 Docs site + progress page"]
     T0036["T0036 Playground"]
+    T0043["T0043 Example library"]
   end
 
   T0000 --> T0001 & T0003 & T0004 & T0005 & T0022
@@ -139,6 +141,7 @@ flowchart TD
   T0018 & T0019 --> T0024
   T0007 & T0008 & T0009 & T0010 & T0023 --> T0025
   T0025 & T0035 --> T0036
+  T0036 & T0011 --> T0043
   T0025 & T0036 --> T0037
   T0007 & T0010 & T0011 & T0012 & T0013 & T0014 & T0015 & T0016 & T0017 & T0021 & T0023 & T0024 & T0025 & T0041 & T0042 --> T0038
   T0038 --> T0026 & T0027 & T0028 & T0029 & T0030 & T0031 & T0032 & T0033 & T0034
@@ -157,7 +160,7 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 | 4 | T0010, T0012, T0013, T0014, T0015, T0016, T0017, T0018 | up to 8 | Function groups only add files in `src/functions/`, so they rarely conflict. |
 | 5 | T0011, T0020, T0024, T0025, T0042 | 5 | Minimal public API can land while the rest of phase 1 continues. |
 | 6 | T0021, T0036, T0040, T0041 | 4 | T0040 verifies the five-package first release; it is independent of hooks/async work. |
-| 7 | T0037, T0038 | 2 | First-release readiness and full phase-1 API completion are independent milestones. |
+| 7 | T0037, T0038, T0043 | 3 | First-release readiness and full phase-1 API completion are independent milestones. |
 | 8 | T0026–T0034 | up to 9 | STU features, FHIR phase 2, performance and CLI, all independent. |
 
 ## Incremental releases

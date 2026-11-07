@@ -1,4 +1,26 @@
-import { expect, test } from '@playwright/test';
+import { readdirSync, readFileSync } from 'node:fs';
+import { test as browserTest, expect, type Page } from '@playwright/test';
+
+const test = browserTest.extend<{ browserErrors: readonly string[] }>({
+  browserErrors: [
+    async ({ page }, use) => {
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      page.on('console', (message) => {
+        if (message.type() === 'error') errors.push(message.text());
+      });
+      await use(errors);
+      expect(errors).toEqual([]);
+    },
+    { auto: true },
+  ],
+});
+
+async function chooseExample(page: Page, title: string): Promise<void> {
+  await page.getByRole('button', { name: /Choose example/ }).click();
+  await page.getByRole('option', { name: title, exact: true }).click();
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+}
 
 for (const viewportWidth of [1440, 390]) {
   test(`keeps width and side margins stable at ${viewportWidth}px when results change`, async ({
@@ -24,7 +46,7 @@ for (const viewportWidth of [1440, 390]) {
       ).toBe(true);
     };
     await page.getByRole('button', { name: 'Run expression', exact: true }).click();
-    await expect(page.getByRole('status')).toHaveText('3 items');
+    await expect(page.locator('.playground-output').getByRole('status')).toHaveText('3 items');
     await expectStable();
     await page.getByLabel('FHIRPath expression').fill('(');
     await expectStable();
@@ -38,11 +60,25 @@ for (const viewportWidth of [1440, 390]) {
 }
 
 test('loads the editor and evaluator only after entering the playground', async ({ page }) => {
+  const assets = new URL('../../build/client/assets/', import.meta.url);
+  const engineFiles = readdirSync(assets).filter(
+    (name) =>
+      name.endsWith('.js') &&
+      readFileSync(new URL(name, assets), 'utf8').includes('eval/undefined-variable'),
+  );
+  expect(engineFiles.length).toBeGreaterThan(0);
   const requests: string[] = [];
   page.on('request', (request) => requests.push(request.url()));
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Callis', exact: true })).toBeVisible();
-  expect(requests.some((url) => url.includes('playground-client-'))).toBe(false);
+  expect(
+    requests.some(
+      (url) =>
+        url.includes('playground-client-') ||
+        url.includes('case-library-') ||
+        engineFiles.some((name) => new URL(url).pathname.endsWith(`/${name}`)),
+    ),
+  ).toBe(false);
   await page.getByRole('link', { name: 'Playground', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Input JSON', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/playground$/);
@@ -55,6 +91,10 @@ test('loads the editor and evaluator only after entering the playground', async 
     'page',
   );
   expect(requests.some((url) => url.includes('playground-client-'))).toBe(true);
+  expect(requests.some((url) => url.includes('case-library-'))).toBe(true);
+  expect(
+    requests.some((url) => engineFiles.some((name) => new URL(url).pathname.endsWith(`/${name}`))),
+  ).toBe(true);
 });
 
 test('prerenders a labelled shell and hydrates the direct route', async ({ page, request }) => {
@@ -96,7 +136,7 @@ test('runs public-API presets and clears stale output on edit or reset', async (
     ['Boolean logic', '[\n  true\n]'],
     ['Exact decimal', '[\n  "0.3"\n]'],
   ] as const) {
-    await page.getByRole('button', { name, exact: true }).click();
+    await chooseExample(page, name);
     await expect(output).toHaveCount(0);
     await run.click();
     await expect(output).toHaveText(expected);
@@ -174,4 +214,113 @@ test('supports keyboard exit, run and search focus in both themes and a narrow l
   );
   await page.getByRole('button', { name: 'Run expression', exact: true }).click();
   await expect(page.locator('.playground-output pre')).toContainText('Ada');
+});
+
+test('searches the library, announces empty results and loads the selected case', async ({
+  page,
+}) => {
+  await page.goto('/playground/');
+  const search = page.getByRole('searchbox', { name: 'Search examples' });
+  await search.fill('clinical-data observations');
+  await expect(page.locator('.playground-search-status')).toHaveText('1 example found.');
+  await chooseExample(page, 'Final observations');
+  await expect(page).toHaveURL(/example=final-observation-count/);
+  await expect(page.getByLabel('FHIRPath expression')).toHaveValue(
+    "Bundle.entry.resource.where(resourceType = 'Observation').where(status = 'final').count()",
+  );
+  await expect(page.locator('.playground-expected pre')).toHaveText('[\n  1\n]');
+  await expect(page.locator('.playground-output pre')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Run expression', exact: true }).click();
+  await expect(page.locator('.playground-comparison')).toHaveText('Matches original expectation.');
+  await search.fill('no-example-has-this-name');
+  await expect(page.locator('.playground-search-status')).toHaveText(
+    'No examples match your search.',
+  );
+  await expect(page.getByRole('button', { name: /Choose example/ })).toBeDisabled();
+  await expect(
+    page.getByRole('heading', { name: 'Final observations', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Clear search', exact: true }).click();
+  await expect(page.locator('.playground-search-status')).toHaveText('12 examples found.');
+});
+
+for (const [id, title, expected] of [
+  ['official-given-name', 'Official given name', '[\n  "Ada"\n]'],
+  ['final-observation-count', 'Final observations', '[\n  1\n]'],
+  ['phone-entry', 'Phone entry', '[\n  false\n]'],
+] as const) {
+  test(`deep-links, compares, edits and resets ${id}`, async ({ page }) => {
+    await page.goto(`/playground/?example=${id}`);
+    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    const expression = page.getByLabel('FHIRPath expression');
+    const original = await expression.inputValue();
+    const run = page.getByRole('button', { name: 'Run expression', exact: true });
+    await expect(page.locator('.playground-output pre')).toHaveCount(0);
+    await run.click();
+    await expect(page.locator('.playground-output pre')).toHaveText(expected);
+    await expect(page.locator('.playground-comparison')).toHaveText(
+      'Matches original expectation.',
+    );
+    await expression.fill('true');
+    await expect(page.locator('.playground-output pre')).toHaveCount(0);
+    await expect(page.locator('.playground-comparison')).toHaveText('Not compared yet.');
+    await expect(page.locator('.playground-expected')).toContainText('Modified example');
+    await run.click();
+    await expect(page.locator('.playground-comparison')).toHaveText(
+      'Modified run: original expectation shown for reference.',
+    );
+    await page.getByRole('button', { name: 'Reset example', exact: true }).click();
+    await expect(expression).toHaveValue(original);
+    await expect(page.locator('.playground-output pre')).toHaveCount(0);
+    await expect(page.locator('.playground-comparison')).toHaveText('Not compared yet.');
+    await page.reload();
+    await expect(expression).toHaveValue(original);
+    await expect(page.locator('.playground-output pre')).toHaveCount(0);
+  });
+}
+
+test('handles unknown case IDs without importing a path and keeps user edits local', async ({
+  page,
+}) => {
+  await page.goto('/playground/?example=unlisted-path');
+  await expect(page.getByText('Unknown example ID. Showing the default example.')).toBeVisible();
+  const json = page.getByRole('textbox', { name: 'Input JSON', exact: true });
+  await expect(json).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+  const storage = await page.evaluate(() => ({
+    local: { ...localStorage },
+    session: { ...sessionStorage },
+  }));
+  await json.fill('{"privateExampleText":"local-only-marker"}');
+  await page.getByLabel('FHIRPath expression').fill('privateExampleText');
+  await page.getByRole('button', { name: 'Run expression', exact: true }).click();
+  await expect(page.locator('.playground-output pre')).toContainText('local-only-marker');
+  expect(requests).toEqual([]);
+  expect(page.url()).not.toContain('local-only-marker');
+  expect(
+    await page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage } })),
+  ).toEqual(storage);
+});
+
+test('uses the searchable picker from the keyboard without stealing editor or docs search focus', async ({
+  page,
+}) => {
+  await page.goto('/playground/');
+  const search = page.getByRole('searchbox', { name: 'Search examples' });
+  await search.fill('phone');
+  await page.getByRole('button', { name: /Choose example/ }).focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('option', { name: 'Phone entry', exact: true })).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Phone entry', exact: true })).toBeVisible();
+  const expression = page.getByLabel('FHIRPath expression');
+  await expression.focus();
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(page.locator('.playground-output pre')).toContainText('false');
+  await page.keyboard.press('ControlOrMeta+k');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(expression).toBeFocused();
 });

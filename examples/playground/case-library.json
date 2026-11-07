@@ -1,0 +1,362 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "given-names",
+      "title": "Given names",
+      "summary": "Follow a path through repeated name entries.",
+      "narrative": "This invented patient excerpt contains two name entries, each with one or more given names.",
+      "question": "Which given names appear in the excerpt?",
+      "inputText": "{\n  \"resourceType\": \"Patient\",\n  \"id\": \"example\",\n  \"active\": true,\n  \"name\": [\n    {\n      \"family\": \"Example\",\n      \"given\": [\n        \"Ada\",\n        \"June\"\n      ]\n    },\n    {\n      \"given\": [\n        \"Alex\"\n      ]\n    }\n  ]\n}",
+      "expression": "Patient.name.given",
+      "expected": {
+        "kind": "result",
+        "value": ["Ada", "June", "Alex"]
+      },
+      "explanation": "The path flattens the given-name arrays into one collection in input order. It does not choose a preferred name.",
+      "edgeCases": [
+        "A missing name or given field contributes no items.",
+        "Duplicate names remain duplicate items."
+      ],
+      "tags": ["navigation", "names"],
+      "source": {
+        "path": "apps/site/app/components/playground/examples.ts",
+        "revision": "ac436db0bb270409c0445201bb355c948ae70038",
+        "test": "Given names",
+        "license": "MIT",
+        "note": "Original synthetic Callis preset; input, expression and expected result preserved."
+      },
+      "requires": {
+        "functions": [],
+        "model": "none"
+      }
+    },
+    {
+      "id": "first-name",
+      "title": "First name",
+      "summary": "Index the first name entry, then read its given names.",
+      "narrative": "One name entry may contain several given names. Indexing a name entry does not select a single given name.",
+      "question": "What given names belong to the first name entry?",
+      "inputText": "{\n  \"resourceType\": \"Patient\",\n  \"id\": \"example\",\n  \"active\": true,\n  \"name\": [\n    {\n      \"family\": \"Example\",\n      \"given\": [\n        \"Ada\",\n        \"June\"\n      ]\n    },\n    {\n      \"given\": [\n        \"Alex\"\n      ]\n    }\n  ]\n}",
+      "expression": "Patient.name[0].given",
+      "expected": {
+        "kind": "result",
+        "value": ["Ada", "June"]
+      },
+      "explanation": "Indexes are zero-based. The first name entry has two given names, so the result still has two items.",
+      "edgeCases": [
+        "An out-of-range index returns an empty collection.",
+        "The result depends on the order recorded in this excerpt."
+      ],
+      "tags": ["navigation", "indexing", "names"],
+      "source": {
+        "path": "apps/site/app/components/playground/examples.ts",
+        "revision": "ac436db0bb270409c0445201bb355c948ae70038",
+        "test": "First name",
+        "license": "MIT",
+        "note": "Original synthetic Callis preset; input, expression and expected result preserved."
+      },
+      "requires": {
+        "functions": [],
+        "model": "none"
+      }
+    },
+    {
+      "id": "filtered-names",
+      "title": "Filtered names",
+      "summary": "Select name entries by the recorded family value.",
+      "narrative": "The invented excerpt includes one family name. This example selects matching entries without deciding which name should be used.",
+      "question": "Which given names belong to an entry with family Example?",
+      "inputText": "{\n  \"resourceType\": \"Patient\",\n  \"id\": \"example\",\n  \"active\": true,\n  \"name\": [\n    {\n      \"family\": \"Example\",\n      \"given\": [\n        \"Ada\",\n        \"June\"\n      ]\n    },\n    {\n      \"given\": [\n        \"Alex\"\n      ]\n    }\n  ]\n}",
+      "expression": "Patient.name.where(family = 'Example').given",
+      "expected": {
+        "kind": "result",
+        "value": ["Ada", "June"]
+      },
+      "explanation": "where evaluates its criterion for each name entry, then the path reads the matching given names.",
+      "edgeCases": [
+        "No matching entry produces an empty collection.",
+        "Multiple matching entries contribute their given names in order."
+      ],
+      "tags": ["filtering", "names"],
+      "source": {
+        "path": "apps/site/app/components/playground/examples.ts",
+        "revision": "ac436db0bb270409c0445201bb355c948ae70038",
+        "test": "Filtered names",
+        "license": "MIT",
+        "note": "Original synthetic Callis preset; input, expression and expected result preserved."
+      },
+      "requires": {
+        "functions": ["where"],
+        "model": "none"
+      }
+    },
+    {
+      "id": "name-count",
+      "title": "Name count",
+      "summary": "Count name entries rather than given-name strings.",
+      "narrative": "The two name entries in this invented excerpt contain three given-name strings altogether.",
+      "question": "How many name entries are present?",
+      "inputText": "{\n  \"resourceType\": \"Patient\",\n  \"id\": \"example\",\n  \"active\": true,\n  \"name\": [\n    {\n      \"family\": \"Example\",\n      \"given\": [\n        \"Ada\",\n        \"June\"\n      ]\n    },\n    {\n      \"given\": [\n        \"Alex\"\n      ]\n    }\n  ]\n}",
+      "expression": "Patient.name.count()",
+      "expected": {
+        "kind": "result",
+        "value": [2]
+      },
+      "explanation": "count returns the number of items in its input collection. It does not count nested given-name values.",
+      "edgeCases": ["A missing name field counts as zero.", "Duplicate entries count separately."],
+      "tags": ["counting", "names"],
+      "source": {
+        "path": "apps/site/app/components/playground/examples.ts",
+        "revision": "ac436db0bb270409c0445201bb355c948ae70038",
+        "test": "Name count",
+        "license": "MIT",
+        "note": "Original synthetic Callis preset; input, expression and expected result preserved."
+      },
+      "requires": {
+        "functions": ["count"],
+        "model": "none"
+      }
+    },
+    {
+      "id": "has-ada",
+      "title": "Has Ada",
+      "summary": "Check whether any name entry starts with Ada.",
+      "narrative": "This is a data-matching exercise on invented names, not an identity check.",
+      "question": "Does an entry have Ada as its first given name?",
+      "inputText": "{\n  \"resourceType\": \"Patient\",\n  \"id\": \"example\",\n  \"active\": true,\n  \"name\": [\n    {\n      \"family\": \"Example\",\n      \"given\": [\n        \"Ada\",\n        \"June\"\n      ]\n    },\n    {\n      \"given\": [\n        \"Alex\"\n      ]\n    }\n  ]\n}",
+      "expression": "Patient.name.exists(given[0] = 'Ada')",
+      "expected": {
+        "kind": "result",
+        "value": [true]
+      },
+      "explanation": "exists returns one Boolean and stops when a matching name entry is found. It does not return the matching entry.",
+      "edgeCases": [
+        "An empty name collection returns false.",
+        "Ada in a later given-name position would not match this criterion."
+      ],
+      "tags": ["existence", "names"],
+      "source": {
+        "path": "apps/site/app/components/playground/examples.ts",
+        "revision": "ac436db0bb270409c0445201bb355c948ae70038",
+        "test": "Has Ada",
+        "license": "MIT",
+        "note": "Original synthetic Callis preset; input, expression and expected result preserved."
+      },
+      "requires": {
+        "functions": ["exists"],
+        "model": "none"
+      }
+    },
+    {
+      "id": "filtered-count",
+      "title": "Filtered count",
+      "summary": "Combine filtering and counting.",
+      "narrative": "This invented excerpt lets us distinguish the number of matching name entries from the number of matching strings.",
+      "question": "How many name entries have family Example?",
+      "inputText": "{\n  \"resourceType\": \"Patient\",\n  \"id\": \"example\",\n  \"active\": true,\n  \"name\": [\n    {\n      \"family\": \"Example\",\n      \"given\": [\n        \"Ada\",\n        \"June\"\n      ]\n    },\n    {\n      \"given\": [\n        \"Alex\"\n      ]\n    }\n  ]\n}",
+      "expression": "Patient.name.where(family = 'Example').count()",
+      "expected": {
+        "kind": "result",
+        "value": [1]
+      },
+      "explanation": "The filtered collection is passed to count. The result is a collection containing one Integer.",
+      "edgeCases": [
+        "No matches returns [0], not an empty collection.",
+        "Every matching entry is counted, including duplicates."
+      ],
+      "tags": ["filtering", "counting", "names"],
+      "source": {
+        "path": "apps/site/app/components/playground/examples.ts",
+        "revision": "ac436db0bb270409c0445201bb355c948ae70038",
+        "test": "Filtered count",
+        "license": "MIT",
+        "note": "Original synthetic Callis preset; input, expression and expected result preserved."
+      },
+      "requires": {
+        "functions": ["where", "count"],
+        "model": "none"
+      }
+    },
+    {
+      "id": "missing-field",
+      "title": "Missing field",
+      "summary": "Inspect an absent field without inventing a value.",
+      "narrative": "The excerpt intentionally contains no address field. It is not a complete patient record.",
+      "question": "What does the address path return for this excerpt?",
+      "inputText": "{\n  \"resourceType\": \"Patient\",\n  \"id\": \"example\",\n  \"active\": true,\n  \"name\": [\n    {\n      \"family\": \"Example\",\n      \"given\": [\n        \"Ada\",\n        \"June\"\n      ]\n    },\n    {\n      \"given\": [\n        \"Alex\"\n      ]\n    }\n  ]\n}",
+      "expression": "Patient.address",
+      "expected": {
+        "kind": "result",
+        "value": []
+      },
+      "explanation": "An absent path produces the empty collection. This says only that this JSON excerpt supplies no address; it says nothing about whether a person has an address.",
+      "edgeCases": [
+        "A missing field and a field containing null contribute no items.",
+        "An empty collection is different from a collection containing false."
+      ],
+      "tags": ["empty", "missing-data"],
+      "source": {
+        "path": "apps/site/app/components/playground/examples.ts",
+        "revision": "ac436db0bb270409c0445201bb355c948ae70038",
+        "test": "Missing field",
+        "license": "MIT",
+        "note": "Original synthetic Callis preset; input, expression and expected result preserved."
+      },
+      "requires": {
+        "functions": [],
+        "model": "none"
+      }
+    },
+    {
+      "id": "boolean-logic",
+      "title": "Boolean logic",
+      "summary": "Combine a recorded Boolean with a literal.",
+      "narrative": "The invented patient excerpt records active as true. This exercise shows Boolean evaluation, not a clinical status assessment.",
+      "question": "What is the result of active and true?",
+      "inputText": "{\n  \"resourceType\": \"Patient\",\n  \"id\": \"example\",\n  \"active\": true,\n  \"name\": [\n    {\n      \"family\": \"Example\",\n      \"given\": [\n        \"Ada\",\n        \"June\"\n      ]\n    },\n    {\n      \"given\": [\n        \"Alex\"\n      ]\n    }\n  ]\n}",
+      "expression": "Patient.active and true",
+      "expected": {
+        "kind": "result",
+        "value": [true]
+      },
+      "explanation": "The recorded true value and the true literal yield true under FHIRPath Boolean rules.",
+      "edgeCases": [
+        "FHIRPath empty-collection logic is not JavaScript truthiness.",
+        "A missing active field must not be silently treated as false."
+      ],
+      "tags": ["boolean", "operators"],
+      "source": {
+        "path": "apps/site/app/components/playground/examples.ts",
+        "revision": "ac436db0bb270409c0445201bb355c948ae70038",
+        "test": "Boolean logic",
+        "license": "MIT",
+        "note": "Original synthetic Callis preset; input, expression and expected result preserved."
+      },
+      "requires": {
+        "functions": [],
+        "model": "none"
+      }
+    },
+    {
+      "id": "exact-decimal",
+      "title": "Exact decimal",
+      "summary": "Preserve the text of a computed Decimal.",
+      "narrative": "This arithmetic example uses Decimal literals in the expression. It does not calculate a clinical recommendation from patient data.",
+      "question": "How is 0.1 plus 0.2 displayed?",
+      "inputText": "{\n  \"resourceType\": \"Patient\",\n  \"id\": \"example\",\n  \"active\": true,\n  \"name\": [\n    {\n      \"family\": \"Example\",\n      \"given\": [\n        \"Ada\",\n        \"June\"\n      ]\n    },\n    {\n      \"given\": [\n        \"Alex\"\n      ]\n    }\n  ]\n}",
+      "expression": "0.1 + 0.2",
+      "expected": {
+        "kind": "result",
+        "value": ["0.3"]
+      },
+      "explanation": "The playground requests decimalOutput string, so the computed Decimal is displayed as exact text. This is not a lossless JSON input parser.",
+      "edgeCases": [
+        "Digits already lost by JSON.parse cannot be recovered.",
+        "A Decimal displayed as a string does not retain a distinct JavaScript type tag."
+      ],
+      "tags": ["decimal", "precision", "operators"],
+      "source": {
+        "path": "apps/site/app/components/playground/examples.ts",
+        "revision": "ac436db0bb270409c0445201bb355c948ae70038",
+        "test": "Exact decimal",
+        "license": "MIT",
+        "note": "Original synthetic Callis preset; input, expression and expected result preserved."
+      },
+      "requires": {
+        "functions": [],
+        "model": "none"
+      }
+    },
+    {
+      "id": "official-given-name",
+      "title": "Official given name",
+      "summary": "Select the name marked official in a synthetic excerpt.",
+      "narrative": "An invented patient excerpt records an official name and a nickname. The labels are recorded data; this example does not verify identity or choose a contact policy.",
+      "question": "Which given names are recorded under an official name?",
+      "inputText": "{\n  \"resourceType\": \"Patient\",\n  \"name\": [\n    {\n      \"use\": \"official\",\n      \"given\": [\n        \"Ada\"\n      ]\n    },\n    {\n      \"use\": \"nickname\",\n      \"given\": [\n        \"AJ\"\n      ]\n    }\n  ]\n}",
+      "expression": "Patient.name.where(use = 'official').given",
+      "expected": {
+        "kind": "result",
+        "value": ["Ada"]
+      },
+      "explanation": "Filtering selects entries whose use is official, then reads their given names. Matching multiple entries returns a collection; this does not assert that only one official name is permitted.",
+      "edgeCases": [
+        "No official name returns an empty collection.",
+        "Multiple official entries preserve their order and duplicates."
+      ],
+      "tags": ["clinical-data", "names", "filtering"],
+      "source": {
+        "path": "packages/core/src/functions/filtering.test.ts",
+        "revision": "ac436db0bb270409c0445201bb355c948ae70038",
+        "test": "where through the public synchronous API",
+        "license": "MIT",
+        "note": "New invented clinical-data excerpt using an existing Callis public-API test pattern. Not an official FHIR fixture or a validated complete resource."
+      },
+      "requires": {
+        "functions": ["where"],
+        "model": "none"
+      }
+    },
+    {
+      "id": "final-observation-count",
+      "title": "Final observations",
+      "summary": "Count final Observation entries in a synthetic Bundle excerpt.",
+      "narrative": "This small invented Bundle contains one final Observation, one preliminary Observation and a Patient entry. It is a data-selection exercise, not an interpretation of any measurement.",
+      "question": "How many Observation resources in the excerpt have status final?",
+      "inputText": "{\n  \"resourceType\": \"Bundle\",\n  \"entry\": [\n    {\n      \"resource\": {\n        \"resourceType\": \"Observation\",\n        \"id\": \"synthetic-final\",\n        \"status\": \"final\"\n      }\n    },\n    {\n      \"resource\": {\n        \"resourceType\": \"Observation\",\n        \"id\": \"synthetic-preliminary\",\n        \"status\": \"preliminary\"\n      }\n    },\n    {\n      \"resource\": {\n        \"resourceType\": \"Patient\",\n        \"id\": \"synthetic-patient\"\n      }\n    }\n  ]\n}",
+      "expression": "Bundle.entry.resource.where(resourceType = 'Observation').where(status = 'final').count()",
+      "expected": {
+        "kind": "result",
+        "value": [1]
+      },
+      "explanation": "The first filter keeps Observation resources; the second keeps the recorded final status. count returns their number. References are not resolved and the excerpt is not a validated complete Bundle.",
+      "edgeCases": [
+        "No matching Observation returns [0].",
+        "Missing status is excluded; every matching entry counts, including duplicates."
+      ],
+      "tags": ["clinical-data", "observations", "filtering", "counting"],
+      "source": {
+        "path": "packages/core/src/functions/existence.test.ts",
+        "revision": "ac436db0bb270409c0445201bb355c948ae70038",
+        "test": "exists and count through the public synchronous API",
+        "license": "MIT",
+        "note": "New invented clinical-data excerpt using an existing Callis public-API test pattern. Not an official FHIR fixture or a validated complete resource."
+      },
+      "requires": {
+        "functions": ["where", "count"],
+        "model": "none"
+      }
+    },
+    {
+      "id": "phone-entry",
+      "title": "Phone entry",
+      "summary": "Check for a phone entry in a synthetic patient excerpt.",
+      "narrative": "The invented excerpt contains an email entry and no phone entry. Absence from this JSON does not establish whether a person has a phone number elsewhere.",
+      "question": "Does this JSON excerpt contain at least one phone entry?",
+      "inputText": "{\n  \"resourceType\": \"Patient\",\n  \"telecom\": [\n    {\n      \"system\": \"email\",\n      \"value\": \"synthetic@example.invalid\"\n    }\n  ]\n}",
+      "expression": "Patient.telecom.exists(system = 'phone')",
+      "expected": {
+        "kind": "result",
+        "value": [false]
+      },
+      "explanation": "exists reports whether an entry has system phone. It does not validate a number, establish consent or decide whether contacting anyone is appropriate.",
+      "edgeCases": [
+        "Missing or empty telecom returns false.",
+        "One or several phone entries return true; this criterion does not check their values."
+      ],
+      "tags": ["clinical-data", "contacts", "existence"],
+      "source": {
+        "path": "packages/core/src/functions/existence.test.ts",
+        "revision": "ac436db0bb270409c0445201bb355c948ae70038",
+        "test": "exists and count through the public synchronous API",
+        "license": "MIT",
+        "note": "New invented clinical-data excerpt using an existing Callis public-API test pattern. Not an official FHIR fixture or a validated complete resource."
+      },
+      "requires": {
+        "functions": ["exists"],
+        "model": "none"
+      }
+    }
+  ]
+}
