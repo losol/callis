@@ -1,5 +1,12 @@
 # @callis/core
 
+## 0.2.0
+
+### Minor Changes
+
+- ac436db: Add `exists([criteria])` and `count()` to the synchronous model-less evaluator. Existence criteria reuse the established filtering predicate rules and stop at the first match. Empty collections return false for existence and zero for count; no public API options or async surface are added.
+- 391ed2a: Add `where(criteria)` to the synchronous model-less evaluator. Filtering preserves order and input identity, supports nested item/index criteria, and follows the existing singleton Boolean and error rules without adding public API options.
+
 ## 0.1.0
 
 ### Minor Changes
