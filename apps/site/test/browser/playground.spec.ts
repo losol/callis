@@ -324,8 +324,14 @@ test('uses the searchable picker from the keyboard without stealing editor or do
   await page.keyboard.press('ControlOrMeta+Enter');
   await expect(page.locator('.playground-result')).toContainText('false');
   await page.keyboard.press('ControlOrMeta+k');
-  await expect(page.getByRole('dialog')).toBeVisible();
+  const palette = page.getByRole('dialog');
+  await expect(palette).toBeVisible();
+  // The palette moves focus into its search field a frame after it opens. Until
+  // then, Escape goes to the field that opened it and the palette stays open, so
+  // wait for that focus move before pressing the key.
+  await expect(palette.getByRole('combobox')).toBeFocused();
   await page.keyboard.press('Escape');
+  await expect(palette).toBeHidden();
   await expect(expression).toBeFocused();
 });
 
