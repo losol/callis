@@ -40,9 +40,11 @@ npm install @callis/core
 
 ## Quick start
 
-Import `compile` and `evaluate` from `@callis/core`, and evaluate against a resource as plain JSON:
+Evaluate a resource given as plain JSON:
 
 ```ts
+import { compile, evaluate, FhirPathError, parseJson } from '@callis/core';
+
 export const patient: Readonly<{ resourceType: string; name: readonly { given: readonly string[] }[] }> = {
   resourceType: 'Patient', name: [{ given: ['Ada', 'Mina'] }],
 };
@@ -51,6 +53,8 @@ export const firstGiven: unknown[] = compile('name.given[0]').evaluate(patient);
 ```
 
 `given` is `['Ada', 'Mina']` and `firstGiven` is `['Ada']`. Results are always plain arrays, and a path that finds nothing gives `[]`. `compile` parses once, and its result evaluates many resources. Errors extend `FhirPathError` and throw synchronously. Decimals come out as JavaScript numbers by default; use `decimalOutput: 'string'` when the exact digits matter ([guide](docs/guide.md#exact-decimal-rendering)).
+
+The snippet uses only `compile` and `evaluate`. Its import line also lists `FhirPathError` and `parseJson` because the guide's examples share it, and `parseJson` is not in releases up to 0.2.0: with those, import just `compile` and `evaluate`.
 
 ## Packages
 
