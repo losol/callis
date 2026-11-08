@@ -65,6 +65,13 @@ assert.deepEqual(core.evaluate(null, '{}.exists()'), [false]);
 const rows = { rows: [{ flag: false }, { flag: true }, { flag: [true, false] }] };
 assert.deepEqual(core.compile('rows.exists(flag)').evaluate(rows), [true]);
 assert.deepEqual(core.evaluate({ rows: [{ value: 1 }, { value: 2 }] }, 'rows.where(value > 1).count()'), [1]);
+assert.deepEqual(core.evaluate(null, "iif(true, 'lazy', %missing)"), ['lazy']);
+assert.deepEqual(core.evaluate(null, '1.0.toString()'), ['1.0']);
+assert.deepEqual(core.evaluate(null, "'2015-02-04T14:34'.toDateTime()"), ['2015-02-04T14:34']);
+assert.deepEqual(core.evaluate(null, "'1.a'.convertsToDecimal()"), [false]);
+assert.deepEqual(core.evaluate(null, "'4 days'.toQuantity('h')", { units: ucum }),
+  [{ value: 96, unit: 'h', system: 'http://unitsofmeasure.org', code: 'h' }]);
+assert.throws(() => core.evaluate(null, '(1 | 2).toInteger()'), error => error.code === 'eval/singleton-expected');
 assert.throws(() => core.compile('intentionallyMissingFunction()'), core.FhirPathSemanticError);
 assert.throws(() => core.evaluate(null, '%missing'), core.FhirPathEvaluationError);
 assert.equal(core.Decimal.name, 'Decimal');

@@ -48,7 +48,8 @@ export function evaluateArgs(
 
 /**
  * Binds a compiled lambda to a call: `forItem()` evaluates it with one item as the focus, `$this`
- * and `$index`; `inPlace()` evaluates it where the call is written.
+ * and `$index`; `forInput()` with the whole input as the focus and `$this`, keeping the call's
+ * `$index` and `$total`; `inPlace()` where the call is written.
  */
 export function bindLambda(
   body: Evaluator,
@@ -61,6 +62,14 @@ export function bindLambda(
     forItem(item: Item, index: number, total?: Collection): MaybePromise<Collection> {
       const itemFocus: readonly [Item] = [item];
       return body(ctx, itemFocus, itemFrame(frame, itemFocus, index, total));
+    },
+    forInput(input: Collection): MaybePromise<Collection> {
+      return body(ctx, input, {
+        this: input,
+        index: frame.index,
+        total: frame.total,
+        parent: frame,
+      });
     },
     inPlace(): MaybePromise<Collection> {
       return body(ctx, focus, frame);

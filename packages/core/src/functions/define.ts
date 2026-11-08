@@ -56,8 +56,14 @@ export interface LambdaArg {
    */
   forItem(item: Item, index: number, total?: Collection): MaybePromise<Collection>;
   /**
+   * Evaluates the argument once for the whole input, as the arguments of `iif()` are: `input` is
+   * the focus and `$this`, also when it is empty, and `$index` and `$total` stay those of the
+   * call ([3.0.0 iif](https://hl7.org/fhirpath/STU3/en/index.html#iifcriterion-this--boolean-true-result-this--collection--otherwise-result-this--collection--collection)).
+   */
+  forInput(input: Collection): MaybePromise<Collection>;
+  /**
    * Evaluates the argument where the call is written, with the call's focus and iteration
-   * variables, as the lazy branches of `iif()` are.
+   * variables.
    */
   inPlace(): MaybePromise<Collection>;
 }
