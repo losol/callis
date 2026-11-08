@@ -76,7 +76,7 @@ This gives `['1.50']`; without `decimalOutput: 'string'`, `[1.5]`. A result that
 
 ## Current support and deferred API
 
-Model-less paths, literals, indexing, Boolean logic, unary polarity and type operations are available. The built-in functions are `not`, `is`, `as`, `where`, `exists`, `count`, `first`, `single`, `children`, `descendants`, `trace`, `now`, `today` and `timeOfDay`. `ofType()` is not implemented yet ([T0042](tasks/T0042-fn-projection-completion.md)). Arithmetic, comparisons, equality/equivalence, membership, union and string concatenation operators from T0010 are implemented. Other standard and FHIR functions are still incremental work; an unavailable function such as `select()` raises `semantic/unknown-function`, rather than pretending to evaluate it.
+Model-less paths, literals, indexing, Boolean logic, unary polarity and type operations are available. The built-in functions are `not`, `is`, `as`, `where`, `exists`, `count`, `first`, `single`, `children`, `descendants`, `trace`, `now`, `today`, `timeOfDay`, `iif`, `toX()` and `convertsToX()` for Boolean, Integer, Decimal, Date, DateTime, Time, String and Quantity, and the string functions below. `ofType()` is not implemented yet ([T0042](tasks/T0042-fn-projection-completion.md)). Arithmetic, comparisons, equality/equivalence, membership, union and string concatenation operators from T0010 are implemented. Other standard and FHIR functions are still incremental work; an unavailable function such as `select()` raises `semantic/unknown-function`, rather than pretending to evaluate it.
 
 Filtering is now available through `where(criteria)`, using the existing synchronous API:
 
@@ -104,6 +104,18 @@ export const onlyName: unknown[] = compile('name.single()').evaluate(patient);
 These zero-argument functions use the existing synchronous model-less API. The remaining subsetting and combining functions, including `last()`, remain deferred.
 
 `children()` returns the properties of each input object in document order, with arrays flattened, but not `resourceType` or keys that start with `_`; `descendants()` returns everything below the input, depth first in document order. `now()`, `today()` and `timeOfDay()` give the same value every time within one evaluation, in UTC unless `timezoneOffset` says otherwise. `trace(name[, projection])` returns its input unchanged; the public API has no hooks yet, so nothing receives its output.
+
+The conversion functions are available too: `iif()`, and `toX()` with `convertsToX()` for Boolean, Integer, Decimal, Date, DateTime, Time, String and Quantity.
+
+```ts
+export const named: unknown[] = evaluate(patient, "iif(name.exists(), 'named', 'unnamed')");
+export const parsedDecimal: unknown[] = evaluate(null, "'1.50'.toDecimal()", { decimalOutput: 'string' });
+export const inHours: unknown[] = evaluate(null, "'4 days'.toQuantity('h').toString()");
+```
+
+These give `['named']`, `['1.50']` and `["96 'h'"]`. `iif()` evaluates only the branch it selects, with the input as `$this`. A conversion takes one item: empty input gives empty, more than one item raises `eval/singleton-expected`, and a value that does not convert gives empty from `toX()` and false from `convertsToX()`. `toString()` keeps the precision of a Decimal (`1.0` gives `'1.0'`) and writes dates and times without `@`.
+
+String functions work on one String: `indexOf`, `substring`, `startsWith`, `endsWith`, `contains`, `upper`, `lower`, `replace`, `matches`, `replaceMatches`, `length` and `toChars`. An empty input or argument gives an empty result; more than one item raises `eval/singleton-expected` and a value that is not a String `eval/type-mismatch`. Characters are Unicode scalar values, as in FHIRPath 3.0.0, so `'a🔥b'.length()` is `3` and `toChars()` never splits a surrogate pair. `matches()` and `replaceMatches()` use JavaScript regular expressions with the `u` flag in single-line mode: `.` also matches a line break, `^` and `$` match only at the ends of the string, and a pattern that is not valid raises `eval/invalid-argument`. A `replaceMatches()` substitution refers to groups as `${name}` or `${1}`, as in the specification's example, or in JavaScript's forms `$1` and `$<name>`. `matchesFull()`, regular expression flags and the other string functions are deferred.
 
 The public surface has no parser, AST input/property, static analyzer, typed output mode, async evaluation, hooks, model option, custom function registry, strict/lenient options or cache. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages. The engine evaluates with a model internally since [T0018](tasks/T0018-model-aware-evaluation.md): choice elements, FHIR primitives with their `_name` extensions, FHIR values as System values and the root identifier as a type with inheritance, which the conformance runner measures with the R4 and R5 providers; the engine's tests also run it against the R6 provider. The public `model` and `lenient` options arrive with the expanded API (T0038); a model provider export does not imply them yet.
 

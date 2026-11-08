@@ -187,7 +187,7 @@ describe('engineAdapter.classifyError', () => {
   it.each([
     'name.empty()',
     'name.where(given.empty())',
-    "'a'.matches('a')",
+    "'a'.matchesFull('a')",
     'name.given.aggregate($total)',
     '%resource',
     '%`vs-administrative-gender`',

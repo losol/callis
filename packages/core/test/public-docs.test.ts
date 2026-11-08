@@ -9,9 +9,12 @@ import {
   firstGiven,
   given,
   hasAda,
+  inHours,
   lossless,
+  named,
   numberOfNames,
   onlyName,
+  parsedDecimal,
   patient,
   quantityJson,
   selectedGiven,
@@ -29,6 +32,9 @@ describe('public guide examples', () => {
     expect(selectedGiven).toEqual(['Ada']);
     expect(onlyName).toEqual(patient.name);
     expect(onlyName[0]).toBe(patient.name[0]);
+    expect(named).toEqual(['named']);
+    expect(parsedDecimal).toEqual(['1.50']);
+    expect(inHours).toEqual(["96 'h'"]);
     expect(exactDecimal).toEqual(['9007199254740993.1200']);
     expect(quantityJson).toBe(
       '[{"value":"1.200","unit":"mg","system":"http://unitsofmeasure.org","code":"mg"}]',

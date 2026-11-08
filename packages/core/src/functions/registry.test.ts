@@ -41,9 +41,19 @@ describe('FunctionRegistry', () => {
   it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty'])(
     'does not find the prototype member %s',
     (name) => {
-      expect(registry.get(name)).toBeUndefined();
+      expect(createRegistry({ standard: false, fhir: false }).get(name)).toBeUndefined();
+      if (name !== 'toString') {
+        expect(registry.get(name)).toBeUndefined();
+      }
     },
   );
+
+  it('finds toString only as the library function (T0014)', () => {
+    const definition = registry.get('toString');
+    expect(definition).not.toBe(Object.prototype.toString);
+    expect(definition).toMatchObject({ name: 'toString', params: [] });
+    expect(registry.resolve('toString', 0).name).toBe('toString');
+  });
 
   it('resolves a call with the right number of arguments', () => {
     expect(registry.resolve('not', 0).name).toBe('not');

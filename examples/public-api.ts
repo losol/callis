@@ -19,6 +19,11 @@ export const filteredNameCount: unknown[] = evaluate(
 );
 export const selectedGiven: unknown[] = evaluate(patient, 'name.given.first()');
 export const onlyName: unknown[] = compile('name.single()').evaluate(patient);
+export const named: unknown[] = evaluate(patient, "iif(name.exists(), 'named', 'unnamed')");
+export const parsedDecimal: unknown[] = evaluate(null, "'1.50'.toDecimal()", {
+  decimalOutput: 'string',
+});
+export const inHours: unknown[] = evaluate(null, "'4 days'.toQuantity('h').toString()");
 export const exactDecimal: unknown[] = evaluate(null, '9007199254740993.1200', {
   decimalOutput: 'string',
 });
