@@ -1,35 +1,46 @@
 # Callis
 
+A [FHIRPath](https://hl7.org/fhirpath/N1/) engine for TypeScript, with no runtime dependencies, for Node.js and browsers.
+
+[Try the playground](https://callis.losol.no/playground/) · [Read the guide](docs/guide.md) · [Follow the progress](https://callis.losol.no/progress)
+
 > **Before 1.0.** 0.x releases are published on npm, and the API can still change before 1.0. Public API is designed with later work in mind to avoid breaking changes, and a breaking change states its reason and migration ([API changes](CONTRIBUTING.md#api-changes), [releasing](RELEASING.md)).
 
-Callis is about finding data. It is a [FHIRPath](https://hl7.org/fhirpath/N1/) engine for TypeScript, with no runtime dependencies, for Node.js and browsers.
+FHIRPath is the path-based query language of HL7 FHIR. An expression such as `Patient.name.given` selects values from a FHIR resource, and FHIR uses such expressions in search parameters, invariants, mappings and other places that need to point at data. Callis evaluates them.
 
-## Documentation
+- **Correct.** It follows FHIRPath N1 and the FHIR additions ([ADR-0001](docs/adr/0001-spec-baseline.md)) and is measured against the official HL7 test suite.
+- **Exact values.** Decimals are not binary floating point, partial dates and times keep their precision, and quantities respect units ([`@callis/ucum`](packages/ucum/README.md) adds full UCUM conversion).
+- **Compile once, evaluate many times.** Built for repeated evaluation, such as search parameters, invariants and mappings.
+- **Clear errors.** Every error has a stable code, and syntax errors point at the source position.
+- **No model needed.** Plain JSON goes in and plain arrays come out.
 
-- [Architecture](docs/architecture.md)
-- [Roadmap](docs/roadmap.md)
-- [Contributing](CONTRIBUTING.md) (and [AGENTS.md](AGENTS.md) for AI agents)
+## Status
 
-## Packages
+Callis is at 0.x: published, partly implemented, and not yet 1.0. The public API evaluates synchronously, without a model: paths, literals, indexing, operators and a first set of functions such as `where`, `exists` and `count`. Most of the standard function library is still to come, and calling a function that is not available raises an error instead of guessing. The [guide](docs/guide.md#current-support-and-deferred-api) lists what is supported, and the [conformance reports](docs/conformance/r5.md) list every HL7 test that passes and fails.
 
-| Package | Description | Status |
+This page and the guide follow the main branch, which can be ahead of the latest release. The [releases](https://github.com/losol/callis/releases) list what each one contains. The scope and criteria for 1.0 are not decided yet.
+
+### FHIR versions
+
+| FHIR | Support | Evidence |
 | --- | --- | --- |
-| [`@callis/core`](packages/core) | The FHIRPath engine | In development; 0.x releases of the implemented subset |
-| [`@callis/ucum`](packages/ucum) | Opt-in UCUM conversion | Implemented and released |
-| [`@callis/fhir-r4`](packages/fhir-r4), [`@callis/fhir-r5`](packages/fhir-r5) | Immutable R4 4.0.1 / R5 5.0.0 provider metadata | Released data packages; the engine evaluates with them internally, public `model` option deferred |
-| [`@callis/fhir-r6`](packages/fhir-r6) | Immutable provider metadata from the R6 draft `6.0.0-snapshot1` | Released data package, best effort: a draft, not final R6, and there is no R6 conformance suite |
+| R4 (4.0.1) | Supported | HL7 test suite, [report](docs/conformance/r4.md) |
+| R5 (5.0.0) | Supported | HL7 test suite, [report](docs/conformance/r5.md) |
+| R6 | Best effort | Built from the draft `6.0.0-snapshot1`, not final R6. There is no official R6 FHIRPath suite, so there is no R6 conformance result. |
+
+Each version has a model package, listed [below](#packages). The engine already uses them internally, for example for choice elements such as `value[x]`. Passing one to the public API is not available yet; see the [roadmap](docs/roadmap.md#fhir-versions).
 
 ## Install
-
-The first release, 0.1.0, offered the implemented subset through a [small synchronous API](docs/tasks/T0025-public-api-release.md) and [simple playground](docs/tasks/T0036-playground.md), after [release readiness](docs/tasks/T0037-first-release-readiness.md). It did not wait for full phase 1. Later 0.x releases add capabilities with documented support, limitations and per-phase [conformance reports](docs/conformance/r5.md); the [releases](https://github.com/losol/callis/releases) list what each one contains. The scope and criteria for 1.0 remain open.
 
 ```sh
 npm install @callis/core
 ```
 
+`@callis/core` is ESM only and needs Node.js 22 or later. It is also checked in a production Vite build in Chromium. Deno, Bun and edge workers are not verified yet. The other packages are optional and take `@callis/core` as a peer dependency.
+
 ## Quick start
 
-The source exports synchronous model-less evaluation. See the [guide](docs/guide.md) for supported features, errors and exact Decimal rendering; the main branch can be ahead of the latest release.
+Evaluate a resource given as plain JSON:
 
 ```ts
 import { compile, evaluate, FhirPathError, parseJson } from '@callis/core';
@@ -41,12 +52,31 @@ export const given: unknown[] = evaluate(patient, 'Patient.name.given');
 export const firstGiven: unknown[] = compile('name.given[0]').evaluate(patient);
 ```
 
-These return `['Ada', 'Mina']` and `['Ada']`. Default Decimal output uses potentially lossy numbers; `decimalOutput: 'string'` preserves evaluator Decimal digits, but cannot recover digits lost in input JavaScript numbers; `parseJson()` keeps them ([guide](docs/guide.md#lossless-json-input)). Full phase-1 conformance and a public model option remain future work.
+`given` is `['Ada', 'Mina']` and `firstGiven` is `['Ada']`. Results are always plain arrays, and a path that finds nothing gives `[]`. `compile` parses once, and its result evaluates many resources. Errors extend `FhirPathError` and throw synchronously. Decimals come out as JavaScript numbers by default; use `decimalOutput: 'string'` when the exact digits matter ([guide](docs/guide.md#exact-decimal-rendering)).
 
-## First 0.1 support
+The snippet uses only `compile` and `evaluate`. Its import line also lists `FhirPathError` and `parseJson` because the guide's examples share it, and `parseJson` is not in releases up to 0.2.0: with those, import just `compile` and `evaluate`.
 
-The [support matrix](docs/guide.md#first-01-support-matrix) lists implemented operators and functions, tested runtimes and deferred APIs. Try the [browser-local playground](https://callis.losol.no/playground/); it executes locally without automatically sending input JSON. The [0.1.0 release inventory](docs/releases/0.1.0.md) records what that release contains and how it was prepared.
+## Packages
+
+| Package | What it is |
+| --- | --- |
+| [`@callis/core`](packages/core/README.md) | The FHIRPath engine |
+| [`@callis/ucum`](packages/ucum/README.md) | Opt-in full UCUM unit conversion |
+| [`@callis/fhir-r4`](packages/fhir-r4/README.md), [`@callis/fhir-r5`](packages/fhir-r5/README.md) | Immutable model metadata for FHIR R4 and R5 |
+| [`@callis/fhir-r6`](packages/fhir-r6/README.md) | Immutable model metadata from the R6 draft, best effort |
+
+## Documentation
+
+- [Guide](docs/guide.md): the public API, options, errors and exact decimals
+- [Browser playground](https://callis.losol.no/playground/): run expressions in your browser; it executes locally and does not automatically send your input anywhere
+- [Project progress](https://callis.losol.no/progress): the project commit by commit, with conformance and roadmap
+- [Architecture](docs/architecture.md), [roadmap](docs/roadmap.md) and [decisions](docs/adr/README.md)
+- [Spec notes](docs/spec-notes.md): how Callis reads the ambiguous parts of the specification
+
+## Contributing
+
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains the workflow, and [AGENTS.md](AGENTS.md) has the rules for AI coding agents.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). `@callis/ucum` includes the UCUM essence file under the UCUM License, and the FHIR model packages carry HL7 source notices; each package says so.
