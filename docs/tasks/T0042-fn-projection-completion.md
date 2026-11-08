@@ -3,6 +3,7 @@
 Part of the [roadmap](../roadmap.md). Phase 1 · wave 5 · size M.
 
 - **Depends on:** [T0012](T0012-fn-filtering.md)
+- **Area:** `area:functions`
 - **Issue:** [#133](https://github.com/losol/callis/issues/133)
 - **Background:** [T0008](T0008-compiler-evaluator.md), [T0009](T0009-equality-kernels.md), [T0018](T0018-model-aware-evaluation.md), [T0038](T0038-public-api-completion.md)
 

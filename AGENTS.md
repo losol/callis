@@ -14,6 +14,18 @@ Instructions for AI coding agents working on Callis. This file follows the [AGEN
 2. Check in the [roadmap](docs/roadmap.md) that its dependencies are merged.
 3. Before writing code, read the [code style guide](docs/guides/code-style.md) and the [testing guide](docs/guides/testing.md).
 
+## Review area and tier
+
+Your task file's `- **Area:**` line and your PR's `area:*` and `risk:high` labels set your review tier; the strictest of them applies. The tier decides which model works on the task and which native AO reviewers your PR needs ([Review areas and model tiers](CONTRIBUTING.md#review-areas-and-model-tiers), [model matrix](CONTRIBUTING.md#model-matrix)).
+
+- Check your tier with `pnpm review:labels` before you push, and record it in the validation comment.
+- Never lower your own tier. Do not remove an `area:*` or `risk:high` label, do not use or ask for a cheaper model or reviewer than the matrix gives, and do not split or reshape a change to land in a cheaper area. If you think the tier is wrong, tell the orchestrator; the owner or the orchestrator decides.
+- Raise it when the paths hide a risk: add `risk:high` and say why in the validation comment, for example for a risky behaviour change.
+- In the light tier (only `area:docs` and `area:site`), only P1 and P2 findings block: fix those, reply to the others and resolve their threads. In every other tier, every required finding blocks.
+- A core PR with `risk:high` or a behaviour change needs a second reviewer from the other vendor. Say so when you report the PR ready.
+- No tier relaxes the hard rules, `pnpm check` or the owner's approval.
+- A new file in no area fails the area test. Add its path to `scripts/review-areas.ts` in your PR (that raises `risk:high`) and say why.
+
 ## Scope
 
 - One task per PR. Do what the task's scope says.
@@ -80,6 +92,7 @@ Design public API to last. Breaking it is a last resort, also before 1.0 ([API c
 | `pnpm typecheck` | Type-check everything. |
 | `pnpm check:title "<title>"` | Check a PR title before you open the PR. |
 | `pnpm check:roadmap` | Check that the roadmap and the task files agree, after a plan change. |
+| `pnpm review:labels` | Show the review areas, risk and tier of your branch. |
 | `pnpm changeset` | Add a changeset. |
 | `pnpm conformance` | Run the HL7 test suite, write the reports and check the baseline (`--update-baseline` records new passes). |
 | `pnpm test:conformance -t "<name>"` | Run matching suite tests as Vitest tests, with diffs. |

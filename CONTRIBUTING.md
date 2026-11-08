@@ -86,7 +86,7 @@ PR titles follow [Conventional Commits 1.0.0](https://www.conventionalcommits.or
 - **One task per PR.** Stay within the task's scope. Open a follow-up issue for anything else and list it in the description ([Findings during a task](#findings-during-a-task)).
 - **Keep PRs reviewable.** If hand-written changes grow far beyond a few hundred lines, split along the task's natural seams (for example `T0008a` and `T0008b`) and update the task file. Generated files do not count.
 - **Fill in the template.** The description becomes the commit body on `main`, so it holds only what stays true after the merge, and test results go in the validation comment ([Description and validation comment](#description-and-validation-comment)). Delete the template comments. The description must start with `Task: T0001` (or `Task: none`) so `git log --grep "Task: T0001"` finds the commit.
-- **Reviews:** Copilot reviews PRs automatically once they are ready for review; the repository rules skip drafts. Agent-managed PRs also need the native AO review ([Ready for review](#ready-for-review)). The owner's approval is required to merge.
+- **Reviews:** Copilot reviews PRs automatically once they are ready for review; the repository rules skip drafts. Agent-managed PRs also need the native AO review that their tier requires ([Review areas and model tiers](#review-areas-and-model-tiers)). The owner's approval is required to merge.
 - **Stay up to date** with `main` by merging it into your branch; avoid force-pushing after review has started.
 
 ## Description and validation comment
@@ -106,6 +106,7 @@ It holds no test commands or results, counts, CI or review status, readiness che
 **The validation comment** is one PR comment whose first line is `<!-- callis:validation-readiness -->` and whose heading is *Validation and readiness*. It records:
 
 - the current head commit, as a full SHA, and the commit that the tests and the native AO approval cover; where that is not the head, the result is marked pending or stale
+- the review tier, and the task's `Area:` line and PR labels it comes from ([Review areas and model tiers](#review-areas-and-model-tiers))
 - the checks run and their results, with links to the CI runs
 - the conformance delta: passing tests per phase, before → after (`pnpm conformance`)
 - the explicitly chosen release milestone and its tracking issue; if no release scope is chosen, record that it is unassigned rather than guessing
@@ -130,6 +131,7 @@ A comment to start from. Every result starts as pending or not assessed; replace
 
 **Head:** `<full SHA>`
 **Release milestone:** `<chosen exact title/link and tracking issue, or unassigned pending owner scope>`
+**Review tier:** `<tier>` (from `<Area: line>` and `<PR labels>`)
 **Tests and CI cover:** pending
 **Native AO review:** pending (`<harness>`, `<model>`, `<effort>`)
 
@@ -160,8 +162,8 @@ Every agent-managed work PR is opened as a draft and stays a draft until all of 
 
 1. The scope is done, including the docs it affects (the task file, `docs/spec-notes.md`, READMEs and guides).
 2. CI is green on the latest commit.
-3. The required native AO reviewer approved that exact commit.
-4. Every required review finding is handled, and no actionable review thread is unresolved.
+3. The native AO reviewers that the PR's [tier](#model-matrix) requires approved that exact commit. The light tier has one round ([model matrix](#model-matrix)).
+4. Every required review finding is handled, and no actionable review thread is unresolved. In the light tier, only P1 and P2 findings are required.
 5. No task change is left unpublished: everything is committed and pushed.
 
 **Who decides.** The worker reports that its PR is ready, and the orchestrator checks the criteria and decides. The orchestrator may have another session carry out the transition once it has checked, but a worker never marks its own PR ready.
@@ -170,11 +172,69 @@ Every agent-managed work PR is opened as a draft and stays a draft until all of 
 
 **Back to draft.** A new commit or a new required finding after the PR is ready turns it back into a draft until the new head meets the criteria again. CI and the native review run on drafts; never mark a PR ready for a moment to start them. Copilot reviews only after the PR is ready, so its review is not a criterion; a required finding from it sends the PR back to draft like any other.
 
-**Agent setup.** Implementation runs on Codex (owner authorization, 2026-11-06). The native AO review runs with the Codex harness, model `gpt-6-astra`, at high effort. When the owner changes these, this paragraph changes with them.
+**Agent setup.** Claude (the `claude-code` harness) is the primary implementation harness, and Codex (`codex`) is used too. Which model works on a PR, and which native AO reviewers it needs, depends on its review tier: see the [model matrix](#model-matrix), the one place where the owner changes models.
 
 **Contributions by people** that no agent manages follow the reviews the maintainers require; the native AO review and the orchestrator apply to agent work only.
 
 **Release PRs** are not work PRs. The version PR keeps its own rules ([Releases](#releases)): it is never marked ready or merged automatically.
+
+## Review areas and model tiers
+
+Work on central code gets strong models and a thorough review; documentation and site work gets cheaper models and a lighter review. A PR's review areas set its tier, and the tier sets the worker model and the reviewers in the [model matrix](#model-matrix). The owner's GitHub approval is required in every tier.
+
+### Areas
+
+| Label | What it covers | Tier |
+| --- | --- | --- |
+| `area:core` | `@callis/core` outside the function library: lexer, parser, compiler and evaluator, types, navigation and the model runtime, equality and comparison, the value types (Decimal, date and time, Quantity), errors, the public API and exports, and core's tests and build configuration. Also `functions/define.ts`, the contract between the compiler and the functions. | core |
+| `area:functions` | The function library in `packages/core/src/functions/`. | standard |
+| `area:models` | The model and unit packages `fhir-r4`, `fhir-r5`, `fhir-r6` and `ucum`, and `tools/model-gen`. | standard |
+| `area:spec` | The contracts: task files, `docs/spec-notes.md`, the ADRs, the roadmap and `docs/architecture.md`, and the process rules in `AGENTS.md`, `CLAUDE.md`, this file, `RELEASING.md` and `.github/copilot-instructions.md`. Never a light tier. | standard |
+| `area:tooling` | `tools/conformance`, `scripts`, `.github`, changesets and the root build configuration. | tooling |
+| `area:docs` | READMEs, changelogs, licenses and source notes anywhere, the guides and other documents in `docs/`, and `examples/`. | light |
+| `area:site` | The documentation site and playground in `apps/site`. | light |
+
+- The paths are globs in [`scripts/review-areas.ts`](scripts/review-areas.ts). The first matching rule wins, so a package README is `area:docs`. A test fails when a file in the repository is in no area, so a new top-level directory or package needs a rule first.
+- A PR that touches several areas takes the strictest tier.
+- Test code follows the code it tests: it adds its area only to a PR that changes nothing but tests. A function PR that adds cases to `packages/core/test/` stays in `area:functions`; removing or weakening a test raises `risk:high` instead.
+- Every task file has an `- **Area:**` line ([task issues](#task-issues-and-the-project-board)). A worker's tier is the strictest of that line and the PR's labels.
+
+### risk:high
+
+`risk:high` raises the tier one step: light → tooling → standard → core. In the core tier it adds a second reviewer from the other vendor instead. The PR labels workflow sets it when a PR:
+
+- changes public exports or API signatures: a package entry point (`packages/*/src/index.ts`) or a module that one re-exports
+- lowers the conformance baseline, that is, removes an entry from `tools/conformance/baseline.json` (adding newly passing tests is normal), or changes the conformance exceptions
+- removes or weakens tests: deletes a test file or moves it out of the tests, removes more test cases and assertions than it adds, adds `.skip`, `.only` or `.todo`, shrinks the conformance fixtures, or changes a Vitest or Playwright configuration
+- touches a release workflow (`release.yml`, `deploy.yml`) or the changeset configuration, any other CI workflow (workflows hold the permissions and secrets), or the review-area rules themselves
+- touches dependencies: a `package.json`, `pnpm-lock.yaml` or `pnpm-workspace.yaml`
+- touches a file that is in no area
+
+The rules are heuristics that err on the strict side. Anyone may add `risk:high` by hand, for example for a risky behaviour change that the paths do not show. Only the owner or the orchestrator removes it.
+
+### Labels on pull requests
+
+- The [PR labels workflow](.github/workflows/pr-labels.yml) labels every PR when it is opened and on every push, from the changed paths and diffs. It only adds labels: a stale one keeps the review stricter until the owner or the orchestrator removes it.
+- It runs on `pull_request_target`, so it can also label PRs from forks. That event runs the base branch's workflow with a token that can write, so the job never runs the PR's code: it checks out the base branch, installs nothing, uses no secrets, has only `contents: read` and `pull-requests: write`, and reads the changed files and diffs through the API as data. A PR that changes the workflow or the rules is labelled by the versions on `main`.
+- `pnpm review:labels` shows the areas, risk and tier of your branch against `origin/main`, including uncommitted and untracked files. `pnpm review:labels --pr 123` does the same for a PR on GitHub.
+- The labels exist on GitHub. To create missing ones, for example in a fork, run `pnpm review:labels --setup`, check the dry run, and add `--apply`. The [roadmap sync](#roadmap-sync) also creates the area labels that task files use.
+
+### Model matrix
+
+This table is the one place to change models. The model IDs are examples that the owner changes here. Claude (the `claude-code` harness) is the primary harness; Codex (`codex`) is the alternative.
+
+| Tier | Areas | Worker | Native AO review | Findings that block |
+| --- | --- | --- | --- | --- |
+| core | `area:core` | Claude Fable 5.1 (`claude-fable-5-1`) or Opus 5.5 (`claude-opus-5-5`) | Codex `gpt-6-astra` at high effort, or Claude Opus 5.5 at high effort. With `risk:high` or a behaviour change, add a second reviewer from the other vendor. | All required findings |
+| standard | `area:spec`, `area:functions`, `area:models` | Claude Opus 5.5 or Sonnet 5.5 (`claude-sonnet-5-5`) | Codex `gpt-6-astra` at high effort, or Claude Opus 5.5 at high effort | All required findings |
+| tooling | `area:tooling` | Claude Sonnet 5.5 | Codex `gpt-6-astra` at medium effort, or Claude Sonnet 5.5 at medium effort | All required findings |
+| light | `area:docs`, `area:site` | Claude Sonnet 5.5 or Haiku 5.5 (`claude-haiku-5-5`) | One review round: Claude Sonnet 5.5 at medium effort, or Codex `gpt-6-astra` at medium effort | Only P1 and P2 |
+
+- **Who applies it.** The orchestrator picks the worker from the task's `Area:` line when it starts the session, for example `ao spawn --agent claude-code --model claude-opus-5-5`, and the reviewer from the PR's tier, for example `ao review trigger --agent codex --model gpt-6-astra --effort high`. A second reviewer runs on the same commit with the other harness and `--rerun`.
+- **A behaviour change** in core changes what an expression evaluates to or which error it raises: a conformance delta, a changed test expectation, or a changeset that describes new behaviour.
+- **The light tier** has one review round. Only P1 and P2 findings block (and P0, where a reviewer uses it); the round's approval, or a fix for each of its P1 and P2 findings with the thread resolved, meets the native-review criterion without a second round. Reply to the other findings, resolve their threads, and fix them or open a follow-up issue as you see fit.
+- **When the tier rises** after work has started, the review follows the new tier, and the orchestrator decides whether a stronger worker takes over.
+- **No tier relaxes** the hard rules in [AGENTS.md](AGENTS.md), `pnpm check`, the other ready-for-review criteria or the owner's approval. An AO approval is never a GitHub approval.
 
 ## Findings during a task
 
@@ -220,12 +280,13 @@ The child implementation uses its own `Task:` ID and closes only its child issue
 
 ### Task issues and the project board
 
-Every task has a task issue titled like `T0001: Lexer`, labelled `task` and with its wave (`wave-1`, …), and an item on the [Callis roadmap](https://github.com/orgs/losol/projects/11) project board. The issue links the task file. The PR that implements the task closes the issue with `Closes #<issue>`. A designated release-tracking issue is the exception: record delivered preparation there, but close it only after the published release is verified ([Release scope and tracking](#release-scope-and-tracking)).
+Every task has a task issue titled like `T0001: Lexer`, labelled `task`, with its wave (`wave-1`, …) and its review areas (`area:functions`, …), and an item on the [Callis roadmap](https://github.com/orgs/losol/projects/11) project board. The issue links the task file. The PR that implements the task closes the issue with `Closes #<issue>`. A designated release-tracking issue is the exception: record delivered preparation there, but close it only after the published release is verified ([Release scope and tracking](#release-scope-and-tracking)).
 
 | What | Source of truth | Copied to |
 | --- | --- | --- |
 | Scope, design notes, acceptance criteria | The task file | Nowhere; the issue links the file. |
 | Title, phase, wave, size, dependencies | The overview table in the [roadmap](docs/roadmap.md) | The task file header, the dependency graph and the waves table (checked); the issue title and labels, its "blocked by" links and the project fields (synced). |
+| Review areas | The `- **Area:**` line of the task file (checked) | The issue's `area:*` labels (synced). |
 | Status, assignee, linked PR | The task issue and the project board | Nowhere. |
 | Findings during a task | Follow-up issues | The plan, once the owner accepts them. |
 
@@ -251,11 +312,12 @@ For agent work, assign the explicitly selected milestone to both the task issue 
 
 ### Roadmap sync
 
-- `pnpm check:roadmap` checks that the overview table, the dependency graph, the waves table and the header of every task file agree. It is part of `pnpm check` and CI.
-- `pnpm sync:roadmap` shows what would change on GitHub, and `pnpm sync:roadmap --apply` makes the changes. The sync creates missing task issues, sets their titles and labels, links each issue as "blocked by" the issues of its dependencies, and adds the issues to the project board with the fields Task, Phase, Wave, Size and Depends on. It fills in Status only when it is empty.
+- `pnpm check:roadmap` checks that the overview table, the dependency graph, the waves table and the header of every task file agree, and that every task file names known review areas in its `- **Area:**` line. Only the tasks delivered before review areas existed (2026-11-08, listed in `scripts/roadmap.ts`) may leave it out. It is part of `pnpm check` and CI.
+- `pnpm sync:roadmap` shows what would change on GitHub, and `pnpm sync:roadmap --apply` makes the changes. The sync creates missing task issues and labels, sets the issues' titles and labels (`task`, the wave and the task file's areas), links each issue as "blocked by" the issues of its dependencies, and adds the issues to the project board with the fields Task, Phase, Wave, Size and Depends on. It fills in Status only when it is empty.
 - Normal roadmap sync never reads or changes release milestones. It never rewrites issue bodies, closes or reopens issues, or touches issues without the `task` label. A task removed from the roadmap keeps its issue; close it by hand.
 - After a plan change is merged, the **Roadmap sync** workflow runs the sync on `main`. It needs the `ROADMAP_SYNC_TOKEN` secret (see [Repository settings](#repository-settings)). Without the secret the workflow does nothing, and a maintainer runs the sync by hand.
 - To add a task: write the task file, then add its row to the overview, its edges to the graph and its ID to the waves table, and run `pnpm check:roadmap`. The sync creates the task issue after the merge.
+- The task file header has an `` - **Area:** `area:functions`, `area:core` `` line after `- **Depends on:**`, with the [review areas](#areas) the work will touch. Where `risk:high` is likely, add a one-line `- **Tier hint:**` that says why and which tier results, for example `` - **Tier hint:** likely `risk:high`: a new public `analyze()`, so the core tier with a second reviewer from the other vendor. ``
 
 **Milestone-only mode** ([#129](https://github.com/losol/callis/pull/129)): a separate mode assigns an explicitly selected release milestone to task issues; normal roadmap sync is unchanged. It adds no roadmap release column or release-plan ledger:
 
@@ -377,6 +439,7 @@ You need Node.js 22.18+, 24.11+ or 26+ (the `engines` range in `package.json`, s
 | `pnpm check:title "feat(core): add lexer"` | Check a PR title against the rules above, as CI does. |
 | `pnpm check:roadmap` | Check that the roadmap and the task files agree. |
 | `pnpm sync:roadmap` | Show what the [roadmap sync](#roadmap-sync) would change on GitHub. Add `--apply` to make the changes. |
+| `pnpm review:labels` | Show the review areas, risk and tier of your branch ([Review areas and model tiers](#review-areas-and-model-tiers)). `--pr 123` checks a PR; `--setup` creates missing labels. |
 | `pnpm changeset` | Add a changeset. |
 | `pnpm changeset:version` | Apply the pending changesets: bump versions and write changelogs. The release workflow runs it for the version PR. |
 | `pnpm release` | Build, run the package checks and publish with Changesets. Only the release workflow runs it. |

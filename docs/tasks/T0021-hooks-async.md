@@ -3,6 +3,8 @@
 Part of the [roadmap](../roadmap.md). Phase 1 · wave 6 · size M.
 
 - **Depends on:** [T0020](T0020-fhir-functions.md)
+- **Area:** `area:core`
+- **Tier hint:** likely `risk:high`: new public API (`evaluateAsync`, `EvaluationHooks`, `TerminologyProvider`), so the core tier with a second reviewer from the other vendor.
 - **Parallel with:** –
 - **Background:** [ADR-0004](../adr/0004-sync-core-async-path.md)
 

@@ -1,9 +1,10 @@
 /**
- * Copies the roadmap to GitHub: one task issue per task with the `task` and wave labels,
+ * Copies the roadmap to GitHub: one task issue per task with the `task`, wave and `area:*` labels,
  * "blocked by" links for its dependencies, and the task's fields on the project board. The
- * roadmap is the source of truth, so the sync only ever changes GitHub. It never rewrites issue
- * bodies, closes issues or deletes anything except stale wave labels and stale "blocked by" links
- * between task issues. See CONTRIBUTING.md, "Roadmap sync".
+ * roadmap and the task files are the source of truth, so the sync only ever changes GitHub. It
+ * never rewrites issue bodies, closes issues or deletes anything except stale wave labels, stale
+ * area labels of a task whose file has an `- **Area:**` line, and stale "blocked by" links between
+ * task issues. See CONTRIBUTING.md, "Roadmap sync".
  * An explicit --release/--task selection only assigns unassigned open issues to an existing
  * milestone, leaving roadmap labels, project fields and all other milestone choices alone.
  *
@@ -19,6 +20,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
+import { REVIEW_LABELS } from './review-areas.ts';
 import {
   issueBody,
   issueLabels,
@@ -31,6 +33,7 @@ import {
   type RoadmapTask,
   setDiff,
   TEXT_FIELDS,
+  taskAreaLabels,
   taskIdOfIssueTitle,
   waveLabel,
 } from './roadmap.ts';
@@ -210,7 +213,8 @@ function graphql<T>(query: string, variables: Record<string, unknown> = {}): T {
 
 // --- Issues and labels ---
 
-function syncWaveLabels(tasks: readonly RoadmapTask[]): void {
+/** Creates the missing wave labels and the missing area labels that task issues need. */
+function syncLabels(tasks: readonly RoadmapTask[]): void {
   const existing = new Set(
     restList<{ name: string }>(`repos/${REPOSITORY}/labels?per_page=100`).map((l) => l.name),
   );
@@ -221,6 +225,18 @@ function syncWaveLabels(tasks: readonly RoadmapTask[]): void {
           name: label,
           color: WAVE_LABEL_COLOR,
           description: `Roadmap wave ${label.slice('wave-'.length)}`,
+        }),
+      );
+    }
+  }
+  const areaLabels = new Set(tasks.flatMap(taskAreaLabels));
+  for (const label of REVIEW_LABELS) {
+    if (areaLabels.has(label.name) && !existing.has(label.name)) {
+      change(`+ label ${label.name}`, () =>
+        rest('POST', `repos/${REPOSITORY}/labels`, {
+          name: label.name,
+          color: label.color,
+          description: label.description,
         }),
       );
     }
@@ -689,7 +705,7 @@ try {
   if (releaseMode) {
     syncReleaseMilestone(roadmap.tasks);
   } else {
-    syncWaveLabels(roadmap.tasks);
+    syncLabels(roadmap.tasks);
 
     const issues = readTaskIssues();
     for (const task of roadmap.tasks) {

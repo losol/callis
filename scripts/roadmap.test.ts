@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   checkRoadmap,
+  DELIVERED_BEFORE_AREAS,
   issueBody,
   issueLabels,
   issueTitle,
   loadRoadmap,
   parseRoadmap,
+  parseTaskAreas,
   projectFieldValues,
   type RoadmapTask,
   setDiff,
@@ -87,6 +89,7 @@ function taskFile(t: FixtureTask): string {
     `Part of the [roadmap](../roadmap.md). Phase 1 · wave ${t.wave} · size M.`,
     '',
     `- **Depends on:** ${deps}`,
+    '- **Area:** `area:core`',
     '',
   ].join('\n');
 }
@@ -194,6 +197,39 @@ describe('checkRoadmap', () => {
     expect(problems).toContain('depends on T0002, but the roadmap says T0002, T0002a');
   });
 
+  // CONTRIBUTING.md, "Review areas and model tiers": every task file names its areas.
+  it('requires an Area line, except in the files of tasks delivered before areas existed', () => {
+    const files = taskFiles();
+    const withoutArea = (file: string) =>
+      (files.get(file) ?? '').replace('- **Area:** `area:core`\n', '');
+    files.set('tasks/T0002a-parser.md', withoutArea('tasks/T0002a-parser.md'));
+    files.set('tasks/T0001-lexer.md', withoutArea('tasks/T0001-lexer.md'));
+    expect(DELIVERED_BEFORE_AREAS.has('T0001')).toBe(true);
+    expect(DELIVERED_BEFORE_AREAS.has('T0002a')).toBe(false);
+    const problems = problemsFor(roadmapMarkdown(), files);
+    expect(problems).toContain('T0002a-parser.md: no "- **Area:**" line');
+    expect(problems).not.toContain('T0001-lexer.md');
+  });
+
+  it.each([
+    ['an unknown area', '- **Area:** `area:engine`', 'the area "`area:engine`" is not one of'],
+    ['an area without backticks', '- **Area:** area:core', 'the area "area:core" is not one of'],
+    ['an empty line', '- **Area:**', 'the area "" is not one of'],
+    ['a repeated area', '- **Area:** `area:core`, `area:core`', 'lists `area:core` twice'],
+    [
+      'two Area lines',
+      '- **Area:** `area:core`\n- **Area:** `area:docs`',
+      'has 2 "- **Area:**" lines',
+    ],
+  ])('reports %s', (_name, line, problem) => {
+    const files = taskFiles();
+    files.set(
+      'tasks/T0003-long.md',
+      (files.get('tasks/T0003-long.md') ?? '').replace('- **Area:** `area:core`', line),
+    );
+    expect(problemsFor(roadmapMarkdown(), files)).toContain(`T0003-long.md: ${problem}`);
+  });
+
   it('reports missing and unlisted task files', () => {
     const files = taskFiles();
     files.delete('tasks/T0002-parser.md');
@@ -201,6 +237,27 @@ describe('checkRoadmap', () => {
     const problems = problemsFor(roadmapMarkdown(), files);
     expect(problems).toContain('T0002: the task file docs/tasks/T0002-parser.md does not exist');
     expect(problems).toContain('docs/tasks/T0004-extra.md: not listed in the roadmap overview');
+  });
+});
+
+describe('task areas', () => {
+  it('reads the areas of the Area line in order', () => {
+    expect(parseTaskAreas('# T\n\n- **Area:** `area:functions`, `area:core`\n')).toEqual({
+      areas: ['functions', 'core'],
+      problems: [],
+    });
+    expect(parseTaskAreas('# T\n\n- **Depends on:** –\n')).toEqual({ problems: [] });
+  });
+
+  it('gives the tasks of this repository the areas of their files', () => {
+    const { roadmap } = loadRoadmap(new URL('..', import.meta.url).pathname);
+    const byId = new Map(roadmap.tasks.map((task) => [task.id, task]));
+    expect(byId.get('T0013')?.areas).toEqual(['functions']);
+    expect(byId.get('T0021')?.areas).toEqual(['core']);
+    expect(byId.get('T0000')?.areas).toBeUndefined();
+    for (const task of roadmap.tasks) {
+      expect(task.areas !== undefined || DELIVERED_BEFORE_AREAS.has(task.id)).toBe(true);
+    }
   });
 });
 
@@ -227,6 +284,25 @@ describe('task issues', () => {
       'task',
       'wave-2',
       'help wanted',
+    ]);
+  });
+
+  it('replaces the area labels with those of the task file', () => {
+    const task: RoadmapTask = { ...TASK, areas: ['functions', 'core'] };
+    expect(issueLabels(task, ['task', 'wave-2', 'area:docs', 'help wanted'])).toEqual([
+      'task',
+      'wave-2',
+      'area:functions',
+      'area:core',
+      'help wanted',
+    ]);
+  });
+
+  it('leaves the area labels alone for a task without an Area line', () => {
+    expect(issueLabels(TASK, ['task', 'wave-2', 'area:docs'])).toEqual([
+      'task',
+      'wave-2',
+      'area:docs',
     ]);
   });
 

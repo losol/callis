@@ -3,6 +3,7 @@
 Part of the [roadmap](../roadmap.md). Phase 1 · wave 6 · size S.
 
 - **Depends on:** [T0011](T0011-fn-existence.md), [T0013](T0013-fn-subsetting-combining.md)
+- **Area:** `area:functions`
 - **Issue:** [#132](https://github.com/losol/callis/issues/132)
 - **Background:** [T0009](T0009-equality-kernels.md), [T0038](T0038-public-api-completion.md)
 

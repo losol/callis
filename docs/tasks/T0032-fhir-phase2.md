@@ -3,6 +3,8 @@
 Part of the [roadmap](../roadmap.md). Phase 2 · wave 8 · size L.
 
 - **Depends on:** [T0038](T0038-public-api-completion.md)
+- **Area:** `area:functions`, `area:models`
+- **Tier hint:** likely `risk:high`: a new entry point in the model packages and an extended `TerminologyProvider`, so the core tier.
 
 ## Goal
 
