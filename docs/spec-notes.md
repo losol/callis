@@ -224,6 +224,49 @@ Implemented in `packages/core/src/runtime/` (`equality.ts`, `comparison.ts`, `op
 - **Decision:** strings are ordered by Unicode code point. JavaScript's `<` compares UTF-16 code units, which puts characters above U+FFFF (surrogate pairs) before U+E000–U+FFFF; Callis corrects for that, so `'\uFFFF' < '\u{10000}'` is true. No locale collation is used.
 - **Code:** `compareStrings()` in `packages/core/src/values/string.ts` ([T0003](tasks/T0003-types-and-collections.md)).
 
+### Characters are Unicode scalar values
+
+- **Spec:** [N1 §5.6](https://hl7.org/fhirpath/N1/#string-manipulation) does not say what a "character" is. [3.0.0](https://hl7.org/fhirpath/STU3/en/#string-manipulation) measures `indexOf()`, `substring()`, `length()` and `toChars()` in characters, "Unicode scalar values", and its examples count a surrogate pair as one (`'a🔥b'.indexOf('b')` is `2`) and a combining accent as one more (`'é'.length()` is `2`).
+- **Tests:** none in the suite. `testMatchesUnicodeCharacters` is commented out in the XML.
+- **Decision:** follow 3.0.0 and count code points, not UTF-16 code units. `indexOf()`, `substring()`, `length()` and `toChars()` convert between characters and JavaScript's code units, and `toChars()` never splits a surrogate pair. Grapheme clusters are not used, as 3.0.0 says.
+- **Strings that are not well-formed:** an expression cannot write a lone surrogate ([the lexer rejects it](#escaped-surrogates-must-form-a-pair)), but input data can hold one. Each lone surrogate counts as one character, and a search never matches half of a surrogate pair: `'🔥'.startsWith('\uD83D')` is false, and `'🔥'.replace('\uD83D', 'x')` is `'🔥'`. This applies to `indexOf()`, `startsWith()`, `endsWith()`, `contains()` and `replace()`.
+- **Case:** `upper()` and `lower()` use JavaScript's `toUpperCase()` and `toLowerCase()`, the Unicode default case mapping with no locale, so `'ß'.upper()` is `'SS'` (as in [string equivalence](#string-equivalence)).
+- **Code:** `packages/core/src/functions/characters.ts` ([T0015](tasks/T0015-fn-string.md)).
+
+### Regular expressions use JavaScript's dialect
+
+- **Spec:** [N1 §5.6.9–10](https://hl7.org/fhirpath/N1/#matchesregex-string-boolean) ask for expressions that are case-sensitive, in "single line" mode, with Unicode characters, and do not prescribe a dialect; they only recommend the PCRE flavor.
+- **Tests:** `testMatchesCaseSensitive1`–`2`, `testMatchesSingleLineMode1`, `testMatchesWithinUrl1`–`4`, `testReplaceMatches1`–`7`.
+- **Decision:** `matches()` and `replaceMatches()` use `RegExp` with the `u` and `s` flags. The `u` flag reads the text as characters and allows `\p{…}`. The `s` flag is "single line" mode, as `testMatchesSingleLineMode1` shows: `.` also matches a line terminator. `^` and `$` match only at the ends of the string, so `matches()` finds the expression anywhere in the input and `'^…$'` matches all of it (`testMatchesWithinUrl2`–`3`). Lines are not special; the `m` flag is a 3.0.0 addition ([T0029](tasks/T0029-stu-strings.md)). A pattern is compiled on every call, so no state is kept between evaluations.
+- **Differences from PCRE** that a user can run into: `\d`, `\w`, `\s` and `\b` follow JavaScript (`\d` and `\w` are ASCII only, `\s` is Unicode); the `u` flag allows an escape only for a syntax character, so `\-` outside a character class and `\_` are errors; there are no inline flags (`(?i)`), possessive quantifiers, atomic groups, `\A`, `\Z` or `(?P<name>…)` (a named group is `(?<name>…)`).
+- **Error code:** a pattern that is not valid raises `eval/invalid-argument`. There is no new error code: the argument is the problem.
+- **Not covered:** a pattern can take exponential time on some input (catastrophic backtracking), as in every backtracking engine. The [architecture](architecture.md#security-and-robustness) documents this, and the `regex` hook for a safe engine comes with [T0021](tasks/T0021-hooks-async.md); every pattern is compiled by `compileRegex()`, the one place for it to plug in.
+- **Errors:** the message says why a pattern is not valid but does not repeat the pattern, because a pattern can be computed from input data and errors never include input data ([architecture](architecture.md#security-and-robustness)).
+- **Code:** `packages/core/src/functions/regex.ts` ([T0015](tasks/T0015-fn-string.md)).
+
+### The substitution of `replaceMatches()`
+
+- **Spec:** [N1 §5.6.10](https://hl7.org/fhirpath/N1/#replacematchesregex-string-substitution-string-string): "The substitution may refer to identified match groups in the regular expression", with the example `'${day}-${month}-${year}'` for named groups. It does not say how a reference is written beyond the example. (The N1 example calls `replace(…)`; it means `replaceMatches(…)`.)
+- **Tests:** none in the suite uses a group.
+- **Decision:** the substitution is expanded by Callis, so it does not depend on `String.prototype.replace`. It accepts the spec's `${name}` and `${n}` (`${0}` is the whole match) and JavaScript's replacement patterns: `$1`–`$99`, `$<name>`, `` $& ``, `` $` ``, `$'` and `$$`. A group that took no part in the match is the empty string. As in JavaScript, `$n` without a group `n` is plain text, so `'costs $5'` is safe; use `$$` for a dollar sign before `{` or a digit. A `${…}` reference to a group the pattern does not have raises `eval/invalid-argument`, like Java does; it is raised when a match is replaced, so a text with no match never raises it. Supporting both forms now means no expression changes meaning when one of them is added later.
+- **Code:** `expandSubstitution()` in `packages/core/src/functions/regex.ts` ([T0015](tasks/T0015-fn-string.md)).
+
+### An empty pattern in `replace()` and `replaceMatches()`
+
+- **Spec:** [N1 §5.6.8](https://hl7.org/fhirpath/N1/#replacepattern-string-substitution-string-string) says an empty `pattern` surrounds every character with the substitution (`'abc'.replace('', 'x')` is `'xaxbxcx'`). `replaceMatches()` says nothing about an empty `regex`.
+- **Tests:** `testReplace2` (`'abc'.replace('', 'x')` is `'xaxbxcx'`) and `testReplaceMatches2` (`'abc'.replaceMatches('', 'x')` is `'abc'`).
+- **Decision:** follow both tests. `replace()` treats the pattern as text, so the empty string occurs before every character and at the end; `''.replace('', 'x')` is `'x'`. `replaceMatches()` returns the input unchanged for an empty `regex`, although the regular expression `''` matches everywhere. Any other expression that can match nothing, such as `x*`, replaces its empty matches as the engine finds them: `'abc'.replaceMatches('x*', '-')` is `'-a-b-c-'`, and with the `u` flag a match never falls inside a surrogate pair.
+
+### `substring()` and the checks on string functions
+
+- **Spec:** [N1 §5.6.2](https://hl7.org/fhirpath/N1/#substringstart-integer-length-integer-string) says "If `start` lies outside the length of the string, the function returns empty"; [3.0.0](https://hl7.org/fhirpath/STU3/en/#substringstart--integer--length--integer--string) adds "outside, or equal to", and that a `length` of zero or less gives `''`. [N1 §5.6](https://hl7.org/fhirpath/N1/#string-manipulation) says the functions "operate on collections with a single item" and signal an error for more than one item "or an item that is not a String". The specs do not say whether an invalid argument is an error when the input is empty.
+- **Tests:** `testSubstring4`–`5`, `testSubstring9`, `testSubstring13`–`18`, `testStartsWithNonString1`, `testEndsWithNonString1`, `testContainsNonString1`.
+- **Decision:**
+  - A `start` at the end of the string is outside it: `'abc'.substring(3)` and `''.substring(0)` are empty (3.0.0). `start` is checked before `length`: `'abc'.substring(-1, -1)` and `'abc'.substring(3, 0)` are empty, while `'abc'.substring(2, 0)` is `''`.
+  - The input and every argument go through [singleton evaluation](#singleton-evaluation-uses-implicit-conversions-only) whether or not another one is empty. `{}.startsWith(1)` raises `eval/type-mismatch` and `'a'.substring(0 | 1)` raises `eval/singleton-expected`, so an error does not depend on the data. Only after that is an empty input or argument an empty result. A String argument is a String only: `'abc'.substring('1')` and `'abc'.substring(1.5)` are errors, since nothing converts to Integer implicitly.
+  - The `NonString` tests (`Appointment.identifier.startsWith('rand')`) are `invalid="semantic"`. The error is found during evaluation, so the runner reports them as "detected late" ([Semantic errors found during evaluation](#semantic-errors-found-during-evaluation)) until [T0024](tasks/T0024-static-analysis.md).
+  - An argument is evaluated with the focus of the call ([Function arguments](#function-arguments-are-evaluated-with-the-focus-of-the-call)), which is why `testSubstring10a` and `testStartsWith12a` are errors: `length()` there is the length of the root resource.
+
 ## Date, DateTime and Time
 
 Implemented in `packages/core/src/values/datetime/` ([T0005](tasks/T0005-date-time.md)).
