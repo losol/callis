@@ -77,6 +77,10 @@ export interface EvaluationHooks {
    * Receives the output of `trace()`, in evaluation order; without it, `trace()` only returns its
    * input. It may return a promise in `evaluateAsync()`, which the evaluation waits for; in
    * `evaluate()` a promise raises `eval/async-in-sync`. An error it throws ends the evaluation.
+   *
+   * The T0021 sketch returns `void`; this extends it with the sync/async rule of every host hook
+   * ([ADR-0004](https://github.com/losol/callis/blob/main/docs/adr/0004-sync-core-async-path.md),
+   * [#185](https://github.com/losol/callis/issues/185)).
    */
   trace?(event: TraceEvent): void | PromiseLike<void>;
 }
