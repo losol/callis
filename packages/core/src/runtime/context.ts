@@ -17,8 +17,9 @@ import type { MaybePromise } from './maybe-promise.ts';
  * Everything one evaluation needs. Created per evaluation by the API and read-only afterwards.
  *
  * Its `model`, `units` and `timezoneOffset` fields match the context the equality and ordering
- * kernels take (T0009), so an `EvalContext` can be passed to them as it is. Later tasks add hooks,
- * limits and a cancellation signal (T0012, T0021).
+ * kernels take (T0009), and `model` and `lenientChoiceSuffix` the context navigation takes, so an
+ * `EvalContext` can be passed to them as it is. Later tasks add hooks, limits and a cancellation
+ * signal (T0012, T0021).
  */
 export interface EvalContext {
   /** Whether this is an `evaluateAsync()` evaluation, where hooks and functions may be async. */
@@ -32,6 +33,12 @@ export interface EvalContext {
   readonly variables: Readonly<Record<string, Collection>>;
   /** The model, or undefined for model-less evaluation of plain JSON. */
   readonly model: ModelProvider | undefined;
+  /**
+   * Whether navigation accepts a choice element written with its type suffix
+   * (`Observation.valueQuantity`): the `lenient.choiceSuffix` compile option
+   * ([ADR-0012](https://github.com/losol/callis/blob/main/docs/adr/0012-evaluation-defaults.md)).
+   */
+  readonly lenientChoiceSuffix: boolean;
   /** The unit system for quantities. */
   readonly units: UnitSystem;
   /**

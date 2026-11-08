@@ -24,6 +24,7 @@ function context(model: EvalContext['model'] = undefined): EvalContext {
     context: [],
     variables: Object.create(null),
     model,
+    lenientChoiceSuffix: false,
     units: minimalUnitSystem,
     timezoneOffset: 0,
     now: () => {
@@ -148,6 +149,35 @@ describe('matchesTypeTarget', () => {
   it('raises eval/unknown-type for an unresolved target', () => {
     const target: TypeTarget = { kind: 'unresolved', specifier: { namespace: 'Foo', name: 'Bar' } };
     expect(errorCode(() => matchesTypeTarget(1, target, modelLess))).toBe('eval/unknown-type');
+  });
+
+  // https://github.com/losol/callis/blob/main/docs/tasks/T0008-compiler-evaluator.md#resource-type-names-without-a-model
+  it('tests typed nodes by the model inheritance', () => {
+    const [typed] = toInputCollection({ resourceType: 'Patient' }, 'r', stubModel);
+    const target = (name: string): TypeTarget => ({ kind: 'type', type: stubType(name) });
+    expect(typed !== undefined && matchesTypeTarget(typed, target('Patient'), withModel)).toBe(
+      true,
+    );
+    expect(
+      typed !== undefined && matchesTypeTarget(typed, target('DomainResource'), withModel),
+    ).toBe(true);
+    expect(typed !== undefined && matchesTypeTarget(typed, target('Observation'), withModel)).toBe(
+      false,
+    );
+    expect(typed !== undefined && matchesTypeTarget(typed, target('HumanName'), withModel)).toBe(
+      false,
+    );
+  });
+
+  it('never matches an untyped object by its resourceType when a model is supplied', () => {
+    const [untyped] = toInputCollection({ resourceType: 'Foo' }, 'r', stubModel);
+    expect(untyped).toBeInstanceOf(ModelNode);
+    expect((untyped as ModelNode).type).toBeUndefined();
+    const target: TypeTarget = { kind: 'type', type: stubType('Patient') };
+    expect(untyped !== undefined && matchesTypeTarget(untyped, target, withModel)).toBe(false);
+    expect(untyped !== undefined && matchesTypeTarget(untyped, any, withModel)).toBe(true);
+    // The name of its data is not a type of the model, so it does not even resolve.
+    expect(resolveTypeTarget({ name: 'Foo' }, stubModel).kind).toBe('unresolved');
   });
 });
 

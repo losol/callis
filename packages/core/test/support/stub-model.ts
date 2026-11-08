@@ -56,7 +56,22 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
       base: 'Element',
       elements: [
         element('url', ['uri']),
-        element('value', ['string', 'boolean', 'Quantity'], { isChoice: true }),
+        element(
+          'value',
+          [
+            'string',
+            'boolean',
+            'Quantity',
+            'Age',
+            'Duration',
+            'dateTime',
+            'integer',
+            'decimal',
+            'code',
+            'Period',
+          ],
+          { isChoice: true },
+        ),
       ],
     },
   ],
@@ -65,10 +80,56 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
   ['code', { kind: 'primitive', base: 'string', systemType: 'String' }],
   ['id', { kind: 'primitive', base: 'string', systemType: 'String' }],
   ['uri', { kind: 'primitive', base: 'Element', systemType: 'String' }],
+  ['url', { kind: 'primitive', base: 'uri', systemType: 'String' }],
   ['integer', { kind: 'primitive', base: 'Element', systemType: 'Integer' }],
+  ['positiveInt', { kind: 'primitive', base: 'integer', systemType: 'Integer' }],
+  ['integer64', { kind: 'primitive', base: 'Element', systemType: 'Long' }],
   ['decimal', { kind: 'primitive', base: 'Element', systemType: 'Decimal' }],
   ['date', { kind: 'primitive', base: 'Element', systemType: 'Date' }],
   ['dateTime', { kind: 'primitive', base: 'Element', systemType: 'DateTime' }],
+  ['instant', { kind: 'primitive', base: 'Element', systemType: 'DateTime' }],
+  ['time', { kind: 'primitive', base: 'Element', systemType: 'Time' }],
+  [
+    'Period',
+    {
+      kind: 'complex',
+      base: 'Element',
+      elements: [element('start', ['dateTime']), element('end', ['dateTime'])],
+    },
+  ],
+  [
+    'Coding',
+    {
+      kind: 'complex',
+      base: 'Element',
+      elements: [
+        element('system', ['uri']),
+        element('code', ['code']),
+        element('display', ['string']),
+      ],
+    },
+  ],
+  [
+    'CodeableConcept',
+    {
+      kind: 'complex',
+      base: 'Element',
+      elements: [element('coding', ['Coding'], { isArray: true }), element('text', ['string'])],
+    },
+  ],
+  [
+    'ContactPoint',
+    {
+      kind: 'complex',
+      base: 'Element',
+      elements: [
+        element('system', ['code']),
+        element('value', ['string']),
+        element('use', ['code']),
+        element('rank', ['positiveInt']),
+      ],
+    },
+  ],
   [
     'Quantity',
     {
@@ -84,6 +145,7 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
     },
   ],
   ['Age', { kind: 'complex', base: 'Quantity', systemType: 'Quantity' }],
+  ['Duration', { kind: 'complex', base: 'Quantity', systemType: 'Quantity' }],
   [
     'HumanName',
     {
@@ -91,8 +153,12 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
       base: 'Element',
       elements: [
         element('use', ['code']),
+        element('text', ['string']),
         element('family', ['string']),
         element('given', ['string'], { isArray: true }),
+        element('prefix', ['string'], { isArray: true }),
+        element('suffix', ['string'], { isArray: true }),
+        element('period', ['Period']),
       ],
     },
   ],
@@ -117,14 +183,26 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
       elements: [
         element('active', ['boolean']),
         element('name', ['HumanName'], { isArray: true }),
+        element('telecom', ['ContactPoint'], { isArray: true }),
+        element('gender', ['code']),
         element('birthDate', ['date']),
+        element('deceased', ['boolean', 'dateTime'], { isChoice: true }),
+        element('multipleBirth', ['boolean', 'integer'], { isChoice: true }),
         element('contact', ['Patient.contact'], { isArray: true }),
       ],
     },
   ],
   [
     'Patient.contact',
-    { kind: 'backbone', base: 'BackboneElement', elements: [element('name', ['HumanName'])] },
+    {
+      kind: 'backbone',
+      base: 'BackboneElement',
+      elements: [
+        element('relationship', ['CodeableConcept'], { isArray: true }),
+        element('name', ['HumanName']),
+        element('period', ['Period']),
+      ],
+    },
   ],
   [
     'Observation',
@@ -133,8 +211,31 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
       base: 'DomainResource',
       elements: [
         element('status', ['code']),
-        element('value', ['Quantity', 'string', 'boolean'], { isChoice: true }),
+        element('code', ['CodeableConcept']),
+        element('effective', ['dateTime', 'Period'], { isChoice: true }),
+        element('issued', ['instant']),
+        element(
+          'value',
+          ['Quantity', 'string', 'boolean', 'dateTime', 'Period', 'integer', 'CodeableConcept'],
+          { isChoice: true },
+        ),
       ],
+    },
+  ],
+  [
+    'Bundle',
+    {
+      kind: 'resource',
+      base: 'Resource',
+      elements: [element('type', ['code']), element('entry', ['Bundle.entry'], { isArray: true })],
+    },
+  ],
+  [
+    'Bundle.entry',
+    {
+      kind: 'backbone',
+      base: 'BackboneElement',
+      elements: [element('fullUrl', ['uri']), element('resource', ['Resource'])],
     },
   ],
 ];

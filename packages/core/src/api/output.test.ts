@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { JsonNumber, parseJson } from '../model/lossless-json.ts';
 import { ModelNode } from '../model/model-node.ts';
 import { parseTemporalLiteral } from '../values/datetime/parse.ts';
-import { Decimal } from '../values/decimal/decimal.ts';
+import { Decimal, MAX_DECIMAL_DIGITS } from '../values/decimal/decimal.ts';
 import { Quantity } from '../values/quantity/quantity.ts';
 import { toOutput, toPlainValue } from './output.ts';
 
@@ -56,6 +57,27 @@ describe('plain output', () => {
         new ModelNode({ value: undefined, name: 'x' }),
       ]),
     ).toEqual([json, extensionOnly]);
+  });
+});
+
+// docs/tasks/T0018-model-aware-evaluation.md#lossless-decimals-in-json-input
+describe('plain output of lossless JSON numbers', () => {
+  it('gives an Integer as a number and a Decimal as a number or exact text', () => {
+    const node = (text: string) => new ModelNode({ value: new JsonNumber(text), name: 'n' });
+    expect(toOutput([node('185'), node('1.50'), node('9.5e2')])).toEqual([185, 1.5, 950]);
+    // An Integer is always a number; only Decimals have an exact text form.
+    expect(
+      toOutput([node('185'), node('1.50'), node('9.5e2')], { decimalOutput: 'string' }),
+    ).toEqual([185, '1.50', '950']);
+    expect(toPlainValue(node(`1e${MAX_DECIMAL_DIGITS + 1}`))).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it('gives an object with lossless numbers as it is', () => {
+    const json = parseJson('{"value": 1.50}');
+    expect(toPlainValue(new ModelNode({ value: json, name: 'q' }))).toBe(json);
+    expect(JSON.stringify(toOutput([new ModelNode({ value: json, name: 'q' })]))).toBe(
+      '[{"value":1.5}]',
+    );
   });
 });
 

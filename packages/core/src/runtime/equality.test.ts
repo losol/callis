@@ -1,6 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it, vi } from 'vitest';
 import { decimal, literal } from '../../test/support/literals.ts';
+import { stubModel } from '../../test/support/stub-model.ts';
 import { stubUnitSystem } from '../../test/support/stub-unit-system.ts';
 import { ModelNode } from '../model/model-node.ts';
 import { Decimal } from '../values/decimal/decimal.ts';
@@ -14,6 +15,7 @@ import {
   itemEquivalent,
   type ModelEquivalence,
 } from './equality.ts';
+import { navigateMember, toInputCollection } from './navigation.ts';
 
 const ctx: EquivalenceContext = { model: undefined, units: minimalUnitSystem, timezoneOffset: 0 };
 
@@ -283,6 +285,221 @@ describe('equality and equivalence', () => {
       expectEquality(node(name), 'Peter', false, false);
       expectEquality(node(name), node('Peter'), false, false);
       expectEquality(node(name), 1, false, false);
+    });
+  });
+
+  // docs/spec-notes.md#complex-values-without-a-model: with a model, the elements are compared.
+  describe('complex values with a model', () => {
+    const typed: EquivalenceContext = { ...ctx, model: stubModel };
+    const period = (start: string, end?: string): Item => {
+      const [observation] = toInputCollection(
+        {
+          resourceType: 'Observation',
+          effectivePeriod: { start, ...(end === undefined ? {} : { end }) },
+        },
+        'o',
+        stubModel,
+      );
+      const [effective] = navigateMember(
+        observation === undefined ? [] : [observation],
+        'effective',
+        { model: stubModel, lenientChoiceSuffix: false },
+      );
+      if (effective === undefined) throw new Error('no effective');
+      return effective;
+    };
+
+    it('compares typed children by their System values, so dates follow the date rules', () => {
+      expectEquality(period('2016-03-28'), period('2016-03-28'), true, true, typed);
+      expectEquality(period('2016-03-28'), period('2016-03-29'), false, false, typed);
+      // Different precision: = is empty and ~ is false, as for the dates themselves.
+      expectEquality(period('2016-03'), period('2016-03-28'), undefined, false, typed);
+      expectEquality(period('2016-03-28'), period('2016-03-28', '2016-04'), false, false, typed);
+    });
+
+    it('compares typed values by their elements, not their JSON keys', () => {
+      const [a] = toInputCollection(
+        { resourceType: 'Patient', deceasedBoolean: true, unknownKey: 1 },
+        'p',
+        stubModel,
+      );
+      const [b] = toInputCollection(
+        { resourceType: 'Patient', deceasedBoolean: true },
+        'p',
+        stubModel,
+      );
+      const [c] = toInputCollection(
+        { resourceType: 'Patient', deceasedDateTime: '2016' },
+        'p',
+        stubModel,
+      );
+      if (a === undefined || b === undefined || c === undefined) throw new Error('no input');
+      expectEquality(a, b, true, true, typed);
+      expectEquality(a, c, false, false, typed);
+      // Without the model, the extra JSON key makes them differ.
+      expectEquality(a, b, false, false);
+    });
+
+    // docs/spec-notes.md#fhir-quantities-without-a-ucum-code (testQuantityUnitComparison)
+    describe('FHIR Quantities without a UCUM code', () => {
+      const quantity = (json: object): Item => {
+        const [observation] = toInputCollection(
+          { resourceType: 'Observation', valueQuantity: json },
+          'o',
+          stubModel,
+        );
+        const [value] = navigateMember(observation === undefined ? [] : [observation], 'value', {
+          model: stubModel,
+          lenientChoiceSuffix: false,
+        });
+        if (value === undefined) throw new Error('no value');
+        return value;
+      };
+
+      it('compares by unit text, then by value', () => {
+        expectEquality(quantity({ value: 1 }), quantity({ value: 1 }), true, true, typed);
+        expectEquality(
+          quantity({ value: 1, unit: 'tablets' }),
+          quantity({ value: 1, unit: 'tablets' }),
+          true,
+          true,
+          typed,
+        );
+        expectEquality(
+          quantity({ value: 1, unit: 'tablets' }),
+          quantity({ value: 2, unit: 'tablets' }),
+          false,
+          false,
+          typed,
+        );
+        expectEquality(
+          quantity({ value: 1, unit: 'tablets' }),
+          quantity({ value: 1.0, unit: 'tablets' }),
+          true,
+          true,
+          typed,
+        );
+      });
+
+      it('is undetermined for = and false for ~ when the units differ or one is missing', () => {
+        expectEquality(
+          quantity({ value: 1, unit: 'tablets' }),
+          quantity({ value: 1 }),
+          undefined,
+          false,
+          typed,
+        );
+        expectEquality(
+          quantity({ value: 1, unit: 'tablets' }),
+          quantity({ value: 1, unit: 'pills' }),
+          undefined,
+          false,
+          typed,
+        );
+        expectEquality(
+          quantity({ value: 1, unit: 'Tablets' }),
+          quantity({ value: 1, unit: 'tablets' }),
+          undefined,
+          false,
+          typed,
+        );
+      });
+
+      it('compares by code when either has one, ignoring the unit text', () => {
+        expectEquality(
+          quantity({ value: 1, code: 'x', system: 'http://a' }),
+          quantity({ value: 1, code: 'x', unit: 'other', system: 'http://b' }),
+          true,
+          true,
+          typed,
+        );
+        expectEquality(
+          quantity({ value: 1, code: 'x', system: 'http://a' }),
+          quantity({ value: 1, code: 'y', system: 'http://a' }),
+          undefined,
+          false,
+          typed,
+        );
+        expectEquality(
+          quantity({ value: 1, code: 'x', system: 'http://a' }),
+          quantity({ value: 1, unit: 'x' }),
+          undefined,
+          false,
+          typed,
+        );
+      });
+
+      it('treats missing values like the Java engine', () => {
+        expectEquality(
+          quantity({ unit: 'tablets' }),
+          quantity({ unit: 'tablets' }),
+          true,
+          true,
+          typed,
+        );
+        expectEquality(
+          quantity({ value: 1, unit: 'tablets' }),
+          quantity({ unit: 'tablets' }),
+          undefined,
+          false,
+          typed,
+        );
+      });
+
+      it('does not apply to a quantity that converts to a System.Quantity', () => {
+        const ucum = { value: 1, system: 'http://unitsofmeasure.org', code: 'mg' };
+        expectEquality(quantity(ucum), quantity({ ...ucum, unit: 'milligram' }), true, true, typed);
+        // A UCUM quantity against one without a code: different types (T0020 refines this).
+        expectEquality(quantity(ucum), quantity({ value: 1, unit: 'mg' }), false, false, typed);
+      });
+    });
+
+    // https://hl7.org/fhirpath/N1/#equals: operands of different types are not equal.
+    it('is false for typed nodes of different model types, even with the same elements', () => {
+      const resource = (resourceType: string): Item => {
+        const [node] = toInputCollection({ resourceType, id: 'x' }, 'r', stubModel);
+        if (node === undefined) throw new Error('no node');
+        return node;
+      };
+      expectEquality(resource('Patient'), resource('Observation'), false, false, typed);
+      expectEquality(resource('Patient'), resource('Patient'), true, true, typed);
+      // A contained resource the model does not know is typed Resource, not Patient.
+      const [patient] = toInputCollection(
+        { resourceType: 'Patient', contained: [{ resourceType: 'Foo', id: 'x' }] },
+        'p',
+        stubModel,
+      );
+      const [contained] = navigateMember(patient === undefined ? [] : [patient], 'contained', {
+        model: stubModel,
+        lenientChoiceSuffix: false,
+      });
+      if (contained === undefined) throw new Error('no contained');
+      expectEquality(contained, resource('Patient'), false, false, typed);
+    });
+
+    it('is false for typed nodes of different model types that share one JSON object', () => {
+      const shared = { id: 'x' };
+      const [patient] = toInputCollection(
+        { resourceType: 'Patient', contact: [{ name: shared, period: shared }] },
+        'p',
+        stubModel,
+      );
+      const navigation = { model: stubModel, lenientChoiceSuffix: false };
+      const contact = navigateMember(patient === undefined ? [] : [patient], 'contact', navigation);
+      const [name] = navigateMember(contact, 'name', navigation);
+      const [period] = navigateMember(contact, 'period', navigation);
+      if (name === undefined || period === undefined) throw new Error('no nodes');
+      expect((name as ModelNode).value).toBe((period as ModelNode).value);
+      expectEquality(name, period, false, false, typed);
+      // The same object under the same type is still equal by identity.
+      expectEquality(name, name, true, true, typed);
+    });
+
+    it('compares an untyped node by its JSON properties even with a model', () => {
+      const [a] = toInputCollection({ resourceType: 'Foo', x: '2016-03' }, 'f', stubModel);
+      const [b] = toInputCollection({ resourceType: 'Foo', x: '2016-03-28' }, 'f', stubModel);
+      if (a === undefined || b === undefined) throw new Error('no input');
+      expectEquality(a, b, false, false, typed);
     });
   });
 

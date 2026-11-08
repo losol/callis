@@ -5,7 +5,7 @@ Callis provides synchronous, model-less evaluation of JSON. The initial API is i
 ## Evaluate or compile
 
 ```ts
-import { compile, evaluate, FhirPathError } from '@callis/core';
+import { compile, evaluate, FhirPathError, parseJson } from '@callis/core';
 
 export const patient: Readonly<{ resourceType: string; name: readonly { given: readonly string[] }[] }> = {
   resourceType: 'Patient', name: [{ given: ['Ada', 'Mina'] }],
@@ -60,7 +60,19 @@ export function expressionError(): string {
 
 Callis errors throw synchronously. `FhirPathSyntaxError` describes invalid syntax; `FhirPathSemanticError` describes compile-time problems such as unknown functions or wrong arity, with `diagnostics`; `FhirPathEvaluationError` describes evaluation failures. All extend `FhirPathError`, with a stable `code`, human-readable `message`, optional `span` and `expression`, and `format()` for an error panel. A span uses UTF-16 offsets, an exclusive `end`, and 1-based `line` and `column`. Not every error has a source span, for example an invalid option.
 
-Catch `FhirPathError` for expression diagnostics and keep other errors separate. JSON parsing is the caller's responsibility: a `JSON.parse` syntax error is not a FHIRPath error. Exceptions thrown by input accessors or a custom unit provider propagate; they are not converted to empty results. `UnitSystem` must be pure and synchronous. A thenable returned by one of its methods raises `eval/async-in-sync` rather than leaking a Promise.
+Catch `FhirPathError` for expression diagnostics and keep other errors separate. JSON parsing is the caller's responsibility: a `JSON.parse` syntax error is not a FHIRPath error, while `parseJson()` below raises `eval/invalid-json`. Exceptions thrown by input accessors or a custom unit provider propagate; they are not converted to empty results. `UnitSystem` must be pure and synchronous. A thenable returned by one of its methods raises `eval/async-in-sync` rather than leaking a Promise.
+
+## Lossless JSON input
+
+`JSON.parse` goes through JavaScript numbers, so `1.50` becomes `1.5` and `9.5e2` becomes `950`. FHIRPath can see that difference, and FHIR keeps the precision of decimals. `parseJson(text)` accepts the same JSON as `JSON.parse` and returns ordinary objects, arrays, strings, Booleans and `null`, with every number as a `JsonNumber` that holds its text (`text`, `toInteger()`, `toDecimal()`, `toNumber()`). Evaluation treats it as the Integer or Decimal it denotes: a number written without a fraction or exponent in the 32-bit range is an Integer, anything else a Decimal with the precision of the text.
+
+```ts
+export const lossless: unknown[] = evaluate(parseJson('{"value": 1.50}'), 'value', {
+  decimalOutput: 'string',
+});
+```
+
+This gives `['1.50']`; without `decimalOutput: 'string'`, `[1.5]`. A result that is an object keeps its `JsonNumber` values; `JSON.stringify()` writes them as numbers, and `String(number)` gives the text. Invalid text raises `eval/invalid-json` with the offset of the problem. Parsing is not limited by the call stack. A `__proto__` key becomes an own property, as with `JSON.parse`.
 
 ## Current support and deferred API
 
@@ -91,7 +103,7 @@ export const onlyName: unknown[] = compile('name.single()').evaluate(patient);
 
 These zero-argument functions use the existing synchronous model-less API. The remaining subsetting and combining functions, including `last()`, remain deferred.
 
-The public surface has no parser, AST input/property, static analyzer, typed output mode, async evaluation, hooks, model option, custom function registry, strict/lenient options or cache. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages; a model provider export does not imply a public model evaluation option.
+The public surface has no parser, AST input/property, static analyzer, typed output mode, async evaluation, hooks, model option, custom function registry, strict/lenient options or cache. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages. The engine evaluates with a model internally since [T0018](tasks/T0018-model-aware-evaluation.md): choice elements, FHIR primitives with their `_name` extensions, FHIR values as System values and the root identifier as a type with inheritance, which the conformance runner measures with the R4 and R5 providers. The public `model` and `lenient` options arrive with the expanded API (T0038); a model provider export does not imply them yet.
 
 The examples are executed by the public documentation tests. Handwritten TSDoc and this small guide describe the initial API; a generated API reference is deferred with the expanded API.
 
@@ -105,7 +117,7 @@ This describes the planned 0.1.0 subset at engine revision [9b78e6e](https://git
 | Data | Model-less JSON paths, root resourceType matching, literals, indexing, variables and system type operations; no model-driven choice expansion or primitive extensions. |
 | Operators | `+ - * / div mod`, unary `+ -`, `&`, `= != ~ !~`, `< <= > >=`, `in contains`, `&#124;`, `and or xor implies`, `is as`. Applicability depends on operand types and FHIRPath empty-collection rules. |
 | Functions | `not()`, `is()`, `as()`, `ofType()` only. `where`, `select`, `exists`, `resolve` and other standard/FHIR groups are not implemented. |
-| Output | Synchronous plain arrays; exact evaluator Decimal/Quantity strings with `decimalOutput: 'string'`; parsed input numbers retain JavaScript precision limits. |
+| Output | Synchronous plain arrays; exact evaluator Decimal/Quantity strings with `decimalOutput: 'string'`; parsed input numbers retain JavaScript precision limits unless the input comes from `parseJson()`, added after 0.1. |
 | Errors | Public FhirPathError subclasses, codes, optional UTF-16 source spans, semantic diagnostics and formatting; caller handles invalid JSON separately. |
 | Companions | UCUM UnitSystem is usable through `units`; R4/R5 export immutable ModelProvider data. R6 is selected for the first release and is being integrated. None provides a public engine `model` option. |
 | Deferred | Async, hooks, custom functions, parser/AST, analysis, typed output, model-aware evaluation and remaining function groups; tracked by implementation tasks and T0038. |
@@ -118,6 +130,6 @@ The handwritten API guide and TSDoc are the reference decision for this small re
 
 ## Planned R6 model metadata
 
-[T0039](tasks/T0039-fhir-r6-model.md) and [T0040](tasks/T0040-fhir-r6-validation.md) implement and verify a real R6 provider from the pinned HL7 `6.0.0-snapshot1` September 2026 draft source. This is planned model metadata, not final R6 stability, a supported public model evaluation option, FHIR validation or an R6 conformance result. The current public evaluator remains model-less; T0018/T0038 own model-aware evaluation and its eventual API. Existing R4/R5 conformance reports measure their named suites only.
+[T0039](tasks/T0039-fhir-r6-model.md) and [T0040](tasks/T0040-fhir-r6-validation.md) implement and verify a real R6 provider from the pinned HL7 `6.0.0-snapshot1` September 2026 draft source. This is planned model metadata, not final R6 stability, a supported public model evaluation option, FHIR validation or an R6 conformance result. The current public evaluator remains model-less; the engine's model-aware evaluation (T0018) reaches the public API with T0038. The engine's own tests run model-aware evaluation against the R6 provider alongside R4 and R5, which is engine-tested provider support for the draft snapshot, not an R6 conformance result: there is no official R6 suite, and the existing R4/R5 conformance reports measure their named suites only.
 
 The owner selected R6 for the [five-package first release](../RELEASING.md#five-package-first-release). The target is distinct from the currently generated version PR and still requires exact-candidate checks and owner release approval. R4, R5 and R6 use the same named-provider API (`r4`, `r5`, `r6`), with `getType(name)` and `getElement(type, name)` for metadata lookup. These are not generated resource classes or a new evaluator API; no public API shape changes are introduced by this release-plan decision.

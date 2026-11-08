@@ -38,6 +38,22 @@ export const SUITE_EXCEPTIONS: readonly SuiteException[] = [
     reason: 'the R4 copy ignores the 0.1 s fraction; Callis follows R5 and 3.0.0',
     note: 'fractions-in-datetime-arithmetic',
   },
+  {
+    // T0018 (#111): the suite marks these as contested; Callis follows the model's inheritance.
+    suites: ['r4', 'r5'],
+    tests: ['testFHIRPathAsFunction11', 'testFHIRPathAsFunction16'],
+    reason:
+      'code derives from string, so as(string) and ofType(string) keep the code; the suite expects empty',
+    note: 'fhir-primitives-in-is-as-and-oftype',
+  },
+  {
+    // T0018: the normative error rule for a type that does not resolve, with no exemption.
+    suites: ['r4', 'r5'],
+    tests: ['testType22'],
+    reason:
+      'System.Patient does not resolve, so is() raises eval/unknown-type; the suite expects false',
+    note: 'unresolved-type-specifiers-are-execution-errors',
+  },
 ];
 
 /** The exception for a test, if there is one. */

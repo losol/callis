@@ -5,6 +5,7 @@
  * These are the basic versions; T0025 finishes them.
  */
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
+import { JsonNumber } from '../model/lossless-json.ts';
 import { ModelNode } from '../model/model-node.ts';
 import type { Collection, Item } from '../runtime/collection.ts';
 import { UCUM_URL } from '../runtime/variables.ts';
@@ -77,11 +78,18 @@ export function toOutput(items: Collection, options: OutputOptions = {}): unknow
  * - Date, DateTime and Time as FHIR-formatted strings, without `@`
  * - Quantity as `{ value, unit, system?, code? }`
  * - input nodes as the JSON they hold; a primitive with only extensions as its `_name` object
+ * - a lossless JSON number (`parseJson()`) as the Integer or Decimal it denotes, so `1.50` is
+ *   `1.5` or, with `decimalOutput: 'string'`, `'1.50'`
  *
- * Undefined only for a node that holds nothing.
+ * A node that holds an object gives that object as it is, so one from `parseJson()` still
+ * contains `JsonNumber` values, which `JSON.stringify()` writes as numbers. Undefined only for a
+ * node that holds nothing.
  */
 export function toPlainValue(item: Item, decimalOutput: DecimalOutput = 'number'): unknown {
   if (item instanceof ModelNode) {
+    if (item.value instanceof JsonNumber) {
+      return plainNumber(item.value, decimalOutput);
+    }
     return item.value !== undefined ? item.value : item.primitiveElement;
   }
   if (item instanceof Decimal) {
@@ -102,6 +110,16 @@ export function toPlainValue(item: Item, decimalOutput: DecimalOutput = 'number'
 
 function plainDecimal(value: Decimal, decimalOutput: DecimalOutput): number | string {
   return decimalOutput === 'string' ? value.toString() : value.toNumber();
+}
+
+/** A lossless JSON number as plain output: an Integer stays a number, a Decimal follows the option. */
+function plainNumber(value: JsonNumber, decimalOutput: DecimalOutput): number | string {
+  const integer = value.toInteger();
+  if (integer !== undefined) {
+    return integer;
+  }
+  const decimal = value.toDecimal();
+  return decimal === undefined ? value.toNumber() : plainDecimal(decimal, decimalOutput);
 }
 
 function invalidOption(name: string, value: string): FhirPathEvaluationError {

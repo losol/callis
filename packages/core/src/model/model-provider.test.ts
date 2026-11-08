@@ -12,7 +12,7 @@ describe('ModelProvider', () => {
 
 // The contract suite that every provider should pass; the generated models are issue #56.
 describeModelProviderContract(stubModel, {
-  startTypes: ['Patient', 'Observation', 'Age'],
+  startTypes: ['Patient', 'Observation', 'Bundle', 'Age', 'Duration'],
   resourceType: 'Patient',
   nonResourceType: 'HumanName',
   systemTypes: [
@@ -20,18 +20,51 @@ describeModelProviderContract(stubModel, {
     ['string', 'String'],
     ['code', 'String'], // a derived primitive
     ['integer', 'Integer'],
+    ['positiveInt', 'Integer'],
+    ['integer64', 'Long'],
     ['decimal', 'Decimal'],
     ['date', 'Date'], // not DateTime: docs/spec-notes.md
     ['dateTime', 'DateTime'],
+    ['instant', 'DateTime'],
+    ['time', 'Time'],
     ['Quantity', 'Quantity'],
     ['Age', 'Quantity'], // a specialization of Quantity
+    ['Duration', 'Quantity'],
     ['HumanName', undefined],
     ['Patient', undefined],
     ['Element', undefined],
   ],
   choiceElements: [
-    { type: 'Observation', element: 'value', typeNames: ['Quantity', 'string', 'boolean'] },
-    { type: 'Extension', element: 'value', typeNames: ['string', 'boolean', 'Quantity'] },
+    {
+      type: 'Observation',
+      element: 'value',
+      typeNames: [
+        'Quantity',
+        'string',
+        'boolean',
+        'dateTime',
+        'Period',
+        'integer',
+        'CodeableConcept',
+      ],
+    },
+    { type: 'Patient', element: 'deceased', typeNames: ['boolean', 'dateTime'] },
+    {
+      type: 'Extension',
+      element: 'value',
+      typeNames: [
+        'string',
+        'boolean',
+        'Quantity',
+        'Age',
+        'Duration',
+        'dateTime',
+        'integer',
+        'decimal',
+        'code',
+        'Period',
+      ],
+    },
   ],
 });
 

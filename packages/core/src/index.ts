@@ -1,8 +1,9 @@
 /**
  * Public API of `@callis/core`.
  *
- * Synchronous model-less evaluation, plain result values, errors, and the contracts used by
- * model and unit-provider packages. Internal modules are imported directly, never through here.
+ * Synchronous model-less evaluation, plain result values, errors, lossless JSON input, and the
+ * contracts used by model and unit-provider packages. Internal modules are imported directly,
+ * never through here.
  *
  * @packageDocumentation
  */
@@ -28,6 +29,8 @@ export {
   FhirPathSyntaxError,
 } from './errors/fhirpath-error.ts';
 export type { SourceSpan } from './errors/source-span.ts';
+export type { JsonValue } from './model/lossless-json.ts';
+export { JsonNumber, parseJson } from './model/lossless-json.ts';
 export type {
   ElementInfo,
   ModelProvider,

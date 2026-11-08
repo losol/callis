@@ -16,7 +16,7 @@ Callis is about finding data. It is a [FHIRPath](https://hl7.org/fhirpath/N1/) e
 | --- | --- | --- |
 | [`@callis/core`](packages/core) | The FHIRPath engine | In development |
 | [`@callis/ucum`](packages/ucum) | Opt-in UCUM conversion | Implemented; release preparation pending |
-| [`@callis/fhir-r4`](packages/fhir-r4), [`@callis/fhir-r5`](packages/fhir-r5) | Immutable R4 4.0.1 / R5 5.0.0 provider metadata | Implemented data packages; public model-aware evaluation deferred |
+| [`@callis/fhir-r4`](packages/fhir-r4), [`@callis/fhir-r5`](packages/fhir-r5) | Immutable R4 4.0.1 / R5 5.0.0 provider metadata | Implemented data packages; the engine evaluates with them internally, public `model` option deferred |
 
 ## Install
 
@@ -33,7 +33,7 @@ npm install @callis/core
 The source/build exports synchronous model-less evaluation. See the [guide](docs/guide.md) for supported features, errors and exact Decimal rendering; this does not announce a published release.
 
 ```ts
-import { compile, evaluate, FhirPathError } from '@callis/core';
+import { compile, evaluate, FhirPathError, parseJson } from '@callis/core';
 
 export const patient: Readonly<{ resourceType: string; name: readonly { given: readonly string[] }[] }> = {
   resourceType: 'Patient', name: [{ given: ['Ada', 'Mina'] }],
@@ -42,7 +42,7 @@ export const given: unknown[] = evaluate(patient, 'Patient.name.given');
 export const firstGiven: unknown[] = compile('name.given[0]').evaluate(patient);
 ```
 
-These return `['Ada', 'Mina']` and `['Ada']`. Default Decimal output uses potentially lossy numbers; `decimalOutput: 'string'` preserves evaluator Decimal digits, but cannot recover digits lost in input JavaScript numbers. Full phase-1 conformance and model-aware evaluation remain future work.
+These return `['Ada', 'Mina']` and `['Ada']`. Default Decimal output uses potentially lossy numbers; `decimalOutput: 'string'` preserves evaluator Decimal digits, but cannot recover digits lost in input JavaScript numbers; `parseJson()` keeps them ([guide](docs/guide.md#lossless-json-input)). Full phase-1 conformance and a public model option remain future work.
 
 ## First 0.1 support
 

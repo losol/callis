@@ -10,6 +10,7 @@ function context(variables: unknown): EvalContext {
     context: ['input'],
     variables: createVariables(variables),
     model: undefined,
+    lenientChoiceSuffix: false,
     units: minimalUnitSystem,
     timezoneOffset: 0,
     now: () => {

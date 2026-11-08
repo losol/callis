@@ -22,14 +22,32 @@ import {
 import { minimalUnitSystem, type UnitSystem } from '../values/quantity/unit-system.ts';
 import { type OutputOptions, toOutput } from './output.ts';
 
+/**
+ * Compatibility relaxations of the spec's rules
+ * ([ADR-0012](https://github.com/losol/callis/blob/main/docs/adr/0012-evaluation-defaults.md)).
+ * Everything is off by default.
+ */
+export interface LenientOptions {
+  /**
+   * Accept a choice element written with its type suffix, as in `Observation.valueQuantity`,
+   * which other engines allow. The spec's form is `Observation.value.ofType(Quantity)`.
+   */
+  readonly choiceSuffix?: boolean;
+}
+
 /** Options that apply when an expression is compiled. */
 export interface CompileOptions {
-  /** The model for type specifiers and, from T0018, navigation. Without one, plain JSON. */
+  /**
+   * The model for type specifiers and type-directed navigation: choice elements, FHIR primitives
+   * with their extensions, inheritance. Without one, plain JSON is navigated by its keys.
+   */
   readonly model?: ModelProvider;
   /** The unit system for quantities; the minimal built-in one by default. */
   readonly units?: UnitSystem;
   /** The functions calls resolve to; the standard library and the FHIR functions by default. */
   readonly functions?: FunctionRegistry;
+  /** Compatibility relaxations; none by default. */
+  readonly lenient?: LenientOptions;
 }
 
 /** Options for one evaluation. */
@@ -80,7 +98,12 @@ export function compile(expression: string, options: CompileOptions = {}): Compi
     model,
     expression,
   });
-  const environment: Environment = { root, model, units };
+  const environment: Environment = {
+    root,
+    model,
+    units,
+    lenientChoiceSuffix: options.lenient?.choiceSuffix === true,
+  };
   return Object.freeze({
     expression,
     ast,
@@ -116,6 +139,7 @@ interface Environment {
   readonly root: Evaluator;
   readonly model: ModelProvider | undefined;
   readonly units: UnitSystem;
+  readonly lenientChoiceSuffix: boolean;
 }
 
 function run(
@@ -154,11 +178,13 @@ function createContext(
     options.timezoneOffset === 'local' ? readClock() : EPOCH,
   );
   let snapshot: NowSnapshot | undefined;
+  const model = environment.model;
   return {
     isAsync,
-    context: toInputCollection(input, ''),
-    variables: createVariables(options.variables),
-    model: environment.model,
+    context: toInputCollection(input, '', model),
+    variables: createVariables(options.variables, model),
+    model,
+    lenientChoiceSuffix: environment.lenientChoiceSuffix,
     units: environment.units,
     timezoneOffset,
     now(): NowSnapshot {

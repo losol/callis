@@ -35,9 +35,14 @@ import assert from 'node:assert/strict';
 import * as core from '@callis/core';
 import { ucum } from '@callis/ucum';
 assert.deepEqual(Object.keys(core).sort(), [
-  'Decimal', 'MAX_DECIMAL_DIGITS', 'minimalUnitSystem', 'compile', 'evaluate',
+  'Decimal', 'MAX_DECIMAL_DIGITS', 'minimalUnitSystem', 'compile', 'evaluate', 'parseJson', 'JsonNumber',
   'FhirPathError', 'FhirPathSyntaxError', 'FhirPathSemanticError', 'FhirPathEvaluationError'
 ].sort());
+const lossless = core.parseJson('{"rows": [{"value": 1.50}]}');
+assert.deepEqual(core.evaluate(lossless, 'rows.value', { decimalOutput: 'string' }), ['1.50']);
+assert.deepEqual(core.evaluate(lossless, 'rows.value'), [1.5]);
+assert.ok(lossless.rows[0].value instanceof core.JsonNumber);
+assert.throws(() => core.parseJson('{'), error => error.code === 'eval/invalid-json');
 assert.deepEqual(core.evaluate({ name: [{ given: ['Ada'] }] }, 'name.given'), ['Ada']);
 assert.deepEqual(core.evaluate({ rows: [{ value: 1 }, { value: 2 }] }, 'rows.where(value > 1).value'), [2]);
 assert.deepEqual(core.compile('rows.where($index = 0).value').evaluate({ rows: [{ value: 3 }, { value: 4 }] }), [3]);
@@ -130,9 +135,9 @@ assert.throws(() => core.evaluate(null, expr, { units: { ...core.minimalUnitSyst
   writeFileSync(
     join(temporary, 'types.mts'),
     `
-import { compile, evaluate, Decimal, minimalUnitSystem,
+import { compile, evaluate, Decimal, minimalUnitSystem, parseJson, JsonNumber,
   FhirPathError, FhirPathEvaluationError,
-  type CompileOptions, type EvaluateOptions, type CompiledExpression,
+  type CompileOptions, type EvaluateOptions, type CompiledExpression, type JsonValue,
   type PlainQuantity, type UnitSystem, type ModelProvider, type SourceSpan,
   type Diagnostic, type ErrorCode, type FhirPathErrorOptions,
 } from '@callis/core';
@@ -145,6 +150,9 @@ const quantity: PlainQuantity = { value: '1.20', unit: 'mg' };
 const error: FhirPathError = new FhirPathEvaluationError('eval/invalid-argument', 'bad option');
 const code: ErrorCode = error.code;
 const span: SourceSpan | undefined = error.span;
+const lossless: JsonValue = parseJson('{"value": 1.50}');
+const number: JsonNumber | undefined = lossless instanceof JsonNumber ? lossless : undefined;
+const text: string | undefined = number?.text;
 // @ts-expect-error AST is deferred
 run.ast;
 // @ts-expect-error async is deferred
