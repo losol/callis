@@ -148,6 +148,72 @@ test('shows task details in a non-modal drawer that tiles switch, and returns fo
   await expect(tile(page, 'T0001')).toBeFocused();
 });
 
+test('starts at the top when the drawer switches from a scrolled task', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 500 });
+  await openBoard(page);
+  await tile(page, 'T0008').click();
+  const drawer = page.getByRole('dialog', { name: /^T0008 / });
+  await expect(drawer).toBeVisible();
+  const body = drawer.locator('.pg-drawer-body');
+
+  // Scroll T0008 down to its "Needed by" list, then open T0014, which depends on it.
+  const next = drawer.getByRole('button', { name: /^T0014 / });
+  await next.scrollIntoViewIfNeeded();
+  expect(await body.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await next.click();
+
+  const switched = page.getByRole('dialog', { name: /^T0014 / });
+  await expect(switched.getByRole('heading', { level: 2 })).toBeFocused();
+  expect(await switched.locator('.pg-drawer-body').evaluate((element) => element.scrollTop)).toBe(
+    0,
+  );
+  await expect(switched.locator('.pg-badge')).toBeInViewport();
+  await expect(switched.locator('.pg-facts')).toBeInViewport();
+});
+
+test('keeps the keyboard in the drawer and the header while the drawer covers a narrow screen', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openBoard(page);
+  await tile(page, 'T0009').focus();
+  await page.keyboard.press('Enter');
+  const drawer = page.getByRole('dialog', { name: /^T0009 / });
+  const title = drawer.getByRole('heading', { level: 2 });
+  await expect(title).toBeFocused();
+  const focusIn = (selector: string) =>
+    page.evaluate((within) => document.activeElement?.closest(within) != null, selector);
+
+  // Backwards from the title the focus goes to the header, not to the board behind the drawer.
+  await page.keyboard.press('Shift+Tab');
+  expect(await focusIn('.site-header')).toBe(true);
+
+  // Forwards through the drawer and past its end, the focus never reaches the page it covers.
+  await drawer.getByRole('button', { name: 'Close' }).focus();
+  for (let step = 0; step < 30; step += 1) {
+    await page.keyboard.press('Tab');
+    const allowed = await page.evaluate(
+      () =>
+        document.activeElement === document.body ||
+        document.activeElement?.closest('.pg-drawer, .site-header') != null,
+    );
+    expect(allowed, `Tab ${step + 1}`).toBe(true);
+  }
+
+  // The page is inert only while the drawer covers it.
+  await page.setViewportSize({ width: 1280, height: 844 });
+  await expect(page.locator('main [inert]')).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('main [inert]').first()).toBeAttached();
+
+  // Escape returns the focus to the tile, which is usable again.
+  await title.focus();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('main [inert]')).toHaveCount(0);
+  await expect(tile(page, 'T0009')).toBeFocused();
+});
+
 for (const theme of ['dark', 'light'] as const) {
   test(`fits the drawer on a narrow screen in the ${theme} theme`, async ({ page }) => {
     await page.addInitScript((value) => localStorage.setItem('callis-theme', value), theme);
@@ -197,6 +263,8 @@ for (const theme of ['dark', 'light'] as const) {
     expect(box?.width).toBeGreaterThanOrEqual(380);
     expect(box?.width).toBeLessThanOrEqual(440);
     await expectBelowHeader(page, drawer);
+    // Beside the board, the drawer leaves the page usable.
+    await expect(page.locator('main [inert]')).toHaveCount(0);
 
     // The header stays usable while the drawer is open.
     const other = theme === 'dark' ? 'light' : 'dark';

@@ -58,6 +58,8 @@ export function Board({ plan, commits, active, taskPages = {} }: BoardProps) {
   const [shownId, setShownId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState(0);
   const tiles = useRef(new Map<string, HTMLButtonElement>());
+  // The tile to focus once the drawer has closed (and the page behind it is no longer inert).
+  const refocus = useRef<string | null>(null);
 
   const waves = [...new Set(plan.map((task) => task.wave))].sort((a, b) => a - b);
   const pointedId = hoveredId ?? focusedId;
@@ -71,17 +73,20 @@ export function Board({ plan, commits, active, taskPages = {} }: BoardProps) {
   };
 
   // Keep the tile of the shown task in view, clear of the drawer (the board's scroll-padding).
+  // After the drawer closed, return the focus. This runs after the drawer's own cleanup, which
+  // lifts the inert state of the page on narrow screens; an inert tile cannot take the focus.
   useEffect(() => {
     if (shownId !== null) {
       tiles.current.get(shownId)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    } else if (refocus.current !== null) {
+      tiles.current.get(refocus.current)?.focus();
+      refocus.current = null;
     }
   }, [shownId]);
 
   /** Closes the drawer; from inside it, the focus goes back to the tile of its task. */
   const close = (returnFocus: boolean) => {
-    if (returnFocus && shownId !== null) {
-      tiles.current.get(shownId)?.focus();
-    }
+    refocus.current = returnFocus ? shownId : null;
     setShownId(null);
   };
 

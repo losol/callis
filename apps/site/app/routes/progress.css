@@ -864,7 +864,7 @@ span.pg-relation {
   text-underline-offset: 0.2em;
 }
 
-/* Full width on narrow screens. */
+/* Full width on narrow screens, where the page behind it is made inert (COVERS_PAGE in task-drawer.tsx). */
 @media (max-width: 40rem) {
   .pg-drawer {
     width: 100%;

@@ -29,11 +29,46 @@ export interface TaskDrawerProps {
 }
 
 /**
- * The details of a roadmap task in a drawer on the right edge of the window.
- * It is a non-modal dialog: the board stays usable next to it, so the focus is
- * not trapped, and a click on another tile shows that task instead. Escape or
- * the close button closes it. The focus goes to the title when it opens and
- * when it switches tasks, so a screen reader reads the task out.
+ * When the drawer is this wide, it covers the whole page below the site header.
+ * Keep it in step with the full-width breakpoint of `.pg-drawer` in progress.css.
+ */
+const COVERS_PAGE = '(max-width: 40rem)';
+
+/**
+ * Makes everything inside `root` inert except `element` and its ancestors, and
+ * returns a function that undoes it. Elements that were inert already are left
+ * alone.
+ */
+function makeInertAround(element: HTMLElement, root: HTMLElement): () => void {
+  const changed: HTMLElement[] = [];
+  let node = element;
+  while (node !== root && node.parentElement !== null) {
+    for (const sibling of node.parentElement.children) {
+      if (sibling !== node && sibling instanceof HTMLElement && !sibling.inert) {
+        sibling.inert = true;
+        changed.push(sibling);
+      }
+    }
+    node = node.parentElement;
+  }
+  return () => {
+    for (const sibling of changed) {
+      sibling.inert = false;
+    }
+  };
+}
+
+/**
+ * The details of a roadmap task in a drawer on the right edge of the window,
+ * below the site header. It is a non-modal dialog: the board stays usable next
+ * to it, so the focus is not trapped, and a click on another tile shows that
+ * task instead. Escape or the close button closes it. The focus goes to the
+ * title when it opens and when it switches tasks, so a screen reader reads the
+ * task out.
+ *
+ * On narrow screens the drawer covers the page below the header, so the page
+ * behind it is made inert while it is open: the keyboard moves between the
+ * drawer and the header, never to controls it hides.
  */
 export function TaskDrawer({
   task,
@@ -45,6 +80,7 @@ export function TaskDrawer({
   onShow,
   onClose,
 }: TaskDrawerProps) {
+  const drawer = useRef<HTMLElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const titleId = useId();
 
@@ -54,10 +90,32 @@ export function TaskDrawer({
     }
   }, [focusRequest]);
 
+  // While the drawer covers the page, the page behind it is inert; the header is outside <main>.
+  useEffect(() => {
+    const element = drawer.current;
+    const page = element?.closest('main');
+    if (!element || !page) {
+      return;
+    }
+    const covering = window.matchMedia(COVERS_PAGE);
+    let restore: (() => void) | undefined;
+    const update = () => {
+      restore?.();
+      restore = covering.matches ? makeInertAround(element, page) : undefined;
+    };
+    update();
+    covering.addEventListener('change', update);
+    return () => {
+      covering.removeEventListener('change', update);
+      restore?.();
+    };
+  }, []);
+
   const mergedPr = task.doneAt !== null ? (commits[task.doneAt]?.pr ?? null) : null;
 
   return (
     <section
+      ref={drawer}
       className="pg-drawer"
       role="dialog"
       aria-labelledby={titleId}
@@ -80,7 +138,9 @@ export function TaskDrawer({
         </button>
       </div>
 
-      <div className="pg-drawer-body">
+      {/* Keyed by task: the drawer stays mounted when it switches tasks, and the new task starts
+          at the top of a fresh body instead of keeping the old task's scroll position. */}
+      <div key={task.id} className="pg-drawer-body">
         <Status task={task} plan={plan} commits={commits} active={active} />
 
         <dl className="pg-facts">
