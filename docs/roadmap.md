@@ -213,7 +213,7 @@ The engine is provider-agnostic: version differences come from the provider's da
 | R6 draft change | Decision | Affects |
 | --- | --- | --- |
 | The Type Factory (`%factory`), General Service API (`%server`) and Terminology Service API (`%terminologies`) moved out of the core specification into HL7's API incubator IG, which has only a CI build. | T0032 covers the R4/R5 APIs. The R6 ones wait until the IG is published; until then they are a known R6 gap. | [T0032](tasks/T0032-fhir-phase2.md#owner-decision-r6-service-apis) |
-| `htmlChecks()` also accepts a string, parsed as the content of a `div`. | Keep the R4/R5 behaviour (xhtml only) for every provider; the string variant waits for final R6. | [T0021](tasks/T0021-hooks-async.md#owner-decision-htmlchecks-on-strings) |
+| `htmlChecks()` also accepts a string, parsed as the content of a `div`. | Accept strings for every provider (R4, R5 and R6), as the pinned R5 suite already expects (`htmlTest02`/`03`); no suite exceptions ([spec notes](spec-notes.md#htmlchecks-on-strings)). | [T0021](tasks/T0021-hooks-async.md#owner-decision-htmlchecks-on-strings) |
 | A new function, `weight()`, and the `%profile` variable for profile invariants. | `weight()` is on the [backlog](#backlog-not-scheduled) until final R6 ([#151](https://github.com/losol/callis/issues/151)). Hosts can pass `%profile` as a variable. | [T0020](tasks/T0020-fhir-functions.md) |
 | `comparable()` is no longer a FHIR addition; it is in FHIRPath 3.0.0. | Already planned with the 3.0.0 additions. | [T0030](tasks/T0030-stu-precision-datetime.md) |
 | The type table maps `FHIR.date` to `System.Date`. | None needed: Callis already does this ([spec notes](spec-notes.md#fhirdate-maps-to-systemdate)). | – |

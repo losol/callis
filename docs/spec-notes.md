@@ -356,6 +356,15 @@ How the conformance runner ([T0022](tasks/T0022-conformance-runner.md), [`tools/
 - **Tests:** the R4 file has two tests named `testEquivalent23` (R5 renamed the second to `testEquivalent24`).
 - **Decision:** test IDs are the names, made unique with a `#2`, `#3`, … suffix in document order. The second R4 test is `testEquivalent23#2` in reports and in the baseline.
 
+## FHIR functions
+
+### `htmlChecks()` on strings
+
+- **Spec:** the R4 and R5 texts define `htmlChecks()` on an xhtml element only, with no value for any other kind of element ([R4](https://hl7.org/fhir/R4/fhirpath.html#functions), [R5 §2.1.9.1.5](https://hl7.org/fhir/R5/fhirpath.html#fn-htmlChecks)). The R6 draft adds strings: a string is parsed as the content of a `div`, and the result is false when it does not parse or breaks the HTML rules ([6.0.0-snapshot1 §2.1.9.3.12](https://hl7.org/fhir/6.0.0-snapshot1/fhirpath.html#fn-htmlChecks), FHIR-56303).
+- **Tests:** R5 `HTMLChecks` at [`cb4eac4`](../tools/conformance/fixtures/SOURCE.md): `htmlTest02` (`valueString` with valid HTML, expects true) and `htmlTest03` (`valueString` with a `button`, expects false), both on `parameters-example-html.json`; `htmlTest04` (`valueInteger`) expects empty. R4 has no `HTMLChecks` group.
+- **Decision** (owner, 2026-11-08): follow the suite and the R6 draft for every provider (R4, R5 and R6). A string is forwarded to the `htmlChecks` hook like xhtml; any other input gives empty, and without a hook the result is empty. No suite exceptions are registered: [ADR-0001](adr/0001-spec-baseline.md) and [ADR-0011](adr/0011-conformance-suite.md) make the suite the arbiter where it clarifies the rules.
+- **Ownership:** [T0021](tasks/T0021-hooks-async.md#owner-decision-htmlchecks-on-strings) implements it and adds the code reference here.
+
 ## Parser
 
 ### Reserved `div` in an HTML fixture

@@ -14,7 +14,7 @@ Let hosts plug in I/O-backed behaviour, synchronously or asynchronously ([host h
 
 - `EvaluationHooks` and `TerminologyProvider` types.
 - `resolve` falls back to the hook.
-- `memberOf`, `subsumes`, `subsumedBy`, `conformsTo` and `htmlChecks` are wired to their hooks.
+- `memberOf`, `subsumes`, `subsumedBy`, `conformsTo` and `htmlChecks` are wired to their hooks. `htmlChecks` forwards both xhtml and string inputs ([owner decision](#owner-decision-htmlchecks-on-strings)).
 - A `regex` hook for a safe regex engine.
 - `evaluateAsync()` end to end: concurrent hook calls for the items of a collection, with a `concurrency` limit and output order preserved; the `signal` option, typed as the exported structural `CancellationSignal` (any `AbortSignal` fits), stops evaluation with `eval/aborted`.
 - **FHIR versions** ([roadmap](../roadmap.md#fhir-versions)): hooks know nothing about FHIR versions. A resource that a `resolve` hook returns is typed by the evaluation's provider through `getRootType()`, like the input. Tests with a model run against the real `r4`, `r5` and `r6` providers, including a hook that returns an R6-only `DeviceAlert`, which is typed under R6 and untyped data under R4 and R5.
@@ -78,9 +78,9 @@ Without a matching hook, the hook-backed functions return empty and never throw.
 
 ### Owner decision: `htmlChecks()` on strings
 
-The R6 draft lets `htmlChecks()` run on a string as well as on xhtml: the string is parsed as the content of a `div` ([6.0.0-snapshot1 §2.1.9.3.12](https://hl7.org/fhir/6.0.0-snapshot1/fhirpath.html#fn-htmlChecks)). R4 and R5 define it for xhtml only and give empty for anything else ([R5 §2.1.9.1.5](https://hl7.org/fhir/R5/fhirpath.html#fn-htmlChecks)).
+The R4 and R5 spec texts define `htmlChecks()` on xhtml only ([R4](https://hl7.org/fhir/R4/fhirpath.html#functions), [R5 §2.1.9.1.5](https://hl7.org/fhir/R5/fhirpath.html#fn-htmlChecks)). The R6 draft also accepts a string, parsed as the content of a `div` ([6.0.0-snapshot1 §2.1.9.3.12](https://hl7.org/fhir/6.0.0-snapshot1/fhirpath.html#fn-htmlChecks)), and the pinned R5 suite already expects that: in `HTMLChecks`, `htmlTest02` and `htmlTest03` call it on a `valueString` and expect true and false, and `htmlTest04` expects empty for an integer.
 
-**Decided by the owner (2026-11-08):** Callis keeps the R4/R5 behaviour for every provider. Only xhtml reaches the `htmlChecks` hook; any other input, including a string, gives empty. The string variant waits for final R6 and is a known R6 gap until then ([FHIR versions](../roadmap.md#fhir-versions)). Record the rule in `docs/spec-notes.md` with the implementation.
+**Decided by the owner (2026-11-08):** `htmlChecks()` accepts strings for every provider (R4, R5 and R6). A string is forwarded to the `htmlChecks` hook like xhtml; any other input gives empty. There are no suite exceptions, and [ADR-0001](../adr/0001-spec-baseline.md) and [ADR-0011](../adr/0011-conformance-suite.md) make the suite the arbiter ([spec notes](../spec-notes.md#htmlchecks-on-strings)). The hook gets the text in both cases; the task decides how it learns which kind it received, because xhtml is the `div` itself and a string is its content, without breaking the hook signature.
 
 ## Acceptance criteria
 
@@ -88,7 +88,7 @@ The R6 draft lets `htmlChecks()` run on a string as well as on xhtml: the string
 - [ ] With an async `resolve` hook, `Bundle.entry.resource.subject.resolve().name` returns results in input order and respects `concurrency`.
 - [ ] The same expression with a sync hook works through `evaluate()`. An async hook in `evaluate()` raises `eval/async-in-sync`.
 - [ ] An aborted signal stops evaluation with `eval/aborted`.
-- [ ] Conformance groups `testConformsTo` (R4 and R5) and `HTMLChecks` (R5 suite only) pass, using fake hooks in the runner.
-- [ ] `htmlChecks()` on a string gives empty without calling the hook, under every provider ([owner decision](#owner-decision-htmlchecks-on-strings)).
+- [ ] Conformance groups `testConformsTo` (R4 and R5) and `HTMLChecks` (R5 suite only, including the string cases `htmlTest02` and `htmlTest03`) pass, using fake hooks in the runner, with no suite exceptions.
+- [ ] `htmlChecks()` forwards xhtml and strings to the hook under the real `r4`, `r5` and `r6` providers, which covers the R6 draft behaviour; any other input gives empty without calling the hook ([owner decision](#owner-decision-htmlchecks-on-strings)). `docs/spec-notes.md` records the spec/suite disagreement.
 - [ ] `memberOf()`, `subsumes()` and `subsumedBy()` have unit tests with fake terminology hooks, in sync and async mode. The suites have no tests for them: `TerminologyTests` holds only `%terminologies` cases, which are [T0032](T0032-fhir-phase2.md) ([#63](https://github.com/losol/callis/issues/63)).
 - [ ] A `resolve` hook result is typed by the real `r4`, `r5` and `r6` providers in the same way. No R6 conformance result is claimed.
