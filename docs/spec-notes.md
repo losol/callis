@@ -34,6 +34,40 @@ How Callis reads the FHIRPath specification where the text is ambiguous, silent,
 - **Tests:** none in the suite come near the bound.
 - **Decision** (owner, [#47](https://github.com/losol/callis/issues/47), 2026-11-04): a Decimal's coefficient has at most 10,000 digits and its scale is at most 10,000. An operation whose exact result is beyond that (`+`, `-`, `*`, `/`, `div`, `power`, `ln`, `log`) is overflow or underflow and gives empty. So `1e9999 + 1e-10000`, which needs 20,000 digits, is empty, and repeated squaring ends in empty instead of an error. Division keeps its 28 significant digits and its 8 digits after the point rather than rounding to fit. So `1 / 3e9980` is empty, and so is a quotient from about `1e9992` up that is not exact within fewer digits (`1e9995 / 3`). Text beyond the bound does not parse, so `toDecimal()` gives empty. A Decimal literal beyond the bound is a valid token with no Decimal value. It is an invalid literal value: it raises `eval/invalid-literal` when evaluated, like `@2015-02-30` (owner, [#69](https://github.com/losol/callis/issues/69), 2026-11-05; [T0008](tasks/T0008-compiler-evaluator.md#invalid-literal-values)).
 
+## Math functions
+
+The math functions ([N1 §5.7](https://hl7.org/fhirpath/N1/#math), [T0016](tasks/T0016-fn-math.md)) are thin: the numbers come from the Decimal kernels (see [Decimal](#decimal)) and the functions add singleton evaluation, the implicit Integer → Decimal conversion and the Integer range.
+
+### The result of `power()` is a Decimal
+
+- **Spec:** [N1 `power`](https://hl7.org/fhirpath/N1/#powerexponent-integer-decimal-integer-decimal) says the result is an Integer when both operands are Integers. [3.0.0 `power`](https://hl7.org/fhirpath/STU3/#powerexponent--integer--decimal--decimal) says it is always a Decimal, "because raising an Integer to a negative power (such as -1) produces a Decimal result", and shows `2.power(3) // 8 (as a decimal)`.
+- **Tests:** `testPower1`, `testPower2`, `testPower3`, `testPowerEmpty`–`testPowerEmpty3` (R5). Equality does not tell an Integer from a Decimal, so no suite test depends on it.
+- **Decision:** follow 3.0.0 ([ADR-0001](adr/0001-spec-baseline.md)): `power()` always returns a Decimal, so `2.power(3)` is the Decimal `8` and `2.power(-1)` is `0.5`. The alternative, an Integer for non-negative whole exponents, would make the type of the result depend on the value of the exponent. `round()` follows the same 3.0.0 line: `1.round()` is the Decimal `1`.
+
+### `log()` of zero or a negative number is an error, `ln()` is empty
+
+- **Spec:** [3.0.0 `log`](https://hl7.org/fhirpath/STU3/#logbase--decimal--decimal) says that an input or a base of 0 or less ends the evaluation with an error. N1 has no such sentence, and neither version says anything about `ln()` of such a number or about base 1.
+- **Tests:** `testLog1`, `testLog2`, `testLogEmpty`–`testLogEmpty3` (R5), `testLn1`, `testLn2`.
+- **Decision:** `log()` raises `eval/invalid-argument` for an input or a base of zero or less, as 3.0.0 asks and as [Results that cannot be represented are empty](#results-that-cannot-be-represented-are-empty) announces. An empty input or an empty base is checked first, so `(-1).log({})` is empty. `ln()` has no such sentence and falls under "cannot be represented", so `0.ln()` and `(-1).ln()` are empty. Base 1 has no logarithm either, and gives empty, like division by zero.
+
+### Integer results outside the Integer range are empty
+
+- **Spec:** [3.0.0 §6.6](https://hl7.org/fhirpath/STU3/#math-1) makes overflow and underflow empty. `ceiling()`, `floor()` and `truncate()` return an Integer, and `abs()` returns the type of its input, but a Decimal can hold a whole number beyond the [32-bit Integer range](https://hl7.org/fhirpath/N1/#integer).
+- **Tests:** none in the suite.
+- **Decision:** the result is empty when it is not an Integer: `3000000000.5.floor()` and `(-2147483648).abs()` are empty, like the Integer overflow of `+` and `*`. The input of `ceiling()`, `floor()` and `truncate()` may be an Integer, which is returned as it is.
+
+### `round()` with an empty or a negative precision
+
+- **Spec:** [N1 `round`](https://hl7.org/fhirpath/N1/#roundprecision-integer-decimal) requires a precision of 0 or more, "or the evaluation will end and signal an error". It does not say what an empty precision (`1.5.round({})`) gives; `log()` and `power()` say that an empty argument gives an empty result.
+- **Tests:** `testRound1`, `testRound2`, `testRoundEmpty` (R5).
+- **Decision:** a precision that is left out is 0; an empty precision gives an empty result, as for `log()` and `power()`. A negative precision raises `eval/invalid-argument` even when the input is empty, because the argument is wrong whatever the input. A precision that is not an Integer (`2.5.round(1.5)`) raises `eval/type-mismatch`.
+
+### Only `abs()` takes a Quantity
+
+- **Spec:** N1 lists `Quantity` only for `abs()`. [3.0.0](https://hl7.org/fhirpath/STU3/#ceiling--integer--quantity) also lets `ceiling()`, `floor()`, `round()` and `truncate()` take a Quantity and return a Quantity with the same unit.
+- **Tests:** `testAbs3`.
+- **Decision:** T0016 scopes the Quantity support to `abs()`, as N1 does. The other functions raise `eval/type-mismatch` for a Quantity, like any other item that is not a number. The 3.0.0 behaviour is a follow-up.
+
 ## Lexer
 
 ### Unknown escape sequences are syntax errors
