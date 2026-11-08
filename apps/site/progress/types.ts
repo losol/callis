@@ -40,9 +40,20 @@ export interface PlanItem {
   name: string;
 }
 
+/**
+ * A paragraph or a list item of a task's goal, as plain text: links are reduced
+ * to their text, and code spans keep their backticks.
+ */
+export interface GoalBlock {
+  kind: 'paragraph' | 'item';
+  text: string;
+}
+
 export interface PlanTask {
   id: string;
   title: string;
+  /** Path of the task file relative to `docs/`, for example `tasks/T0001-lexer.md`. */
+  file: string;
   phase: number;
   deps: string[];
   wave: number;
@@ -51,6 +62,8 @@ export interface PlanTask {
   doneAt: number | null;
   /** The functions and operators the task adds, read from its task file. */
   items: PlanItem[];
+  /** The `## Goal` section of the task file; empty when it has none. */
+  goal: GoalBlock[];
 }
 
 export interface ProgressData {

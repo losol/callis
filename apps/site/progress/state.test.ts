@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  dependentsOf,
   isDoneAt,
   itemsDoneAt,
   itemsTotal,
@@ -8,6 +9,7 @@ import {
   phase1Of,
   statusAt,
   tasksDoneAt,
+  waitingForAt,
 } from './state.ts';
 import type { CommitPoint, PlanTask } from './types.ts';
 
@@ -15,6 +17,7 @@ function task(id: string, deps: string[], doneAt: number | null, itemCount = 0):
   return {
     id,
     title: id,
+    file: `tasks/${id}.md`,
     phase: 1,
     deps,
     wave: 1,
@@ -24,6 +27,7 @@ function task(id: string, deps: string[], doneAt: number | null, itemCount = 0):
       kind: 'function' as const,
       name: `${id}-${index}`,
     })),
+    goal: [],
   };
 }
 
@@ -59,6 +63,20 @@ describe('statusAt', () => {
 
   it('blocks a task whose dependency is not in the plan', () => {
     expect(statusAt(plan, task('T9', ['T404'], null), 5)).toBe('blocked');
+  });
+});
+
+describe('relations', () => {
+  it('lists the dependencies that are not merged yet', () => {
+    expect(waitingForAt(plan, plan[3] as PlanTask, 0)).toEqual(['T1', 'T3']);
+    expect(waitingForAt(plan, plan[3] as PlanTask, 1)).toEqual(['T3']);
+    expect(waitingForAt(plan, plan[1] as PlanTask, 1)).toEqual([]);
+    expect(waitingForAt(plan, task('T9', ['T404'], null), 5)).toEqual(['T404']);
+  });
+
+  it('lists the tasks that depend on a task', () => {
+    expect(dependentsOf(plan, plan[0] as PlanTask).map((item) => item.id)).toEqual(['T2', 'T4']);
+    expect(dependentsOf(plan, plan[3] as PlanTask)).toEqual([]);
   });
 });
 

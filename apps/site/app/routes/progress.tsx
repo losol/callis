@@ -13,7 +13,7 @@ import { Board } from '../components/progress/board.tsx';
 import { LineChart } from '../components/progress/charts.tsx';
 import { CommitLog } from '../components/progress/commit-log.tsx';
 import { Functions } from '../components/progress/functions.tsx';
-import { getProgress } from '../progress.server.ts';
+import { getProgress, getTaskPages } from '../progress.server.ts';
 import progressStylesheet from './progress.css?url';
 
 export function links() {
@@ -25,7 +25,8 @@ export function meta() {
 }
 
 export function loader() {
-  return getProgress();
+  const progress = getProgress();
+  return { ...progress, taskPages: getTaskPages(progress.plan) };
 }
 
 const number = new Intl.NumberFormat('en');
@@ -97,10 +98,16 @@ export default function ProgressPage() {
     setPlaying(true);
   };
 
-  // The arrow keys step and the space bar plays, unless the focus is on something that uses the key.
+  // The arrow keys step and the space bar plays, unless the focus is on something that uses the
+  // key, or a dialog (the task details) is open and has the keyboard.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) {
+      if (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        document.querySelector('dialog[open]')
+      ) {
         return;
       }
       if (event.key === 'ArrowLeft' && !usesArrowKeys(event.target)) {
@@ -323,9 +330,12 @@ export default function ProgressPage() {
         </div>
         <p className="pg-sub">
           Columns are the waves of the roadmap. A task is unblocked when all its dependencies are
-          merged; hover a task to see them.
+          merged. Hover over or focus a task to highlight it, the tasks it depends on{' '}
+          <span className="pg-swatch dep" aria-hidden="true" /> and the tasks that depend on it{' '}
+          <span className="pg-swatch dependent" aria-hidden="true" />. Click it, or press Enter, for
+          its details.
         </p>
-        <Board plan={plan} commits={commits} active={active} />
+        <Board plan={plan} commits={commits} active={active} taskPages={data.taskPages} />
       </section>
 
       <section className="pg-card">

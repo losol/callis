@@ -15,11 +15,24 @@ export function statusAt(plan: readonly PlanTask[], task: PlanTask, index: numbe
   if (isDoneAt(task, index)) {
     return 'done';
   }
-  const unblocked = task.deps.every((id) => {
+  return waitingForAt(plan, task, index).length === 0 ? 'ready' : 'blocked';
+}
+
+/**
+ * The IDs of the task's dependencies that are not merged at the commit with
+ * this index, in roadmap order. A dependency that is not in the plan counts as
+ * not merged.
+ */
+export function waitingForAt(plan: readonly PlanTask[], task: PlanTask, index: number): string[] {
+  return task.deps.filter((id) => {
     const dep = plan.find((candidate) => candidate.id === id);
-    return dep !== undefined && isDoneAt(dep, index);
+    return dep === undefined || !isDoneAt(dep, index);
   });
-  return unblocked ? 'ready' : 'blocked';
+}
+
+/** The tasks that depend directly on this one, in plan order. */
+export function dependentsOf(plan: readonly PlanTask[], task: PlanTask): PlanTask[] {
+  return plan.filter((candidate) => candidate.deps.includes(task.id));
 }
 
 export function tasksDoneAt(plan: readonly PlanTask[], index: number): number {
