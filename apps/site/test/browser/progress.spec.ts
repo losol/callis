@@ -38,6 +38,17 @@ async function settled(drawer: Locator): Promise<void> {
   );
 }
 
+/** Checks that a control is visible and that no other element covers its centre. */
+async function expectUncovered(control: Locator): Promise<void> {
+  await expect(control).toBeVisible();
+  const uncovered = await control.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    return hit !== null && element.contains(hit);
+  });
+  expect(uncovered).toBe(true);
+}
+
 /**
  * Checks that the drawer starts below the sticky site header and reaches the bottom of the
  * window, and that the header's links and theme toggle stay visible and uncovered.
@@ -56,14 +67,17 @@ async function expectBelowHeader(page: Page, drawer: Locator): Promise<void> {
     header.getByRole('link', { name: 'GitHub', exact: true }),
     header.getByRole('button', { name: 'Switch theme' }),
   ]) {
-    await expect(control).toBeVisible();
-    const uncovered = await control.evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
-      return hit !== null && element.contains(hit);
-    });
-    expect(uncovered).toBe(true);
+    await expectUncovered(control);
   }
+}
+
+/** Checks that the page does not scroll sideways: nothing on it is wider than the viewport. */
+async function expectNoSidewaysScroll(page: Page): Promise<void> {
+  const [scrollWidth, clientWidth] = await page.evaluate(() => [
+    document.documentElement.scrollWidth,
+    document.documentElement.clientWidth,
+  ]);
+  expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
 }
 
 // T0009 depends on T0003–T0006, and T0010 depends on T0009 (docs/roadmap.md).
@@ -226,11 +240,11 @@ for (const theme of ['dark', 'light'] as const) {
     await expect(drawer).toBeVisible();
     await settled(drawer);
     // The drawer spans the width of the viewport below the header, and its content wraps inside
-    // it. The page behind it is not checked: a commit subject with a long word can still widen it
-    // (#154).
+    // it. The page behind it fits the viewport too, whatever the selected commit's subject is.
     const box = await drawer.boundingBox();
     expect(box?.x).toBe(0);
     expect(box?.width).toBe(390);
+    await expectNoSidewaysScroll(page);
     await expectBelowHeader(page, drawer);
     const body = drawer.locator('.pg-drawer-body');
     const [scrollWidth, clientWidth] = await body.evaluate((element) => [
@@ -284,4 +298,81 @@ for (const theme of ['dark', 'light'] as const) {
       'none',
     );
   });
+}
+
+const PLAYER_VIEWPORTS = [
+  { width: 390, height: 844 },
+  { width: 1280, height: 800 },
+] as const;
+
+/** Opens the progress page in a viewport and a theme. */
+async function openProgress(
+  page: Page,
+  viewport: (typeof PLAYER_VIEWPORTS)[number],
+  theme: 'dark' | 'light',
+): Promise<void> {
+  await page.addInitScript((value) => localStorage.setItem('callis-theme', value), theme);
+  await page.setViewportSize(viewport);
+  await openBoard(page);
+  await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+}
+
+// The subjects in the history are short, except the merge commit that a pull request build
+// checks out: `Merge <40-character SHA> into <40-character SHA>`. It is the last commit, which the
+// player selects first. This subject has that shape and a long path as well, so it is wider than
+// the viewport at both sizes (#154).
+const LONG_SUBJECT = `Merge ${'a1b2c3d4e5'.repeat(4)} into ${'f6a7b8c9d0'.repeat(4)} ${'/very/long/path'.repeat(20)}`;
+
+for (const viewport of PLAYER_VIEWPORTS) {
+  for (const theme of ['dark', 'light'] as const) {
+    test(`wraps a long word in the commit subject at ${viewport.width}px in the ${theme} theme`, async ({
+      page,
+    }) => {
+      await openProgress(page, viewport, theme);
+      // Add the long word after the hydration: React renders the text nodes it owns and leaves
+      // this one alone.
+      const subject = page.locator('.pg-subject');
+      await subject.evaluate((element, text) => element.append(` ${text}`), LONG_SUBJECT);
+      await expect(subject).toContainText('/very/long/path');
+
+      // The page does not scroll sideways, and the whole subject stays inside the player.
+      await expectNoSidewaysScroll(page);
+      const playerBox = await page.locator('.pg-player').boundingBox();
+      const subjectBox = await subject.boundingBox();
+      expect((subjectBox?.x ?? 0) + (subjectBox?.width ?? 0)).toBeLessThanOrEqual(
+        (playerBox?.x ?? 0) + (playerBox?.width ?? 0),
+      );
+      const [scrollWidth, clientWidth] = await subject.evaluate((element) => [
+        element.scrollWidth,
+        element.clientWidth,
+      ]);
+      expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+    });
+
+    test(`keeps the commit player below the site header when scrolled at ${viewport.width}px in the ${theme} theme`, async ({
+      page,
+    }) => {
+      await openProgress(page, viewport, theme);
+      // Scroll until the player is stuck. The header wraps on narrow screens, so its height
+      // differs between the viewports: the player follows it (#157).
+      await page.evaluate(() => {
+        const top = document.querySelector('.pg-player')?.getBoundingClientRect().top ?? 0;
+        window.scrollTo(0, top + window.scrollY + 300);
+      });
+      expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+
+      const headerBox = await page.locator('.site-header').boundingBox();
+      const playerBox = await page.locator('.pg-player').boundingBox();
+      expect(playerBox?.y).toBeCloseTo((headerBox?.y ?? 0) + (headerBox?.height ?? 0), 0);
+      // The buttons and the slider stay visible and usable.
+      const controls = await page
+        .locator('.pg-player')
+        .locator('button, input[type="range"]')
+        .all();
+      expect(controls).toHaveLength(5);
+      for (const control of controls) {
+        await expectUncovered(control);
+      }
+    });
+  }
 }

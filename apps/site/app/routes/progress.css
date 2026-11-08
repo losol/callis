@@ -68,10 +68,14 @@
   font-size: 0.85rem;
 }
 
-/* The player */
+/*
+ * The player sticks below the site's sticky header. The header wraps on narrow
+ * screens, so its live height is used; the header publishes it (site-header.tsx).
+ * The fallback is the header's height on wide screens, for before it has run.
+ */
 .pg-player {
   position: sticky;
-  top: 56px;
+  top: var(--site-header-height, 56px);
   z-index: 5;
   margin: 1.5rem 0 1rem;
   padding: 0.75rem 1rem;
@@ -131,6 +135,8 @@
 
 .pg-subject {
   font-weight: 600;
+  /* A long word in a subject (a SHA, a URL, a path) wraps instead of widening the page. */
+  overflow-wrap: anywhere;
 }
 
 .pg-meta {
