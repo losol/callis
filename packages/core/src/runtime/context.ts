@@ -7,6 +7,7 @@
  * parameters, never stored globally, so a compiled expression is reentrant and can run in several
  * overlapping async evaluations at once.
  */
+import type { SourceSpan } from '../errors/source-span.ts';
 import type { ModelProvider } from '../model/model-provider.ts';
 import type { NowSnapshot } from '../values/datetime/now.ts';
 import type { UnitSystem } from '../values/quantity/unit-system.ts';
@@ -14,12 +15,20 @@ import type { Collection, Item } from './collection.ts';
 import type { MaybePromise } from './maybe-promise.ts';
 
 /**
+ * Where `trace()` sends its output: the name, the traced items and the span of the call
+ * ([N1 §5.9.1](https://hl7.org/fhirpath/N1/#tracename-string-projection-expression-collection)).
+ * The API builds it from the host's `trace` hook. It returns a promise only in async mode, when
+ * the hook did; in sync mode a hook that returns a thenable raises `eval/async-in-sync`.
+ */
+export type TraceSink = (name: string, items: Collection, span: SourceSpan) => MaybePromise<void>;
+
+/**
  * Everything one evaluation needs. Created per evaluation by the API and read-only afterwards.
  *
  * Its `model`, `units` and `timezoneOffset` fields match the context the equality and ordering
  * kernels take (T0009), and `model` and `lenientChoiceSuffix` the context navigation takes, so an
- * `EvalContext` can be passed to them as it is. Later tasks add hooks, limits and a cancellation
- * signal (T0012, T0021).
+ * `EvalContext` can be passed to them as it is. Later tasks add the other hooks, limits and a
+ * cancellation signal (T0021, T0042).
  */
 export interface EvalContext {
   /** Whether this is an `evaluateAsync()` evaluation, where hooks and functions may be async. */
@@ -51,6 +60,8 @@ export interface EvalContext {
    * same value every time within one evaluation.
    */
   now(): NowSnapshot;
+  /** Receives the output of `trace()`; undefined when the host has no `trace` hook. */
+  readonly trace: TraceSink | undefined;
 }
 
 /**

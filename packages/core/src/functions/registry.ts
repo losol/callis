@@ -8,7 +8,9 @@ import { EXISTENCE_FUNCTIONS } from './existence.ts';
 import { FILTERING_FUNCTIONS } from './filtering.ts';
 import { LOGIC_FUNCTIONS } from './logic.ts';
 import { SUBSETTING_FUNCTIONS } from './subsetting.ts';
+import { TREE_FUNCTIONS } from './tree.ts';
 import { TYPE_FUNCTIONS } from './types.ts';
+import { UTILITY_FUNCTIONS } from './utility.ts';
 
 /**
  * Looks up functions by name. Immutable: {@link FunctionRegistry.extend} returns a new registry,
@@ -50,7 +52,9 @@ const STANDARD_FUNCTIONS: readonly FunctionDefinition[] = Object.freeze([
   ...FILTERING_FUNCTIONS,
   ...LOGIC_FUNCTIONS,
   ...SUBSETTING_FUNCTIONS,
+  ...TREE_FUNCTIONS,
   ...TYPE_FUNCTIONS,
+  ...UTILITY_FUNCTIONS,
 ]);
 
 /** The FHIR functions (T0020). */
