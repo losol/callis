@@ -8,6 +8,7 @@ import { EXISTENCE_FUNCTIONS } from './existence.ts';
 import { FILTERING_FUNCTIONS } from './filtering.ts';
 import { LOGIC_FUNCTIONS } from './logic.ts';
 import { MATH_FUNCTIONS } from './math.ts';
+import { STRING_FUNCTIONS } from './string.ts';
 import { SUBSETTING_FUNCTIONS } from './subsetting.ts';
 import { TYPE_FUNCTIONS } from './types.ts';
 
@@ -51,6 +52,7 @@ const STANDARD_FUNCTIONS: readonly FunctionDefinition[] = Object.freeze([
   ...FILTERING_FUNCTIONS,
   ...LOGIC_FUNCTIONS,
   ...MATH_FUNCTIONS,
+  ...STRING_FUNCTIONS,
   ...SUBSETTING_FUNCTIONS,
   ...TYPE_FUNCTIONS,
 ]);
