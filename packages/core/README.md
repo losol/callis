@@ -2,7 +2,7 @@
 
 A [FHIRPath](https://hl7.org/fhirpath/N1/) engine for TypeScript.
 
-> **Work in progress.** The initial API supports synchronous model-less evaluation. Full phase-1 conformance, a public model option and async evaluation remain future work. The examples follow the main branch, which can be ahead of the latest release; 0.x changes may extend or change the API.
+> **Before 1.0.** 0.x releases are published on npm, and the API can still change before 1.0. Public API is designed with later work in mind to avoid breaking changes, and a breaking change states its reason and migration in the [changelog](https://github.com/losol/callis/blob/main/packages/core/CHANGELOG.md) ([API changes](https://github.com/losol/callis/blob/main/CONTRIBUTING.md#api-changes)). The API supports synchronous model-less evaluation; full phase-1 conformance, a public model option and async evaluation are later work. The examples follow the main branch, which can be ahead of the latest release.
 
 ## Goals
 
