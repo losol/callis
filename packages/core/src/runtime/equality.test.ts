@@ -477,6 +477,24 @@ describe('equality and equivalence', () => {
       expectEquality(contained, resource('Patient'), false, false, typed);
     });
 
+    it('is false for typed nodes of different model types that share one JSON object', () => {
+      const shared = { id: 'x' };
+      const [patient] = toInputCollection(
+        { resourceType: 'Patient', contact: [{ name: shared, period: shared }] },
+        'p',
+        stubModel,
+      );
+      const navigation = { model: stubModel, lenientChoiceSuffix: false };
+      const contact = navigateMember(patient === undefined ? [] : [patient], 'contact', navigation);
+      const [name] = navigateMember(contact, 'name', navigation);
+      const [period] = navigateMember(contact, 'period', navigation);
+      if (name === undefined || period === undefined) throw new Error('no nodes');
+      expect((name as ModelNode).value).toBe((period as ModelNode).value);
+      expectEquality(name, period, false, false, typed);
+      // The same object under the same type is still equal by identity.
+      expectEquality(name, name, true, true, typed);
+    });
+
     it('compares an untyped node by its JSON properties even with a model', () => {
       const [a] = toInputCollection({ resourceType: 'Foo', x: '2016-03' }, 'f', stubModel);
       const [b] = toInputCollection({ resourceType: 'Foo', x: '2016-03-28' }, 'f', stubModel);

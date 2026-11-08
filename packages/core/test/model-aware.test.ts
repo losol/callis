@@ -391,6 +391,15 @@ describe('variables and compiled expressions', () => {
     expect(run(patient, '%a in %b', { variables })).toEqual([false]);
   });
 
+  it('never equates differently typed elements that share one JSON object', () => {
+    const shared = { id: 'x' };
+    const input = { resourceType: 'Patient', contact: [{ name: shared, period: shared }] };
+    expect(run(input, 'Patient.contact.name = Patient.contact.period')).toEqual([false]);
+    expect(run(input, 'Patient.contact.name ~ Patient.contact.period')).toEqual([false]);
+    expect(run(input, '(Patient.contact.name | Patient.contact.period).count()')).toEqual([2]);
+    expect(run(input, 'Patient.contact.name = Patient.contact.name')).toEqual([true]);
+  });
+
   it('compares typed complex values by their elements', () => {
     const earlier = { resourceType: 'Observation', effectivePeriod: { start: '2016-03' } };
     const variables = { a: observation, b: earlier, c: { ...observation } };

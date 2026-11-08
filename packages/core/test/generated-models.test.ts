@@ -289,6 +289,16 @@ describe.each(PROVIDERS)(
         expect(run(resources, '($this[0] | $this[1]).count()')).toEqual([2]);
         expect(run(resources, '($this[0] | $this[2]).count()')).toEqual([1]);
       });
+
+      it('is false across element types even when the elements share one JSON object', () => {
+        const shared = { text: 'x' };
+        const input = { resourceType: 'Patient', name: [shared, shared], address: [shared] };
+        expect(run(input, 'Patient.name[0] = Patient.address')).toEqual([false]);
+        expect(run(input, 'Patient.name[0] ~ Patient.address')).toEqual([false]);
+        expect(run(input, '(Patient.name[0] | Patient.address).count()')).toEqual([2]);
+        expect(run(input, 'Patient.name[0] = Patient.name[1]')).toEqual([true]);
+        expect(run(input, 'Patient.name.count()')).toEqual([2]);
+      });
     });
 
     // https://hl7.org/fhir/6.0.0-snapshot1/devicealert.html: a resource that R4 and R5 do not have.
