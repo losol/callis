@@ -158,9 +158,9 @@ jobs:
         run: pnpm site:test
       - name: Build the site
         run: pnpm site:build
-      - name: Install browser for playground checks
+      - name: Install browser for site checks
         run: pnpm --filter @callis/site exec playwright install --with-deps chromium
-      - name: Test the playground in Chromium
+      - name: Test the playground and progress page in Chromium
         run: pnpm --filter @callis/site run test:browser
       - name: Test all five packed packages in Node and Vite
         run: pnpm check:release

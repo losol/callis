@@ -16,7 +16,8 @@ const roadmap = `# Roadmap
 `;
 
 const files: Record<string, string> = {
-  'tasks/T0011-fn-existence.md': '## Goal\n\n`empty`, `exists([criteria])`.\n',
+  'tasks/T0011-fn-existence.md':
+    '## Goal\n\n[N1 §5.1](https://hl7.org/fhirpath/N1/#existence): `empty`, `exists([criteria])`.\n',
 };
 
 describe('buildPlan', () => {
@@ -40,5 +41,13 @@ describe('buildPlan', () => {
   it('reads the functions from the task file', () => {
     expect(plan[2]?.items.map((item) => item.name)).toEqual(['empty', 'exists']);
     expect(plan[1]?.items).toEqual([]);
+  });
+
+  it('keeps the path of the task file and reads its goal', () => {
+    expect(plan[2]?.file).toBe('tasks/T0011-fn-existence.md');
+    expect(plan[2]?.goal).toEqual([
+      { kind: 'paragraph', text: 'N1 §5.1: `empty`, `exists([criteria])`.' },
+    ]);
+    expect(plan[0]?.goal).toEqual([]);
   });
 });

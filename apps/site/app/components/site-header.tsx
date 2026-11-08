@@ -52,6 +52,25 @@ export function SiteHeader() {
     setTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark');
   }, []);
 
+  // Publish the header's height as `--site-header-height` on <html>, for panels
+  // that open below the sticky header, such as the task drawer on the progress
+  // page. The header wraps on narrow screens, so the height is watched.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the Navbar remounts on navigation (its key is the pathname), and the new element must be observed
+  useEffect(() => {
+    const header = document.querySelector<HTMLElement>('.site-header');
+    if (header === null) {
+      return;
+    }
+    const root = document.documentElement;
+    const publish = () => {
+      root.style.setProperty('--site-header-height', `${header.getBoundingClientRect().height}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [pathname]);
+
   const onThemeChange = (next: Theme) => {
     document.documentElement.setAttribute('data-theme', next);
     try {
@@ -63,7 +82,7 @@ export function SiteHeader() {
   };
 
   return (
-    <Navbar key={pathname} sticky elevated fluid>
+    <Navbar key={pathname} className="site-header" sticky elevated fluid>
       <Navbar.Brand>
         <Link to="/" className="site-brand">
           <span className="site-brand-mark" aria-hidden="true">
