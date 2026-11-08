@@ -320,8 +320,11 @@ const TEST_CONFIG = ['**/vitest.config.ts', '**/vitest.*.config.ts', '**/playwri
 
 /** A test case or an assertion in a line of test code; `regex.test(…)` is neither. */
 const TEST_CASE = /(?<![\w$.])(?:it|test|bench|expect|expectTypeOf|assert)(?:\.\w+)*\(/g;
-/** A test that is skipped, focused (which skips the others) or only planned. */
-const TEST_SKIP = /(?<![\w$.])(?:it|test|describe|bench)\.(?:skip|only|todo|fails|skipIf|runIf)\b/;
+/**
+ * A statement that skips, focuses (which skips the others) or only plans a test. It starts the
+ * line, so a test about this rule that quotes `it.skip(` in a string does not count.
+ */
+const TEST_SKIP = /^\s*(?:it|test|describe|bench)\.(?:skip|only|todo|fails|skipIf|runIf)\b/;
 
 /** The added and removed lines of a patch, without their `+` or `-`. */
 export function patchLines(patch: string): { added: string[]; removed: string[] } {

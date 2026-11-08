@@ -276,14 +276,14 @@ describe('risk', () => {
   describe('tests', () => {
     const path = 'packages/core/src/runtime/equality.test.ts';
 
-    it('accept added cases and moved assertions', () => {
+    it('accept added cases, moved assertions, regex tests and quoted skips', () => {
       const added = '@@ -1 +1,3 @@\n+  it("a", () => {\n+    expect(a).toBe(1);\n+  });';
       const moved =
         '@@ -1,2 +1,2 @@\n-  expect(a).toBe(1);\n-  expect(b).toBe(2);\n+  expect(b).toBe(2);\n+  expect(a).toBe(1);';
       const regex = '@@ -1 +1 @@\n-    if (PATTERN.test(value)) {\n+    if (OTHER.test(value)) {';
-      expect(
-        reasons([modified(path, added), modified(path, moved), modified(path, regex)]),
-      ).toEqual([]);
+      const quoted = `@@ -1 +1 @@\n+  const patch = '+  it.skip("a", () => {';`;
+      const patches = [added, moved, regex, quoted];
+      expect(reasons(patches.map((patch) => modified(path, patch)))).toEqual([]);
     });
 
     it.each([
