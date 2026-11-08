@@ -607,11 +607,15 @@
   background: color-mix(in oklch, var(--primary) 20%, transparent);
 }
 
-/* The task details: a drawer on the right edge, over the board and the site's navbar (z-index 50) */
+/*
+ * The task details: a drawer on the right edge, over the board and below the
+ * site's sticky header, which stays usable. The header publishes its height
+ * (site-header.tsx); the drawer sits under the header's z-index (50).
+ */
 .pg-drawer {
   position: fixed;
-  z-index: 60;
-  top: 0;
+  z-index: 40;
+  top: var(--site-header-height, 0px);
   right: 0;
   bottom: 0;
   box-sizing: border-box;

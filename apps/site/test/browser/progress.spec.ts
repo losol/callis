@@ -38,6 +38,34 @@ async function settled(drawer: Locator): Promise<void> {
   );
 }
 
+/**
+ * Checks that the drawer starts below the sticky site header and reaches the bottom of the
+ * window, and that the header's links and theme toggle stay visible and uncovered.
+ */
+async function expectBelowHeader(page: Page, drawer: Locator): Promise<void> {
+  const header = page.locator('.site-header');
+  const headerBox = await header.boundingBox();
+  const box = await drawer.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box?.y).toBeCloseTo((headerBox?.y ?? 0) + (headerBox?.height ?? 0), 0);
+  expect((box?.y ?? 0) + (box?.height ?? 0)).toBeCloseTo(viewport?.height ?? 0, 0);
+  for (const control of [
+    header.getByRole('link', { name: 'Docs', exact: true }),
+    header.getByRole('link', { name: 'Playground', exact: true }),
+    header.getByRole('link', { name: 'Progress', exact: true }),
+    header.getByRole('link', { name: 'GitHub', exact: true }),
+    header.getByRole('button', { name: 'Switch theme' }),
+  ]) {
+    await expect(control).toBeVisible();
+    const uncovered = await control.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      return hit !== null && element.contains(hit);
+    });
+    expect(uncovered).toBe(true);
+  }
+}
+
 // T0009 depends on T0003–T0006, and T0010 depends on T0009 (docs/roadmap.md).
 test('highlights the hovered or focused task apart from its dependencies and dependents', async ({
   page,
@@ -131,11 +159,13 @@ for (const theme of ['dark', 'light'] as const) {
     const drawer = page.getByRole('dialog', { name: /^T0009 / });
     await expect(drawer).toBeVisible();
     await settled(drawer);
-    // The drawer covers the viewport and its content wraps inside it. The page behind it is not
-    // checked: a commit subject with a long word can still widen it (#154).
+    // The drawer spans the width of the viewport below the header, and its content wraps inside
+    // it. The page behind it is not checked: a commit subject with a long word can still widen it
+    // (#154).
     const box = await drawer.boundingBox();
     expect(box?.x).toBe(0);
     expect(box?.width).toBe(390);
+    await expectBelowHeader(page, drawer);
     const body = drawer.locator('.pg-drawer-body');
     const [scrollWidth, clientWidth] = await body.evaluate((element) => [
       element.scrollWidth,
@@ -166,6 +196,13 @@ for (const theme of ['dark', 'light'] as const) {
     expect((box?.x ?? 0) + (box?.width ?? 0)).toBeCloseTo(1280, 0);
     expect(box?.width).toBeGreaterThanOrEqual(380);
     expect(box?.width).toBeLessThanOrEqual(440);
+    await expectBelowHeader(page, drawer);
+
+    // The header stays usable while the drawer is open.
+    const other = theme === 'dark' ? 'light' : 'dark';
+    await page.locator('.site-header').getByRole('button', { name: 'Switch theme' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', other);
+    await expect(drawer).toBeVisible();
 
     // Scrolled to its end, the board shows its last wave left of the drawer.
     const lastColumnRight = await page.locator('.pg-board-wrap').evaluate((wrap) => {
