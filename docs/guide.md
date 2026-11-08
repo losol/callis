@@ -76,7 +76,7 @@ This gives `['1.50']`; without `decimalOutput: 'string'`, `[1.5]`. A result that
 
 ## Current support and deferred API
 
-Model-less paths, literals, indexing, Boolean logic, unary polarity and type operations are available. Built-ins currently include `not`, `is`, `as` and `ofType`. Arithmetic, comparisons, equality/equivalence, membership, union and string concatenation operators from T0010 are implemented. Other standard and FHIR functions are still incremental work; an unavailable function such as `select()` raises `semantic/unknown-function`, rather than pretending to evaluate it.
+Model-less paths, literals, indexing, Boolean logic, unary polarity and type operations are available. The built-in functions are `not`, `is`, `as`, `where`, `exists`, `count`, `first` and `single`. `ofType()` is not implemented yet ([T0042](tasks/T0042-fn-projection-completion.md)). Arithmetic, comparisons, equality/equivalence, membership, union and string concatenation operators from T0010 are implemented. Other standard and FHIR functions are still incremental work; an unavailable function such as `select()` raises `semantic/unknown-function`, rather than pretending to evaluate it.
 
 Filtering is now available through `where(criteria)`, using the existing synchronous API:
 
@@ -103,23 +103,23 @@ export const onlyName: unknown[] = compile('name.single()').evaluate(patient);
 
 These zero-argument functions use the existing synchronous model-less API. The remaining subsetting and combining functions, including `last()`, remain deferred.
 
-The public surface has no parser, AST input/property, static analyzer, typed output mode, async evaluation, hooks, model option, custom function registry, strict/lenient options or cache. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages. The engine evaluates with a model internally since [T0018](tasks/T0018-model-aware-evaluation.md): choice elements, FHIR primitives with their `_name` extensions, FHIR values as System values and the root identifier as a type with inheritance, which the conformance runner measures with the R4 and R5 providers. The public `model` and `lenient` options arrive with the expanded API (T0038); a model provider export does not imply them yet.
+The public surface has no parser, AST input/property, static analyzer, typed output mode, async evaluation, hooks, model option, custom function registry, strict/lenient options or cache. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages. The engine evaluates with a model internally since [T0018](tasks/T0018-model-aware-evaluation.md): choice elements, FHIR primitives with their `_name` extensions, FHIR values as System values and the root identifier as a type with inheritance, which the conformance runner measures with the R4 and R5 providers; the engine's tests also run it against the R6 provider. The public `model` and `lenient` options arrive with the expanded API (T0038); a model provider export does not imply them yet.
 
 The examples are executed by the public documentation tests. Handwritten TSDoc and this small guide describe the initial API; a generated API reference is deferred with the expanded API.
 
 ## First 0.1 support matrix
 
-This describes the planned 0.1.0 subset at engine revision [9b78e6e](https://github.com/losol/callis/tree/9b78e6ef0b65bf535af335677afa65dffc0f0f1d), including the playground layout fix. It does not announce npm availability.
+This describes the 0.1.0 subset at engine revision [9b78e6e](https://github.com/losol/callis/tree/9b78e6ef0b65bf535af335677afa65dffc0f0f1d), including the playground layout fix. The five packages were published from `b92db53` on 2026-11-06 UTC with this engine unchanged ([RELEASING](../RELEASING.md#release-tracking)); later releases add to it as described above.
 
 | Surface | Implemented / limit |
 | --- | --- |
 | Runtimes | CI tests Node 22, 24 and 26; packed ESM/TypeScript plus production Vite/Chromium smoke on Node 24. Deno, Bun, edge workers, Firefox and Safari unverified. |
 | Data | Model-less JSON paths, root resourceType matching, literals, indexing, variables and system type operations; no model-driven choice expansion or primitive extensions. |
 | Operators | `+ - * / div mod`, unary `+ -`, `&`, `= != ~ !~`, `< <= > >=`, `in contains`, `&#124;`, `and or xor implies`, `is as`. Applicability depends on operand types and FHIRPath empty-collection rules. |
-| Functions | `not()`, `is()`, `as()`, `ofType()` only. `where`, `select`, `exists`, `resolve` and other standard/FHIR groups are not implemented. |
+| Functions | `not()`, `is()` and `as()` only. `ofType()`, listed here before, was never registered ([#130](https://github.com/losol/callis/issues/130)). `where`, `select`, `exists`, `resolve` and other standard/FHIR groups are not implemented. |
 | Output | Synchronous plain arrays; exact evaluator Decimal/Quantity strings with `decimalOutput: 'string'`; parsed input numbers retain JavaScript precision limits unless the input comes from `parseJson()`, added after 0.1. |
 | Errors | Public FhirPathError subclasses, codes, optional UTF-16 source spans, semantic diagnostics and formatting; caller handles invalid JSON separately. |
-| Companions | UCUM UnitSystem is usable through `units`; R4/R5 export immutable ModelProvider data. R6 is selected for the first release and is being integrated. None provides a public engine `model` option. |
+| Companions | UCUM UnitSystem is usable through `units`; R4, R5 and R6 export immutable ModelProvider data, R6 from the pinned `6.0.0-snapshot1` draft. None provides a public engine `model` option. |
 | Deferred | Async, hooks, custom functions, parser/AST, analysis, typed output, model-aware evaluation and remaining function groups; tracked by implementation tasks and T0038. |
 
 The [playground](https://callis.losol.no/playground/) runs editable JSON and expressions locally in the browser, with exact evaluator Decimal string rendering and synthetic presets. It does not automatically transmit input JSON. Its results use the same public API; JSON.parse precision limits still apply.
@@ -128,8 +128,8 @@ The committed [R4](conformance/r4.md) and [R5](conformance/r5.md) reports use th
 
 The handwritten API guide and TSDoc are the reference decision for this small release. A generated reference is deferred to T0038. README and guide TypeScript snippets share `examples/public-api.ts`, executed by the documentation tests; the site serves this guide from the same source.
 
-## Planned R6 model metadata
+## R6 model metadata
 
-[T0039](tasks/T0039-fhir-r6-model.md) and [T0040](tasks/T0040-fhir-r6-validation.md) implement and verify a real R6 provider from the pinned HL7 `6.0.0-snapshot1` September 2026 draft source. This is planned model metadata, not final R6 stability, a supported public model evaluation option, FHIR validation or an R6 conformance result. The current public evaluator remains model-less; the engine's model-aware evaluation (T0018) reaches the public API with T0038. The engine's own tests run model-aware evaluation against the R6 provider alongside R4 and R5, which is engine-tested provider support for the draft snapshot, not an R6 conformance result: there is no official R6 suite, and the existing R4/R5 conformance reports measure their named suites only.
+Callis supports FHIR R4, R5 and R6, with R6 as best effort. [T0039](tasks/T0039-fhir-r6-model.md) and [T0040](tasks/T0040-fhir-r6-validation.md) delivered a real R6 provider, `@callis/fhir-r6`, from the pinned HL7 `6.0.0-snapshot1` September 2026 draft source, and it shipped in the [five-package first release](../RELEASING.md#five-package-first-release). This is draft model metadata, not final R6 stability, a supported public model evaluation option, FHIR validation or an R6 conformance result. The current public evaluator remains model-less; the engine's model-aware evaluation (T0018) reaches the public API with T0038. The engine's own tests run model-aware evaluation against the R6 provider alongside R4 and R5, which is engine-tested provider support for the draft snapshot, not an R6 conformance result: there is no official R6 suite, and the existing R4/R5 conformance reports measure their named suites only.
 
-The owner selected R6 for the [five-package first release](../RELEASING.md#five-package-first-release). The target is distinct from the currently generated version PR and still requires exact-candidate checks and owner release approval. R4, R5 and R6 use the same named-provider API (`r4`, `r5`, `r6`), with `getType(name)` and `getElement(type, name)` for metadata lookup. These are not generated resource classes or a new evaluator API; no public API shape changes are introduced by this release-plan decision.
+R4, R5 and R6 use the same named-provider API (`r4`, `r5`, `r6`), with `getType(name)` and `getElement(type, name)` for metadata lookup. These are not generated resource classes or a new evaluator API. Where the R6 draft's FHIRPath page differs from R5, and which later tasks handle those differences, is listed under [FHIR versions](roadmap.md#fhir-versions) in the roadmap.

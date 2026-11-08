@@ -24,12 +24,13 @@ The narrowed T0011/T0012 deliver only exists/count/where. Full phase-1 completio
 - Type tests (`expectTypeOf`) for the public API.
 - **Documentation:**
   - README quick start
-  - `docs/guide.md`: model-less use, R4/R5, units, async hooks, errors, output modes
+  - `docs/guide.md`: model-less use, R4, R5 and R6, units, async hooks, errors, output modes
   - generated API reference (TypeDoc) or a decision not to generate one
   - `spec-notes.md` completed, with the conformance report linked
 - An `examples/` folder that runs in CI.
 - Extend the existing release documentation and examples for later 0.x releases; reuse the workflow and owner process in [RELEASING.md](../../RELEASING.md).
 - Validate model options, including rejecting an empty or `System` namespace ([#60](https://github.com/losol/callis/issues/60)).
+- **FHIR versions** ([roadmap](../roadmap.md#fhir-versions)): the public `model` option takes any `ModelProvider`, so `r4`, `r5` and `r6` need no version-specific API. Type tests, documentation examples and the packed release consumers (`pnpm check:release`) cover all three. The public conformance adapter measures the R4 and R5 suites; for R6 the guide and the R6 README describe the engine-tested coverage on the pinned `6.0.0-snapshot1` draft and its known gaps, without a pass count.
 - Public `parse`, AST inputs and the compiled `ast` property require the parser chain-depth fix [#107](https://github.com/losol/callis/issues/107), with bounded-tree regression tests. Until it is resolved, keep these internal and report this completion task blocked; do not delay T0025 for them.
 
 ## Design notes
@@ -128,4 +129,5 @@ interface CompiledExpression {
 - [ ] Public API conformance matches the internal adapter without losing any baseline entries, including model, strict and async coverage.
 - [ ] Later 0.x package tarballs install and run in fresh Node and Vite projects; publication remains an owner action.
 - [ ] #60 option validation and #107 parser-depth prerequisites are covered. No future option is accepted as a silent no-op.
+- [ ] The public `model` option evaluates with `r4`, `r5` and `r6` in the type tests and in the packed Node and Vite consumers. The guide and READMEs label R6 as the pinned draft, list its known gaps and publish no R6 conformance number.
 - [ ] Support, limitations and per-phase conformance documentation describe this release; 1.0 scope and criteria remain open.

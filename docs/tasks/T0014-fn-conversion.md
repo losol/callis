@@ -19,6 +19,10 @@ Part of the [roadmap](../roadmap.md). Phase 1 · wave 4 · size M.
 - `toString` and `convertsToString`
 - `toQuantity([unit])` and `convertsToQuantity([unit])`
 
+## Scope
+
+- With a model, the functions read the System value that [T0018](T0018-model-aware-evaluation.md) gives a typed FHIR primitive, the same for every provider ([FHIR versions](../roadmap.md#fhir-versions)). The R6 draft adds a FHIR note on `toString()` that limits it to FHIR primitives with a value ([§2.1.9.4.1](https://hl7.org/fhir/6.0.0-snapshot1/fhirpath.html#fn-toString)); check a typed FHIR `Quantity` against it and record any difference in `docs/spec-notes.md`.
+
 ## Acceptance criteria
 
 - [ ] Each conversion table in N1 §5.5 is fully covered, including the string formats it accepts and rejects.

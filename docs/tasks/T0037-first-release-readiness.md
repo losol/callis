@@ -36,3 +36,5 @@ Existing API compatibility rules still apply before 1.0: design for extension an
 ## Implementation notes
 
 The [0.1 release inventory](../releases/0.1.0.md) records all four contracts/versions/peers, artifact checks, support limits, conformance and a dated read-only settings audit. `pnpm check:release` tests actual tarballs in fresh Node/TypeScript and Vite/Chromium consumers; `--stable` simulates version generation in a disposable copy. The task ends at reviewable preparation, while owner-only npm/settings and exact regenerated version-PR approval remain explicit release gates.
+
+After this task, the owner added R6: [T0039](T0039-fhir-r6-model.md) and [T0040](T0040-fhir-r6-validation.md) extended the inventory and checks to five packages, and the published `0.1.0` (2026-11-06 UTC, version PR #93 at `b92db53`) includes `@callis/fhir-r6`. Issue #115 stays open as the release tracker until the owner records the post-publication verification ([RELEASING](../../RELEASING.md#release-tracking)).

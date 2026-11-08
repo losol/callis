@@ -14,7 +14,7 @@ Everything in this repository is written in English.
 | `docs/tasks/` | One file per task: goal, scope, design notes, acceptance criteria. |
 | [`docs/guides/`](docs/guides/) | How to write code ([code style](docs/guides/code-style.md)) and tests ([testing](docs/guides/testing.md)). |
 | [`RELEASING.md`](RELEASING.md) | How the owner releases the packages. |
-| `docs/spec-notes.md` | Interpretations of the FHIRPath specification (created when first needed). |
+| [`docs/spec-notes.md`](docs/spec-notes.md) | Interpretations of the FHIRPath specification. |
 | GitHub issues and the [Callis roadmap](https://github.com/orgs/losol/projects/11) project | Task status, follow-ups and bugs ([task issues](#task-issues-and-the-project-board)). |
 
 ## Workflow
@@ -58,7 +58,7 @@ PR titles follow [Conventional Commits 1.0.0](https://www.conventionalcommits.or
 | `chore` | Other maintenance that does not fit above. |
 | `revert` | Reverting an earlier change. |
 
-**Scopes** name the package, app or tool directory the change is about: `core`, `ucum`, `fhir-r4`, `fhir-r5`, `cli`, `conformance`, `model-gen`, `site`. The scope is optional for repository-wide `docs`, `build`, `ci` and `chore` changes. Use one scope. If a PR needs two, it is usually two PRs.
+**Scopes** name the package, app or tool directory the change is about: `core`, `ucum`, `fhir-r4`, `fhir-r5`, `fhir-r6`, `cli`, `conformance`, `model-gen`, `site`. The scope is optional for repository-wide `docs`, `build`, `ci` and `chore` changes. Use one scope. If a PR needs two, it is usually two PRs.
 
 **Summary**
 
@@ -257,16 +257,16 @@ For agent work, assign the explicitly selected milestone to both the task issue 
 - After a plan change is merged, the **Roadmap sync** workflow runs the sync on `main`. It needs the `ROADMAP_SYNC_TOKEN` secret (see [Repository settings](#repository-settings)). Without the secret the workflow does nothing, and a maintainer runs the sync by hand.
 - To add a task: write the task file, then add its row to the overview, its edges to the graph and its ID to the waves table, and run `pnpm check:roadmap`. The sync creates the task issue after the merge.
 
-**Pending implementation:** the separate milestone-only mode requires [#129](https://github.com/losol/callis/pull/129) and is not available until that implementation merges. The commands and safeguards below describe its intended interface; normal roadmap sync remains available and unchanged. This adds no roadmap release column or release-plan ledger:
+**Milestone-only mode** ([#129](https://github.com/losol/callis/pull/129)): a separate mode assigns an explicitly selected release milestone to task issues; normal roadmap sync is unchanged. It adds no roadmap release column or release-plan ledger:
 
 ```sh
-pnpm sync:roadmap --release "<existing milestone title>" --task T0018 --task T0020
+pnpm sync:roadmap --release "<existing milestone title>" --task T0020 --task T0024
 # After review of this exact dry run, add --apply to make only those milestone changes.
 ```
 
 The task IDs above illustrate syntax, not a selected future release. `--release` and one or more repeated `--task` flags must be supplied together. The milestone must already exist with a unique exact title and be open; unknown, ambiguous or closed targets are rejected before writes. Only existing selected task issues are eligible. Missing/closed issues, already-correct assignments and conflicting manual milestones are skipped and reported. Apply rechecks the milestone and issue before patching to avoid overwriting concurrent changes. It requires repository push access, not only token scopes, and verifies the returned milestone number; a successful HTTP response alone does not prove that GitHub applied the assignment.
 
-This mode changes only selected issue milestone assignments: no labels, dependency links, Project fields/views/status, issue bodies/states or PR metadata. Workers assign the matching PR milestone separately. It never creates/reopens milestones or migrates delivered history. GitHub milestone assignments remain the sole release-scope metadata; there is no competing versioned release ledger. Review the concrete dry run with the orchestrator before any `--apply`; do not run a broad apply as part of milestone setup. The automatic workflow remains normal roadmap sync and does not select release scope. The companion safeguard in #129 removes script paths from its push triggers: after it merges, roadmap/task-source changes still trigger normal sync, but script/test-only maintenance cannot auto-apply unrelated drift. Manual workflow dispatch remains available; review the concrete dry run before dispatching it.
+This mode changes only selected issue milestone assignments: no labels, dependency links, Project fields/views/status, issue bodies/states or PR metadata. Workers assign the matching PR milestone separately. It never creates/reopens milestones or migrates delivered history. GitHub milestone assignments remain the sole release-scope metadata; there is no competing versioned release ledger. Review the concrete dry run with the orchestrator before any `--apply`; do not run a broad apply as part of milestone setup. The automatic workflow remains normal roadmap sync and does not select release scope. The companion safeguard in #129 removed script paths from the workflow's push triggers: roadmap and task-source changes still trigger normal sync, but script/test-only maintenance cannot auto-apply unrelated drift. Manual workflow dispatch remains available; review the concrete dry run before dispatching it.
 
 ## Definition of done
 

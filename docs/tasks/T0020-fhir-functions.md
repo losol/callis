@@ -18,6 +18,8 @@ The FHIR additions that need no host I/O ([variables](#variables), [R5 §2.1.9.1
   - FHIR equivalence (`id` ignored; `Coding` on `system` + `code`; `CodeableConcept` on intersecting codings) through the T0009 extension point
   - FHIR `Quantity` → `System.Quantity` in operations
 - Registering `memberOf`, `subsumes`, `subsumedBy`, `conformsTo` and `htmlChecks` as host-backed functions that return empty without a hook. The hook plumbing is T0021.
+- **FHIR versions** ([roadmap](../roadmap.md#fhir-versions)): R4 ([§2.9.1.5](https://hl7.org/fhir/R4/fhirpath.html#functions)), R5 ([§2.1.9.1.5](https://hl7.org/fhir/R5/fhirpath.html#functions)) and the R6 draft ([§2.1.9.3](https://hl7.org/fhir/6.0.0-snapshot1/fhirpath.html#functions)) define these functions and variables the same way, so the engine has no version-specific code. The cases that need a model also run against the real `r4`, `r5` and `r6` providers in `packages/core/test/generated-models.test.ts`: `extension()` and `hasValue()` on a primitive with only extensions, `%resource` and `%rootResource` in a contained resource, `Coding` and `CodeableConcept` equivalence, and `resolve()` of a contained R6-only `DeviceAlert`, which is typed under R6 and untyped data under R4 and R5.
+- **Not in this task:** the R6 draft adds `weight()` ([§2.1.9.3.13](https://hl7.org/fhir/6.0.0-snapshot1/fhirpath.html#fn-weight), [#151](https://github.com/losol/callis/issues/151)), which needs cross-resource lookups, and a `%profile` variable for profile invariants ([§2.1.9.2](https://hl7.org/fhir/6.0.0-snapshot1/fhirpath.html#variables)). Hosts can already pass `%profile` through `variables`; this task builds in no value for it.
 
 ## Design notes
 
@@ -41,4 +43,5 @@ An undefined variable raises `eval/undefined-variable`. A defined variable whose
 
 - [ ] `Patient.birthDate.extension('http://…').value` works. `hasValue()` and `getValue()` behave correctly for extension-only primitives.
 - [ ] `resolve()` finds contained resources and Bundle entries, and returns empty otherwise without an error.
-- [ ] Conformance groups: `testExtension`, `testHasValue`, `testDollarResource`, `testVariables`, `primitivesWithoutValue`.
+- [ ] The same FHIR function and variable cases pass against the real `r4`, `r5` and `r6` providers, including the contained `DeviceAlert` typed under R6 only. No R6 conformance result is claimed, and no R6 suite exception is registered.
+- [ ] Conformance groups: `testExtension`, `testHasValue`, `testDollarResource`, `testVariables` (R4 and R5), and `primitivesWithoutValue` (R5 suite only).

@@ -10,4 +10,4 @@ Part of the [roadmap](../roadmap.md). Phase 2 · wave 8 · size M.
 
 ## Acceptance criteria
 
-Conformance group `testType` passes; the instance selector parses, is type-checked with a model, and evaluates.
+Conformance group `testType` passes in R4 and R5; the instance selector parses, is type-checked with a model, and evaluates. `type()` and the instance selector take their types from the provider, and their model cases pass against the real `r4`, `r5` and `r6` providers, including the R6-only `DeviceAlert` ([FHIR versions](../roadmap.md#fhir-versions)), with no R6 conformance claim.
