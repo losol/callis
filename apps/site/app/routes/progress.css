@@ -322,6 +322,14 @@
   padding-bottom: 0.5rem;
 }
 
+/* While the drawer is open, the last waves can still be scrolled out from under it. */
+@media (min-width: 40.01rem) {
+  .pg-board-wrap.has-drawer {
+    padding-right: 24rem;
+    scroll-padding-right: 24rem;
+  }
+}
+
 .pg-board {
   display: grid;
   grid-auto-flow: column;
@@ -421,6 +429,12 @@
   outline-offset: 2px;
 }
 
+/* The task shown in the drawer: a bar on its left edge. */
+.pg-tile.selected {
+  border-color: var(--primary);
+  box-shadow: inset 4px 0 0 var(--primary);
+}
+
 .pg-board.has-highlight .pg-tile {
   opacity: 0.4;
 }
@@ -435,6 +449,10 @@
   opacity: 0.8;
 }
 
+.pg-board.has-highlight .pg-tile.selected {
+  opacity: 1;
+}
+
 .pg-board .pg-tile.current {
   z-index: 1;
   border-color: var(--primary);
@@ -446,6 +464,13 @@
     0 0 0 3px var(--primary),
     0 8px 22px -6px color-mix(in oklch, var(--primary) 70%, black);
   opacity: 1;
+}
+
+.pg-board .pg-tile.current.selected {
+  box-shadow:
+    inset 4px 0 0 var(--primary),
+    0 0 0 3px var(--primary),
+    0 8px 22px -6px color-mix(in oklch, var(--primary) 70%, black);
 }
 
 .pg-tile:focus-visible {
@@ -582,62 +607,65 @@
   background: color-mix(in oklch, var(--primary) 20%, transparent);
 }
 
-/* The task details */
-.pg-dialog {
+/* The task details: a drawer on the right edge, over the board and the site's navbar (z-index 50) */
+.pg-drawer {
+  position: fixed;
+  z-index: 60;
+  top: 0;
+  right: 0;
+  bottom: 0;
   box-sizing: border-box;
-  width: min(36rem, calc(100vw - 1.5rem));
-  max-width: none;
-  max-height: min(44rem, calc(100dvh - 1.5rem));
-  /* Centred, as the browser does it; the site's reset sets the margin to 0. */
-  inset: 0;
-  margin: auto;
-  /* No padding: a click on the dialog element itself is a click on the backdrop. */
-  padding: 0;
-  overflow: hidden;
-  border: 1px solid var(--border-2);
-  border-radius: 0.75rem;
-  background: var(--card);
-  color: var(--text);
-  box-shadow: var(--shadow-overlay);
-  font-family: var(--font-body);
-  line-height: 1.5;
-}
-
-.pg-dialog[open] {
   display: flex;
   flex-direction: column;
+  width: min(24rem, 100%);
+  border-left: 1px solid var(--border-2);
+  background: var(--card);
+  color: var(--text);
+  box-shadow: -16px 0 40px -16px rgb(0 0 0 / 0.45);
+  font-family: var(--font-body);
+  line-height: 1.5;
+  animation: pg-drawer-in 0.2s ease-out;
 }
 
-.pg-dialog::backdrop {
-  background: rgb(0 0 0 / 0.55);
+@keyframes pg-drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
 }
 
-.pg-dialog-body {
-  /* Keeps absolutely positioned descendants (visually hidden text) in the scrolled area. */
-  position: relative;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 1.1rem 1.25rem 1.25rem;
-}
-
-.pg-dialog-head {
+.pg-drawer-head {
   display: flex;
+  flex: none;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
+  padding: 1rem 1.25rem 0.85rem;
+  border-bottom: 1px solid var(--border-1);
 }
 
-.pg-dialog h2 {
+.pg-drawer-body {
+  /* Keeps absolutely positioned descendants (visually hidden text) in the scrolled area. */
+  position: relative;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.25rem 1.25rem 1.25rem;
+}
+
+.pg-drawer h2 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   line-height: 1.3;
 }
 
-.pg-dialog h2:focus {
+.pg-drawer h2:focus {
   outline: none;
 }
 
-.pg-dialog-id {
+.pg-drawer-id {
   display: block;
   color: var(--text-subtle);
   font-family: var(--font-mono, ui-monospace, monospace);
@@ -646,7 +674,7 @@
   letter-spacing: 0.04em;
 }
 
-.pg-dialog-close {
+.pg-drawer-close {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -661,20 +689,20 @@
   cursor: pointer;
 }
 
-.pg-dialog-close:hover,
+.pg-drawer-close:hover,
 .pg-relation:hover {
   background: var(--card-hover);
   color: var(--text);
 }
 
-.pg-dialog-close:focus-visible,
+.pg-drawer-close:focus-visible,
 .pg-relation:focus-visible,
-.pg-dialog-links a:focus-visible {
+.pg-drawer-links a:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 1px;
 }
 
-.pg-dialog-status {
+.pg-drawer-status {
   margin: 0.75rem 0 0;
   color: var(--text-muted);
   font-size: 0.85rem;
@@ -728,11 +756,11 @@
   font-weight: 700;
 }
 
-.pg-dialog-section {
+.pg-drawer-section {
   margin-top: 1rem;
 }
 
-.pg-dialog h3 {
+.pg-drawer h3 {
   margin: 0 0 0.35rem;
   color: var(--text-subtle);
   font-size: 0.72rem;
@@ -740,21 +768,21 @@
   text-transform: uppercase;
 }
 
-.pg-dialog-section p,
-.pg-dialog-section > ul {
+.pg-drawer-section p,
+.pg-drawer-section > ul {
   margin: 0 0 0.4rem;
-  font-size: 0.88rem;
+  font-size: 0.86rem;
 }
 
-.pg-dialog-section > ul {
+.pg-drawer-section > ul {
   padding-left: 1.2rem;
 }
 
-.pg-dialog-empty {
+.pg-drawer-empty {
   color: var(--text-subtle);
 }
 
-.pg-dialog-section .pg-relations {
+.pg-drawer-section .pg-relations {
   display: grid;
   /* minmax(0, …): long titles are cut with an ellipsis instead of widening the list. */
   grid-template-columns: minmax(0, 1fr);
@@ -815,7 +843,7 @@ span.pg-relation {
   color: var(--success-text);
 }
 
-.pg-dialog-links {
+.pg-drawer-links {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1.25rem;
@@ -826,24 +854,29 @@ span.pg-relation {
   font-size: 0.88rem;
 }
 
-.pg-dialog-links a {
+.pg-drawer-links a {
   color: var(--primary);
   font-weight: 600;
   text-underline-offset: 0.2em;
 }
 
-@media (max-width: 30rem) {
-  .pg-dialog-body {
-    padding: 0.9rem 1rem 1rem;
+/* Full width on narrow screens. */
+@media (max-width: 40rem) {
+  .pg-drawer {
+    width: 100%;
+    border-left: 0;
   }
 
-  .pg-dialog h2 {
-    font-size: 1.1rem;
+  .pg-drawer-head,
+  .pg-drawer-body {
+    padding-right: 1rem;
+    padding-left: 1rem;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pg-tile.new {
+  .pg-tile.new,
+  .pg-drawer {
     animation: none;
   }
 

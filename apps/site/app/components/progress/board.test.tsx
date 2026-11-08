@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { CommitPoint, PlanTask } from '../../../progress/types.ts';
 import { Board, relationTo } from './board.tsx';
-import { issueSearchUrl, TaskDialog } from './task-dialog.tsx';
+import { issueSearchUrl, TaskDrawer } from './task-drawer.tsx';
 
 function task(id: string, deps: string[], doneAt: number | null, title = `Task ${id}`): PlanTask {
   return {
@@ -73,25 +73,37 @@ describe('Board', () => {
     expect(html).toContain('(blocked)');
   });
 
-  it('renders a closed, empty dialog until a task is chosen', () => {
-    expect(html).toMatch(/<dialog class="pg-dialog"[^>]*><\/dialog>/);
-    expect(html).not.toMatch(/<dialog[^>]* open/);
+  it('renders no drawer and no selected tile until a task is chosen', () => {
+    expect(html).not.toContain('pg-drawer');
+    expect(html).not.toContain('aria-current');
   });
 });
 
-describe('TaskDialog', () => {
+describe('TaskDrawer', () => {
   const props = {
     plan,
     commits,
+    focusRequest: 1,
     onShow: () => undefined,
     onClose: () => undefined,
   };
 
+  it('is a labelled, non-modal dialog with a close button', () => {
+    const html = render(
+      <TaskDrawer {...props} task={plan[1] as PlanTask} active={1} page={undefined} />,
+    );
+    expect(html).toMatch(/<section class="pg-drawer" role="dialog" aria-labelledby="([^"]+)">/);
+    const labelledBy = /aria-labelledby="([^"]+)"/.exec(html)?.[1];
+    expect(html).toContain(`<h2 id="${labelledBy}" tabindex="-1">`);
+    expect(html).not.toContain('aria-modal');
+    expect(html).toContain('<span class="pg-visually-hidden">Close</span>');
+  });
+
   it('shows the facts, the status at the selected commit and both kinds of relation', () => {
     const html = render(
-      <TaskDialog
+      <TaskDrawer
         {...props}
-        task={plan[1] ?? null}
+        task={plan[1] as PlanTask}
         active={1}
         page={{ href: '/tasks/T2-task', external: false }}
       />,
@@ -111,7 +123,7 @@ describe('TaskDialog', () => {
 
   it('names the dependencies a blocked task waits for, including unknown ones', () => {
     const html = render(
-      <TaskDialog {...props} task={plan[2] ?? null} active={1} page={undefined} />,
+      <TaskDrawer {...props} task={plan[2] as PlanTask} active={1} page={undefined} />,
     );
     expect(html).toContain('at bbbbbbb: waiting for T2, T404.');
     expect(html).toContain('not in the roadmap');
@@ -121,9 +133,9 @@ describe('TaskDialog', () => {
 
   it('links the pull request of a merged task and an external task file', () => {
     const html = render(
-      <TaskDialog
+      <TaskDrawer
         {...props}
-        task={plan[0] ?? null}
+        task={plan[0] as PlanTask}
         active={1}
         page={{
           href: 'https://github.com/losol/callis/blob/main/docs/tasks/T1.md',
@@ -150,7 +162,7 @@ describe('TaskDialog', () => {
       ],
     };
     const html = render(
-      <TaskDialog {...props} plan={[hostile]} task={hostile} active={0} page={undefined} />,
+      <TaskDrawer {...props} plan={[hostile]} task={hostile} active={0} page={undefined} />,
     );
     expect(html).not.toContain('<img');
     expect(html).not.toContain('<b>bold</b>');

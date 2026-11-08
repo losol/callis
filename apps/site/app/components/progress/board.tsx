@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { isDoneAt, statusAt } from '../../../progress/state.ts';
 import type { CommitPoint, PlanTask } from '../../../progress/types.ts';
 import type { DocLink } from '../../doc-links.ts';
-import { TaskDialog } from './task-dialog.tsx';
+import { TaskDrawer } from './task-drawer.tsx';
 import { STATUS_MARK, STATUS_NAME } from './task-status.ts';
 
 export interface BoardProps {
@@ -48,24 +48,48 @@ export function relationTo(
 /**
  * The roadmap as columns per wave; each task is merged, unblocked or blocked.
  * Hovering or focusing a tile highlights it with its dependencies and the tasks
- * that depend on it; clicking it opens its details.
+ * that depend on it; clicking it shows its details in a drawer, which another
+ * click on a tile switches to that task.
  */
 export function Board({ plan, commits, active, taskPages = {} }: BoardProps) {
-  // The pointer wins while it is over a tile; otherwise the focused tile is highlighted.
+  // The pointer wins while it is over a tile, then the focused tile, then the task in the drawer.
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [shownId, setShownId] = useState<string | null>(null);
-  const opener = useRef<HTMLButtonElement | null>(null);
+  const [focusRequest, setFocusRequest] = useState(0);
+  const tiles = useRef(new Map<string, HTMLButtonElement>());
 
   const waves = [...new Set(plan.map((task) => task.wave))].sort((a, b) => a - b);
-  const highlightedId = hoveredId ?? focusedId;
-  const highlighted = plan.find((task) => task.id === highlightedId);
-  const shown = plan.find((task) => task.id === shownId) ?? null;
+  const pointedId = hoveredId ?? focusedId;
+  const highlighted = plan.find((task) => task.id === (pointedId ?? shownId));
+  const shown = plan.find((task) => task.id === shownId);
+
+  /** Shows a task in the drawer and moves the focus into it. */
+  const show = (id: string) => {
+    setShownId(id);
+    setFocusRequest((count) => count + 1);
+  };
+
+  // Keep the tile of the shown task in view, clear of the drawer (the board's scroll-padding).
+  useEffect(() => {
+    if (shownId !== null) {
+      tiles.current.get(shownId)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }, [shownId]);
+
+  /** Closes the drawer; from inside it, the focus goes back to the tile of its task. */
+  const close = (returnFocus: boolean) => {
+    if (returnFocus && shownId !== null) {
+      tiles.current.get(shownId)?.focus();
+    }
+    setShownId(null);
+  };
 
   return (
     <>
-      <div className="pg-board-wrap">
-        <div className={highlighted ? 'pg-board has-highlight' : 'pg-board'}>
+      <div className={shown ? 'pg-board-wrap has-drawer' : 'pg-board-wrap'}>
+        {/* Only the pointer or the focus dims the rest of the board; the drawer alone does not. */}
+        <div className={pointedId ? 'pg-board has-highlight' : 'pg-board'}>
           {waves.map((wave) => (
             <div key={wave} className="pg-col">
               <h3>{`wave ${wave}`}</h3>
@@ -80,16 +104,27 @@ export function Board({ plan, commits, active, taskPages = {} }: BoardProps) {
                     status,
                     task.doneAt === active ? 'new' : '',
                     relation ? RELATION_CLASS[relation] : '',
+                    task.id === shownId ? 'selected' : '',
                   ];
                   return (
                     <button
                       key={task.id}
+                      ref={(element) => {
+                        if (element) {
+                          tiles.current.set(task.id, element);
+                        } else {
+                          tiles.current.delete(task.id);
+                        }
+                      }}
                       type="button"
                       className={classes.filter(Boolean).join(' ')}
                       aria-haspopup="dialog"
-                      onClick={(event) => {
-                        opener.current = event.currentTarget;
-                        setShownId(task.id);
+                      aria-current={task.id === shownId ? 'true' : undefined}
+                      onClick={() => show(task.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape' && shownId !== null) {
+                          close(false);
+                        }
                       }}
                       onMouseEnter={() => setHoveredId(task.id)}
                       onMouseLeave={() => setHoveredId(null)}
@@ -111,18 +146,18 @@ export function Board({ plan, commits, active, taskPages = {} }: BoardProps) {
           ))}
         </div>
       </div>
-      <TaskDialog
-        task={shown}
-        plan={plan}
-        commits={commits}
-        active={active}
-        page={shown ? taskPages[shown.id] : undefined}
-        onShow={setShownId}
-        onClose={() => {
-          setShownId(null);
-          opener.current?.focus();
-        }}
-      />
+      {shown && (
+        <TaskDrawer
+          task={shown}
+          plan={plan}
+          commits={commits}
+          active={active}
+          page={taskPages[shown.id]}
+          focusRequest={focusRequest}
+          onShow={show}
+          onClose={() => close(true)}
+        />
+      )}
     </>
   );
 }

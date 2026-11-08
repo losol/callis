@@ -7,163 +7,146 @@ import type { DocLink } from '../../doc-links.ts';
 import { site } from '../../site.config.ts';
 import { STATUS_MARK, STATUS_NAME } from './task-status.ts';
 
-export interface TaskDialogProps {
-  /** The task to show, or null for a closed dialog. */
-  task: PlanTask | null;
+export interface TaskDrawerProps {
+  /** The task to show. */
+  task: PlanTask;
   plan: readonly PlanTask[];
   commits: readonly CommitPoint[];
   /** The selected commit; the status is the status at this commit. */
   active: number;
   /** Where the task file is read, if anywhere. */
   page: DocLink | undefined;
-  /** Shows another task, by ID, in the same dialog. */
+  /**
+   * Counts the requests to move the focus into the drawer. The focus moves to
+   * the title whenever it changes: when the drawer opens and when it switches
+   * to another task.
+   */
+  focusRequest: number;
+  /** Shows another task, by ID, in the drawer. */
   onShow: (id: string) => void;
-  /** Called after the dialog closed, whether by Escape, the close button or the backdrop. */
+  /** Asks to close the drawer, by Escape or the close button. */
   onClose: () => void;
 }
 
 /**
- * The details of a roadmap task in a modal `<dialog>`. The browser makes the
- * rest of the page inert while it is open and closes it on Escape; a click on
- * the backdrop closes it too. The focus goes to the title when it opens and when
- * it switches to another task, so a screen reader reads the task out.
+ * The details of a roadmap task in a drawer on the right edge of the window.
+ * It is a non-modal dialog: the board stays usable next to it, so the focus is
+ * not trapped, and a click on another tile shows that task instead. Escape or
+ * the close button closes it. The focus goes to the title when it opens and
+ * when it switches tasks, so a screen reader reads the task out.
  */
-export function TaskDialog({
+export function TaskDrawer({
   task,
   plan,
   commits,
   active,
   page,
+  focusRequest,
   onShow,
   onClose,
-}: TaskDialogProps) {
-  const dialog = useRef<HTMLDialogElement>(null);
+}: TaskDrawerProps) {
   const heading = useRef<HTMLHeadingElement>(null);
-  const pressedOnBackdrop = useRef(false);
   const titleId = useId();
-  const taskId = task?.id ?? null;
 
   useEffect(() => {
-    const element = dialog.current;
-    if (element === null) {
-      return;
+    if (focusRequest > 0) {
+      heading.current?.focus();
     }
-    if (taskId === null) {
-      if (element.open) {
-        element.close();
-      }
-      return;
-    }
-    if (!element.open) {
-      element.showModal();
-    }
-    heading.current?.focus();
-  }, [taskId]);
+  }, [focusRequest]);
 
-  const close = () => dialog.current?.close();
-  const mergedPr = task?.doneAt != null ? (commits[task.doneAt]?.pr ?? null) : null;
+  const mergedPr = task.doneAt !== null ? (commits[task.doneAt]?.pr ?? null) : null;
 
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: the click only adds the backdrop; Escape, handled by the browser, is the keyboard equivalent
-    <dialog
-      ref={dialog}
-      className="pg-dialog"
+    <section
+      className="pg-drawer"
+      role="dialog"
       aria-labelledby={titleId}
-      onClose={onClose}
-      onPointerDown={(event) => {
-        pressedOnBackdrop.current = event.target === event.currentTarget;
-      }}
-      onClick={(event) => {
-        // The dialog has no padding, so a click on the dialog itself is a click on the backdrop.
-        // A press that started inside (selecting text, say) does not count.
-        if (pressedOnBackdrop.current && event.target === event.currentTarget) {
-          close();
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          onClose();
         }
-        pressedOnBackdrop.current = false;
       }}
     >
-      {task !== null && (
-        <div className="pg-dialog-body">
-          <div className="pg-dialog-head">
-            <h2 id={titleId} ref={heading} tabIndex={-1}>
-              <span className="pg-dialog-id">{task.id}</span>
-              <span className="pg-dialog-title">
-                <Inline text={task.title} />
-              </span>
-            </h2>
-            <button type="button" className="pg-dialog-close" onClick={close}>
-              <span aria-hidden="true">✕</span>
-              <span className="pg-visually-hidden">Close</span>
-            </button>
+      <div className="pg-drawer-head">
+        <h2 id={titleId} ref={heading} tabIndex={-1}>
+          <span className="pg-drawer-id">{task.id}</span>
+          <span className="pg-drawer-title">
+            <Inline text={task.title} />
+          </span>
+        </h2>
+        <button type="button" className="pg-drawer-close" onClick={onClose}>
+          <span aria-hidden="true">✕</span>
+          <span className="pg-visually-hidden">Close</span>
+        </button>
+      </div>
+
+      <div className="pg-drawer-body">
+        <Status task={task} plan={plan} commits={commits} active={active} />
+
+        <dl className="pg-facts">
+          <div>
+            <dt>Wave</dt>
+            <dd>{task.wave}</dd>
           </div>
+          <div>
+            <dt>Phase</dt>
+            <dd>{task.phase}</dd>
+          </div>
+          <div>
+            <dt>Size</dt>
+            <dd>{task.size}</dd>
+          </div>
+        </dl>
 
-          <Status task={task} plan={plan} commits={commits} active={active} />
+        {task.goal.length > 0 && (
+          <section className="pg-drawer-section" aria-labelledby={`${titleId}-goal`}>
+            <h3 id={`${titleId}-goal`}>Goal</h3>
+            <Goal blocks={task.goal} />
+          </section>
+        )}
 
-          <dl className="pg-facts">
-            <div>
-              <dt>Wave</dt>
-              <dd>{task.wave}</dd>
-            </div>
-            <div>
-              <dt>Phase</dt>
-              <dd>{task.phase}</dd>
-            </div>
-            <div>
-              <dt>Size</dt>
-              <dd>{task.size}</dd>
-            </div>
-          </dl>
+        <Relations
+          id={`${titleId}-deps`}
+          heading="Depends on"
+          empty="Nothing: it can start at any time."
+          ids={task.deps}
+          plan={plan}
+          active={active}
+          onShow={onShow}
+        />
+        <Relations
+          id={`${titleId}-dependents`}
+          heading="Needed by"
+          empty="No task depends on it."
+          ids={dependentsOf(plan, task).map((dependent) => dependent.id)}
+          plan={plan}
+          active={active}
+          onShow={onShow}
+        />
 
-          {task.goal.length > 0 && (
-            <section className="pg-dialog-section" aria-labelledby={`${titleId}-goal`}>
-              <h3 id={`${titleId}-goal`}>Goal</h3>
-              <Goal blocks={task.goal} />
-            </section>
-          )}
-
-          <Relations
-            id={`${titleId}-deps`}
-            heading="Depends on"
-            empty="Nothing: it can start at any time."
-            ids={task.deps}
-            plan={plan}
-            active={active}
-            onShow={onShow}
-          />
-          <Relations
-            id={`${titleId}-dependents`}
-            heading="Needed by"
-            empty="No task depends on it."
-            ids={dependentsOf(plan, task).map((dependent) => dependent.id)}
-            plan={plan}
-            active={active}
-            onShow={onShow}
-          />
-
-          <ul className="pg-dialog-links">
-            {page !== undefined && (
-              <li>
-                {page.external ? (
-                  <ExternalLink href={page.href}>Task file</ExternalLink>
-                ) : (
-                  <Link to={page.href}>Task file</Link>
-                )}
-              </li>
-            )}
+        <ul className="pg-drawer-links">
+          {page !== undefined && (
             <li>
-              <ExternalLink href={issueSearchUrl(task.id)}>GitHub issue</ExternalLink>
+              {page.external ? (
+                <ExternalLink href={page.href}>Task file</ExternalLink>
+              ) : (
+                <Link to={page.href}>Task file</Link>
+              )}
             </li>
-            {mergedPr !== null && (
-              <li>
-                <ExternalLink href={`${site.githubUrl}/pull/${mergedPr}`}>
-                  {`Pull request #${mergedPr}`}
-                </ExternalLink>
-              </li>
-            )}
-          </ul>
-        </div>
-      )}
-    </dialog>
+          )}
+          <li>
+            <ExternalLink href={issueSearchUrl(task.id)}>GitHub issue</ExternalLink>
+          </li>
+          {mergedPr !== null && (
+            <li>
+              <ExternalLink href={`${site.githubUrl}/pull/${mergedPr}`}>
+                {`Pull request #${mergedPr}`}
+              </ExternalLink>
+            </li>
+          )}
+        </ul>
+      </div>
+    </section>
   );
 }
 
@@ -204,7 +187,7 @@ function Status({
     detail = `at ${at}: waiting for ${waitingForAt(plan, task, active).join(', ')}.`;
   }
   return (
-    <p className="pg-dialog-status">
+    <p className="pg-drawer-status">
       <span className={`pg-badge ${status}`}>
         <span aria-hidden="true">{`${STATUS_MARK[status]} `}</span>
         {capitalize(STATUS_NAME[status])}
@@ -232,10 +215,10 @@ function Relations({
   onShow: (id: string) => void;
 }) {
   return (
-    <section className="pg-dialog-section" aria-labelledby={id}>
+    <section className="pg-drawer-section" aria-labelledby={id}>
       <h3 id={id}>{ids.length > 0 ? `${heading} (${ids.length})` : heading}</h3>
       {ids.length === 0 ? (
-        <p className="pg-dialog-empty">{empty}</p>
+        <p className="pg-drawer-empty">{empty}</p>
       ) : (
         <ul className="pg-relations">
           {ids.map((relatedId) => {

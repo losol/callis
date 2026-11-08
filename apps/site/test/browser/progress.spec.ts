@@ -31,6 +31,13 @@ async function openBoard(page: Page): Promise<void> {
   await page.mouse.move(0, 0);
 }
 
+/** Waits until the drawer has slid in, so its box is where it stays. */
+async function settled(drawer: Locator): Promise<void> {
+  await drawer.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+}
+
 // T0009 depends on T0003–T0006, and T0010 depends on T0009 (docs/roadmap.md).
 test('highlights the hovered or focused task apart from its dependencies and dependents', async ({
   page,
@@ -54,73 +61,82 @@ test('highlights the hovered or focused task apart from its dependencies and dep
   await expect(hovered).toHaveClass(/\bdep\b/);
 });
 
-test('opens task details from a click or the keyboard, switches tasks and returns focus', async ({
+test('shows task details in a non-modal drawer that tiles switch, and returns focus', async ({
   page,
 }) => {
   await openBoard(page);
-  const position = await page.locator('.pg-pos').textContent();
 
   await tile(page, 'T0009').click();
-  const dialog = page.getByRole('dialog', { name: /^T0009 / });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('heading', { level: 2 })).toBeFocused();
-  await expect(dialog).toContainText('Wave3');
-  await expect(dialog.getByRole('link', { name: 'Task file' })).toHaveAttribute(
+  const drawer = page.getByRole('dialog', { name: /^T0009 / });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole('heading', { level: 2 })).toBeFocused();
+  expect(await drawer.getAttribute('aria-modal')).toBeNull();
+  await expect(tile(page, 'T0009')).toHaveAttribute('aria-current', 'true');
+  await expect(drawer.locator('.pg-facts')).toContainText('Wave3');
+  await expect(drawer.getByRole('link', { name: 'Task file' })).toHaveAttribute(
     'href',
     /^\/tasks\/T0009-/,
   );
-  await expect(dialog.getByRole('link', { name: /^GitHub issue/ })).toHaveAttribute(
+  await expect(drawer.getByRole('link', { name: /^GitHub issue/ })).toHaveAttribute(
     'href',
     /\/issues\?q=.*T0009%3A/,
   );
-  // The page's own arrow-key and space shortcuts stay off while the dialog is open.
-  await page.keyboard.press('ArrowLeft');
-  await page.keyboard.press(' ');
-  await expect(page.locator('.pg-pos')).toHaveText(position ?? '');
 
-  await dialog.getByRole('button', { name: /^T0003 / }).click();
-  const switched = page.getByRole('dialog', { name: /^T0003 / });
-  await expect(switched).toBeVisible();
+  // The page stays usable: another tile switches the drawer, and the player changes its status.
+  await tile(page, 'T0010').click();
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  const switched = page.getByRole('dialog', { name: /^T0010 / });
   await expect(switched.getByRole('heading', { level: 2 })).toBeFocused();
-  await expect(switched.getByRole('button', { name: /^T0009 / })).toBeVisible();
+  await expect(tile(page, 'T0010')).toHaveAttribute('aria-current', 'true');
+  await expect(tile(page, 'T0009')).not.toHaveAttribute('aria-current');
+  await page.getByRole('button', { name: '|◀' }).click();
+  await expect(switched.locator('.pg-badge')).toContainText('Blocked');
 
+  // A dependency in the drawer switches it too; Escape returns the focus to the shown task's tile.
+  await switched.getByRole('button', { name: /^T0009 / }).click();
+  await expect(page.getByRole('dialog', { name: /^T0009 / })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(tile(page, 'T0009')).toBeFocused();
 
+  // Enter opens it; the focus is not trapped; the close button returns the focus.
   await tile(page, 'T0010').focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('dialog', { name: /^T0010 / })).toBeVisible();
+  await page.keyboard.press('Shift+Tab');
+  expect(await page.evaluate(() => document.activeElement?.closest('.pg-board') !== null)).toBe(
+    true,
+  );
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(tile(page, 'T0010')).toBeFocused();
 
+  // Space opens it; Escape on a tile closes it and leaves the focus on that tile.
   await page.keyboard.press(' ');
   await expect(page.getByRole('dialog', { name: /^T0010 / })).toBeVisible();
-  // A click on the backdrop, outside the dialog box, closes it.
-  await page.mouse.click(4, 4);
+  await tile(page, 'T0001').focus();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(tile(page, 'T0010')).toBeFocused();
-  await expect(page.locator('.pg-pos')).toHaveText(position ?? '');
+  await expect(tile(page, 'T0001')).toBeFocused();
 });
 
 for (const theme of ['dark', 'light'] as const) {
-  test(`fits the task details on a narrow screen in the ${theme} theme`, async ({ page }) => {
+  test(`fits the drawer on a narrow screen in the ${theme} theme`, async ({ page }) => {
     await page.addInitScript((value) => localStorage.setItem('callis-theme', value), theme);
     await page.setViewportSize({ width: 390, height: 844 });
     await openBoard(page);
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
 
     await tile(page, 'T0009').click();
-    const dialog = page.getByRole('dialog', { name: /^T0009 / });
-    await expect(dialog).toBeVisible();
-    const box = await dialog.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box?.x ?? -1).toBeGreaterThanOrEqual(0);
-    expect((box?.x ?? 0) + (box?.width ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(390);
+    const drawer = page.getByRole('dialog', { name: /^T0009 / });
+    await expect(drawer).toBeVisible();
+    await settled(drawer);
+    const box = await drawer.boundingBox();
+    expect(box?.x).toBe(0);
+    expect(box?.width).toBe(390);
     expect(
       await page.evaluate(() => {
-        const body = document.querySelector('dialog[open] .pg-dialog-body');
+        const body = document.querySelector('.pg-drawer-body');
         return (
           body !== null &&
           body.scrollWidth <= body.clientWidth &&
@@ -128,7 +144,41 @@ for (const theme of ['dark', 'light'] as const) {
         );
       }),
     ).toBe(true);
-    await dialog.getByRole('link', { name: /^GitHub issue/ }).scrollIntoViewIfNeeded();
-    await expect(dialog.getByRole('link', { name: /^GitHub issue/ })).toBeInViewport();
+    await drawer.getByRole('link', { name: /^GitHub issue/ }).scrollIntoViewIfNeeded();
+    await expect(drawer.getByRole('link', { name: /^GitHub issue/ })).toBeInViewport();
+  });
+}
+
+for (const theme of ['dark', 'light'] as const) {
+  test(`slides the drawer in beside a scrollable board at 1280px in the ${theme} theme`, async ({
+    page,
+  }) => {
+    await page.addInitScript((value) => localStorage.setItem('callis-theme', value), theme);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await openBoard(page);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    await tile(page, 'T0009').click();
+    const drawer = page.locator('.pg-drawer');
+    await expect(drawer).toBeVisible();
+    expect(await drawer.evaluate((element) => getComputedStyle(element).animationName)).toBe(
+      'pg-drawer-in',
+    );
+    await settled(drawer);
+    const box = await drawer.boundingBox();
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeCloseTo(1280, 0);
+    expect(box?.width).toBeGreaterThanOrEqual(380);
+    expect(box?.width).toBeLessThanOrEqual(440);
+
+    // Scrolled to its end, the board shows its last wave left of the drawer.
+    const lastColumnRight = await page.locator('.pg-board-wrap').evaluate((wrap) => {
+      wrap.scrollLeft = wrap.scrollWidth;
+      return wrap.querySelector('.pg-col:last-child')?.getBoundingClientRect().right ?? 0;
+    });
+    expect(lastColumnRight).toBeLessThanOrEqual(box?.x ?? 0);
+
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    expect(await drawer.evaluate((element) => getComputedStyle(element).animationName)).toBe(
+      'none',
+    );
   });
 }

@@ -98,16 +98,10 @@ export default function ProgressPage() {
     setPlaying(true);
   };
 
-  // The arrow keys step and the space bar plays, unless the focus is on something that uses the
-  // key, or a dialog (the task details) is open and has the keyboard.
+  // The arrow keys step and the space bar plays, unless the focus is on something that uses the key.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        document.querySelector('dialog[open]')
-      ) {
+      if (event.metaKey || event.ctrlKey || event.altKey) {
         return;
       }
       if (event.key === 'ArrowLeft' && !usesArrowKeys(event.target)) {
@@ -332,8 +326,8 @@ export default function ProgressPage() {
           Columns are the waves of the roadmap. A task is unblocked when all its dependencies are
           merged. Hover over or focus a task to highlight it, the tasks it depends on{' '}
           <span className="pg-swatch dep" aria-hidden="true" /> and the tasks that depend on it{' '}
-          <span className="pg-swatch dependent" aria-hidden="true" />. Click it, or press Enter, for
-          its details.
+          <span className="pg-swatch dependent" aria-hidden="true" />. Click it, or press Enter, to
+          open its details in a panel on the right; another task switches the panel.
         </p>
         <Board plan={plan} commits={commits} active={active} taskPages={data.taskPages} />
       </section>
