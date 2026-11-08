@@ -64,8 +64,8 @@ export const firstGiven: unknown[] = compile('name.given[0]').evaluate(patient);
 ## Documentation
 
 - [Guide](docs/guide.md): the public API, options, errors and exact decimals
-- [Playground](https://callis.losol.no/playground/): run expressions in your browser; it executes locally and does not automatically send your input anywhere
-- [Progress](https://callis.losol.no/progress): the project commit by commit, with conformance and roadmap
+- [Browser playground](https://callis.losol.no/playground/): run expressions in your browser; it executes locally and does not automatically send your input anywhere
+- [Project progress](https://callis.losol.no/progress): the project commit by commit, with conformance and roadmap
 - [Architecture](docs/architecture.md), [roadmap](docs/roadmap.md) and [decisions](docs/adr/README.md)
 - [Spec notes](docs/spec-notes.md): how Callis reads the ambiguous parts of the specification
 
