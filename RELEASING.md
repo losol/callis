@@ -24,17 +24,17 @@ The first stable 0.1 release supports the implemented subset, not all of phase 1
 
 Before any version PR is merged, review its actual package/version inventory, peer dependencies, pending changesets and prerelease state. All packages the workflow would publish must meet their documented support, license and smoke-test requirements; publishing generated model data does not claim model-aware evaluation is ready. If an included package is unready, resolve the staging decision with the owner first. The existing workflow is not a selective core-only release gate. Do not delete changesets to exclude packages.
 
-The [first-0.1 inventory and owner checklist](docs/releases/0.1.0.md) records the current source/registry distinction, observed settings and outstanding external gates.
+The [first-0.1 inventory and owner checklist](docs/releases/0.1.0.md) is the preparation record of the first release: the source and registry state, the settings and the external gates as they were observed before it was published.
 
-These are release-preparation requirements, not authorization for an agent to publish, merge a version PR or change settings. Use the current files as evidence: core already has a prerelease version in the repository, so the initial `0.0.0` examples below describe first-package setup rather than current state.
+These are release-preparation requirements, not authorization for an agent to publish, merge a version PR or change settings. Use the current files as evidence: all five packages in `packages/` have been released, so the `0.0.0` and `0.0.1` examples below describe the setup of a new package, not the current state.
 
 ## Five-package first release
 
-The owner selected R6 for the first stable 0.1 release on 2026-11-06. The [target inventory](docs/releases/0.1.0.md) is `@callis/core`, `@callis/ucum`, `@callis/fhir-r4`, `@callis/fhir-r5` and `@callis/fhir-r6`, all `0.1.0`, with four companion peers `^0.1.0`. R6 supplies published `6.0.0-snapshot1` draft metadata, not final-R6 validation or a public model-aware evaluator option.
+The owner selected R6 for the first stable 0.1 release on 2026-11-06. The [inventory](docs/releases/0.1.0.md) was `@callis/core`, `@callis/ucum`, `@callis/fhir-r4`, `@callis/fhir-r5` and `@callis/fhir-r6`, all `0.1.0`, with four companion peers `^0.1.0`. R6 supplies published `6.0.0-snapshot1` draft metadata, not final-R6 validation or a public model-aware evaluator option.
 
-[T0039](docs/tasks/T0039-fhir-r6-model.md) supplies the provider; [T0040](docs/tasks/T0040-fhir-r6-validation.md) makes the default and stable release-consumer checks cover five packages. After the approved implementation and plan integrate legitimately, the existing workflow must regenerate the version PR normally. Current #93 observations and temporary five-package simulations do not validate that future candidate: review its exact five versions, peers, changelogs, archives and source/license metadata, run the actual packed consumers and require fresh hosted CI/native review on its immutable head before the owner's release decision.
+[T0039](docs/tasks/T0039-fhir-r6-model.md) supplied the provider, and [T0040](docs/tasks/T0040-fhir-r6-validation.md) made the default and stable release-consumer checks cover all five packages. The workflow then regenerated the version PR, [#93](https://github.com/losol/callis/pull/93). After the owner merged it, the workflow published all five packages as `0.1.0` ([Release tracking](#release-tracking)).
 
-The existing workflow discovers unpublished workspace packages; source `0.0.0` plus a minor changeset alone does not prevent discovery, while patch-only `0.0.1` can collide with a placeholder. Do not edit #93 manually, remove changesets, mark R6 private or add conditional release exclusions. Local placeholders do not establish npm state. The owner must separately verify all five package names/versions, registry visibility/write permissions, trusted publishers and provenance requirements. Inclusion is decided; merge, npm/settings actions and publication remain separate owner decisions.
+What that release relied on still holds: the workflow discovers every unpublished workspace package, a source `0.0.0` with a `minor` changeset becomes `0.1.0`, and one with only `patch` changesets becomes `0.0.1`, which the placeholder already holds ([1](#1-reserve-the-name-with-a-placeholder), [4](#4-a-new-public-package)). To keep a package out of a release, do not remove changesets, mark it private or add conditional release exclusions; resolve it with the owner first ([Release scope and readiness](#release-scope-and-readiness)).
 
 ## 1. Reserve the name with a placeholder
 
@@ -94,16 +94,16 @@ If `npm view` returns 404 after a successful publish, check how the package was 
 
 Once the Release workflow is on `main`, every push to `main` with pending changesets opens or updates the PR `chore: version packages`. It stays open until the owner releases.
 
-> **Do not merge the version PR before 0.1.0 is ready.** Merging it publishes every package it lists to npm, and npm never takes a version back. In prerelease mode ([5](#5-prereleases)) it publishes a prerelease under `next` instead, which is how to try out the release before 0.1.0.
+> **Merge the version PR only to release.** Merging it publishes every package it lists to npm, and npm never takes a version back. In prerelease mode ([5](#5-prereleases)) it publishes prereleases under `next` instead, which is how to try out a release first.
 
 Safeguards that make an accidental release unlikely:
 
 - **The PR is a draft,** and every update turns it back into one. A draft cannot be merged, so releasing takes a deliberate *Ready for review* first.
 - **Its body lists each package with the version it will publish,** for example `@callis/core@0.1.0`, followed by its changelog entry.
-- **It gets no CI by itself,** because the workflow's token starts no workflows, and CI must be verified before the owner merges it. It must be closed and reopened to start those checks. Do not assume branch rules enforce them: confirm current repository settings; the [0.1 audit](docs/releases/0.1.0.md#read-only-npm-and-repository-audit) did not observe a required-status-check rule.
+- **It gets no CI by itself,** because the workflow's token starts no workflows, and CI must be verified before the owner merges it. It must be closed and reopened to start those checks. Do not assume branch rules enforce them: confirm current repository settings; the [0.1 audit](docs/releases/0.1.0.md#read-only-npm-and-repository-audit) did not observe a required-status-check rule, and [#155](https://github.com/losol/callis/issues/155) tracks adding one.
 - **Nothing is published while changesets are pending.** The workflow then only updates the version PR, and only merging it consumes the changesets. Never delete pending changesets by hand: with nothing pending, the next push to `main` would publish what is on `main`, for example `@callis/core@0.0.0`. `pnpm exec changeset publish-plan` shows what that would be.
 
-Once, before the first release, give the `npm` environment `main` as its only deployment branch:
+Give the `npm` environment `main` as its only deployment branch, once ([Repository settings](CONTRIBUTING.md#repository-settings); [#155](https://github.com/losol/callis/issues/155) tracks it):
 
 ```sh
 gh api -X PUT repos/losol/callis/environments/npm --input - <<'JSON'
@@ -140,31 +140,29 @@ This covers 0.1.0 and every release after it.
 
 ## 4. A new public package
 
-This covers `@callis/fhir-r4`, `@callis/fhir-r5` and `@callis/ucum` (only after T0007's license check, [ADR-0007](docs/adr/0007-ucum-split.md)), and any later package. It gets the same placeholder, so that its first real version also comes from the workflow:
+This covers any package that is not on npm yet. It gets the same placeholder, so that its first real version also comes from the workflow:
 
 1. **The PR that adds the package also adds a `minor` changeset for it.** Its first version is then 0.1.0. Without a pending changeset, a run with nothing else pending would try to publish its `0.0.0`.
 2. **Reserve the name** ([1](#1-reserve-the-name-with-a-placeholder)) with its `PKG` and `PKG_DIR`, for example `@callis/fhir-r4` and `packages/fhir-r4`, before its first version PR is merged.
 3. **Create its trusted publisher** right before you merge that version PR ([3](#3-every-release), step 2), and release as usual.
-
-For the first release, do steps 2 and 3 for every package that 0.1.0 includes.
 
 ## 5. Prereleases
 
 While `.changeset/pre.json` exists with `"mode": "pre"`, Changesets is in prerelease mode, with the tag in that file (`next`):
 
 - The version PR is titled `chore: version packages (next)`, and its versions are prereleases: first `0.1.0-next.0`, then `0.1.0-next.1`, and so on.
-- Merging it publishes them under the npm dist-tag `next`. `latest` does not move: `npm install @callis/core` still gets the placeholder, and `npm install @callis/core@next` gets the prerelease. The GitHub release is marked as a prerelease.
+- Merging it publishes them under the npm dist-tag `next`. `latest` does not move: `npm install @callis/core` still gets the last stable version, and `npm install @callis/core@next` gets the prerelease. The GitHub release is marked as a prerelease.
 - Changesets moves the changesets it has used into `.changeset/pre/` instead of deleting them, so the stable release still lists them.
 - A prerelease is published like any release, with provenance. Its first publish also validates the trusted publisher, which then no longer expires.
 
 Release as in [3](#3-every-release), but check `next` instead of `latest`:
 
 ```sh
-npm view @callis/core dist-tags                         # { latest: '0.0.1', next: '0.1.0-next.0' }
+npm view @callis/core dist-tags                         # next is the new prerelease; latest has not moved
 npm view @callis/core@0.1.0-next.0 dist.attestations    # names a SLSA provenance
 ```
 
-**To end prereleases** before 0.1.0, run `pnpm changeset pre exit` in a PR and merge it. The next version PR, `chore: version packages`, then releases `0.1.0` under `latest`, and its changelog entry lists every change from the prereleases. The `next` tag still points to the last prerelease after that. Move it with `npm dist-tag add @callis/core@0.1.0 next --otp <code>`, or remove it with `npm dist-tag rm @callis/core next --otp <code>`.
+**To end prereleases,** run `pnpm changeset pre exit` in a PR and merge it. The next version PR, `chore: version packages`, then releases the stable versions under `latest`, and its changelog entry lists every change from the prereleases. The `next` tag still points to the last prerelease after that. Move it with `npm dist-tag add @callis/core@<version> next --otp <code>`, or remove it with `npm dist-tag rm @callis/core next --otp <code>`.
 
 ## When something goes wrong
 
