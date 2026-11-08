@@ -10,7 +10,7 @@
 | [`docs/adr/`](adr/README.md) | One file per architecture decision (context, decision, consequences). |
 | [`docs/roadmap.md`](roadmap.md) | Task index, dependency graph and suggested waves. |
 | `docs/tasks/` | One file per task (`T0000-scaffold.md` …): goal, scope, design notes, acceptance criteria. A worker only needs its own task file plus the ADRs it links. |
-| `docs/spec-notes.md` | Spec interpretations and suite-label exceptions (created by the first task that needs it). |
+| [`docs/spec-notes.md`](spec-notes.md) | Spec interpretations and suite-label exceptions. |
 | `docs/conformance/` | Generated conformance reports (from T0022). |
 | [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`AGENTS.md`](../AGENTS.md) | How to work in the repository: workflow, PR titles, definition of done; agent rules. |
 | [`docs/guides/`](guides/) | Code style and testing guides. |
@@ -26,9 +26,10 @@
 | FHIRPath 3.0.0 (STU release, July 2026, now "current") | <https://hl7.org/fhirpath/STU3/> ([change notes](https://hl7.org/fhirpath/STU3/changes.html)) |
 | FHIRPath in FHIR R4 | <https://hl7.org/fhir/R4/fhirpath.html> |
 | FHIRPath in FHIR R5 | <https://hl7.org/fhir/R5/fhirpath.html> |
+| FHIRPath in FHIR R6 (draft `6.0.0-snapshot1`, pinned; not final) | <https://hl7.org/fhir/6.0.0-snapshot1/fhirpath.html> |
 | FHIR JSON format (primitive extensions, choice types) | <https://hl7.org/fhir/R4/json.html> |
 | UCUM | <https://ucum.org/ucum> |
-| Official test suite | <https://github.com/FHIR/fhir-test-cases/tree/master/r5/fhirpath> |
+| Official test suite (R4 and R5; there is no R6 suite) | <https://github.com/FHIR/fhir-test-cases/tree/master/r5/fhirpath> |
 
 Links of the form `N1 §x` point into the N1 document, for example [N1 §4.5](https://hl7.org/fhirpath/N1/#singleton-evaluation-of-collections).
 
@@ -40,7 +41,7 @@ Links of the form `N1 §x` point into the N1 document, for example [N1 §4.5](ht
 2. **No runtime dependencies** in `@callis/core`.
 3. **Fast repeated evaluation.** Compile once, evaluate many times: search parameters, invariants, mappings.
 4. **Runs anywhere.** The same ESM build works in Node.js, browsers, Deno, Bun and edge workers.
-5. **Works without a model, better with one.** Plain JSON is enough to get started; a FHIR R4/R5 model adds choice types, type checks and primitive extensions.
+5. **Works without a model, better with one.** Plain JSON is enough to get started; a FHIR R4, R5 or R6 model adds choice types, type checks and primitive extensions ([FHIR versions](roadmap.md#fhir-versions)).
 6. **Precise values.** No binary floating point for `Decimal`. Dates keep partial precision. Quantities respect units.
 7. **Good diagnostics.** Every error has a stable code and a source position.
 8. **Strict TypeScript** and a fully typed public API.
@@ -73,7 +74,7 @@ FHIRPath 3.0.0 (July 2026) is now the version served at <https://hl7.org/fhirpat
 | FHIR functions: `extension()`, `hasValue()`, `getValue()`, `resolve()`, `ofType()`/`is`/`as` on FHIR types | ✓ | | [R5 §2.1.9.1.5](https://hl7.org/fhir/R5/fhirpath.html#functions) |
 | FHIR functions backed by host hooks: `memberOf()`, `subsumes()`, `subsumedBy()`, `conformsTo()`, `htmlChecks()` | ✓ | | empty without a hook |
 | FHIR equivalence changes (`Coding`, `CodeableConcept`, `id` ignored) | ✓ | | [R5 §2.1.9.1.6](https://hl7.org/fhir/R5/fhirpath.html#changes) |
-| `elementDefinition()`, `slice()`, `checkModifiers()`; R5 draft APIs `%terminologies`, `%server`, `%factory` | | ✓ | T0032 |
+| `elementDefinition()`, `slice()`, `checkModifiers()`; R5 draft APIs `%terminologies`, `%server`, `%factory` | | ✓ | T0032; the R6 draft moved the three APIs out of the core specification |
 | CDA logical model, "document functions" (HL7 Java extensions) | | | out of scope |
 
 ## Pipeline
@@ -119,7 +120,7 @@ Everything up to and including the compiler is pure and deterministic. The AST i
 | Decimal | Own `BigInt`-based implementation (coefficient + scale) that keeps precision. | [0005](adr/0005-bigint-decimal.md) |
 | Date/time | Own partial-precision value types; no Temporal and no date library. | [0006](adr/0006-own-date-time-types.md) |
 | Units | Minimal unit system in core; full UCUM in the opt-in `@callis/ucum`. | [0007](adr/0007-ucum-split.md) |
-| Model | `ModelProvider` interface; the core also works on plain JSON. R4/R5 models are generated and published as separate packages. | [0008](adr/0008-model-provider.md) |
+| Model | `ModelProvider` interface; the core also works on plain JSON. R4, R5 and R6 models are generated and published as separate packages; R6 from a pinned draft ([T0039](tasks/T0039-fhir-r6-model.md)). | [0008](adr/0008-model-provider.md) |
 | Packaging | ESM only, ES2022, zero runtime dependencies, Node 22/24/26 and browsers. | [0009](adr/0009-esm-only-zero-deps.md) |
 | Tooling | pnpm, TypeScript 7, tsdown, Biome, Vitest, Changesets. | [0010](adr/0010-tooling.md) |
 | Conformance | Vendored HL7 test suite, run in CI with a baseline that may only ratchet upwards. | [0011](adr/0011-conformance-suite.md) |
@@ -154,9 +155,9 @@ names.evaluate(patient);
 const exact = evaluate({}, '1.234', { decimalOutput: 'string' });
 ```
 
-This is a planned surface until T0025 lands. It exposes only implemented capabilities, preserves the existing exported provider/unit contracts and provides plain JSON-friendly results plus stable public errors. Public parsing/AST access waits for [#107](https://github.com/losol/callis/issues/107). Model options, typed output, analysis, hooks, async evaluation and compile caching remain in the [later API sketch](tasks/T0038-public-api-completion.md#public-api-sketch); their presence in the pipeline describes the target architecture, not current release support. Errors are described in [T0000](tasks/T0000-scaffold.md#errors-and-diagnostics).
+T0025 delivered this surface, and later increments add functions and `parseJson()`; the [guide](guide.md) lists what is supported now. It exposes only implemented capabilities, preserves the existing exported provider/unit contracts and provides plain JSON-friendly results plus stable public errors. Public parsing/AST access waits for [#107](https://github.com/losol/callis/issues/107). Model options, typed output, analysis, hooks, async evaluation and compile caching remain in the [later API sketch](tasks/T0038-public-api-completion.md#public-api-sketch); their presence in the pipeline describes the target architecture, not current release support. Errors are described in [T0000](tasks/T0000-scaffold.md#errors-and-diagnostics).
 
-The first 0.1 release follows the minimal API and [simple playground](tasks/T0036-playground.md), with support, limitations and conformance documented in [T0037](tasks/T0037-first-release-readiness.md). Later 0.x releases advance toward full phase 1 without changing its specification baseline. The scope and criteria for 1.0 remain open.
+The first 0.1 release, published on 2026-11-06 with five packages, followed the minimal API and [simple playground](tasks/T0036-playground.md), with support, limitations and conformance documented in [T0037](tasks/T0037-first-release-readiness.md). Later 0.x releases advance toward full phase 1 without changing its specification baseline. The scope and criteria for 1.0 remain open.
 
 **Stability:** releases before 1.0 may break the public API, including `ModelProvider`, but only as a last resort: APIs are designed with later tasks in mind, and each breaking change states its reason in its PR and is called out in its changeset ([API changes](../CONTRIBUTING.md#api-changes)). Stabilising the API is a goal for 1.0, not for 0.1.0 ([roadmap backlog](roadmap.md#backlog-not-scheduled)).
 
@@ -174,6 +175,7 @@ callis/
 │   ├── ucum/                   @callis/ucum    UCUM unit system, no runtime dependencies
 │   ├── fhir-r4/                @callis/fhir-r4 generated R4 ModelProvider
 │   ├── fhir-r5/                @callis/fhir-r5 generated R5 ModelProvider
+│   ├── fhir-r6/                @callis/fhir-r6 generated R6 ModelProvider (pinned draft)
 │   └── cli/                    @callis/cli     later
 ├── scripts/                    repository scripts: zero-dependency check, size report
 ├── tools/                      private, never published
@@ -269,5 +271,11 @@ The open questions from the first draft were answered by the owner on 2026-11-03
 | Default timezone | **UTC** for values without an offset; `timezoneOffset` overrides it, and `'local'` uses the host's offset. | [ADR-0012](adr/0012-evaluation-defaults.md) |
 | Choice-type suffixes (`Observation.valueQuantity`) | Rejected by default as the spec requires; `lenient: { choiceSuffix: true }` accepts them. | [ADR-0012](adr/0012-evaluation-defaults.md) |
 | Package names and npm scope | `@callis/fhir-r4` and `@callis/fhir-r5`; the `@callis` scope is secured. | [ADR-0008](adr/0008-model-provider.md) |
+
+Later owner decisions:
+
+| Question | Decision | Recorded in |
+| --- | --- | --- |
+| FHIR versions | R4, R5 and R6. R6 is best effort: `@callis/fhir-r6` is pinned to the draft `6.0.0-snapshot1`, there is no R6 conformance suite, and known gaps are documented instead (R6 in the first release, 2026-11-06; support direction, 2026-11-08). | [Roadmap: FHIR versions](roadmap.md#fhir-versions), [T0039](tasks/T0039-fhir-r6-model.md) |
 
 New questions go into the relevant task file or a new ADR.

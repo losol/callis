@@ -2,7 +2,7 @@
 
 Runs the official [HL7 FHIRPath test suite](https://github.com/FHIR/fhir-test-cases/tree/master/r5/fhirpath) against Callis and reports the results ([T0022](../../docs/tasks/T0022-conformance-runner.md), [ADR-0011](../../docs/adr/0011-conformance-suite.md)). This package is private and never published.
 
-The reports are in [`docs/conformance/`](../../docs/conformance/): [R4](../../docs/conformance/r4.md) and [R5](../../docs/conformance/r5.md). CI also uploads a JSON summary and every test result as the `conformance-results` artifact.
+The reports are in [`docs/conformance/`](../../docs/conformance/): [R4](../../docs/conformance/r4.md) and [R5](../../docs/conformance/r5.md). CI also uploads a JSON summary and every test result as the `conformance-results` artifact. There is no official R6 FHIRPath suite, so there is no R6 report; the engine's tests against the R6 provider are not conformance results ([FHIR versions](../../docs/roadmap.md#fhir-versions)).
 
 ## Commands
 
@@ -122,4 +122,4 @@ The converter ([`src/fhir-xml.ts`](src/fhir-xml.ts)) is driven by the generated 
 
 **Checked against the official examples.** Ten converted inputs are copies of examples in the FHIR specification. A unit test compares each with the official JSON example from the `hl7.fhir.r4.examples` and `hl7.fhir.r5.examples` packages, vendored in [`official-examples/`](official-examples/SOURCE.md). The differences must be exactly the ones listed with their reason in [`src/official-examples.ts`](src/official-examples.ts): the suite edited its copy of the example, the examples package added metadata, or the official JSON writes the same narrative XHTML differently. There are no differences in names, cardinality, types or numbers.
 
-**Decimal precision.** The runner parses an input with the adapter's `parseInput`, and with `JSON.parse` when the adapter has none. `JSON.parse` loses what the converted JSON keeps: `1.50` becomes `1.5` and `9.5e2` becomes `950`. Until [T0018](../../docs/tasks/T0018-model-aware-evaluation.md) sets `parseInput` to the engine's lossless `parseJson`, tests that observe the precision of a decimal from an input can fail for that reason alone. The baseline records only tests that really pass, so such a test joins it when the lossless path is in place.
+**Decimal precision.** The runner parses an input with the adapter's `parseInput`, and with `JSON.parse` when the adapter has none. `JSON.parse` loses what the converted JSON keeps: `1.50` becomes `1.5` and `9.5e2` becomes `950`. Since [T0018](../../docs/tasks/T0018-model-aware-evaluation.md), the engine adapter sets `parseInput` to the engine's lossless `parseJson`, so tests that observe the precision of a decimal from an input see it as written. An adapter without the hook can fail such tests for that reason alone; the baseline records only tests that really pass.

@@ -9,7 +9,8 @@
 - **Changes to the plan** start as follow-up issues and land in their own `docs` PRs ([Findings during a task](../CONTRIBUTING.md#findings-during-a-task)). New tasks take the next free ID; IDs are never reused.
 - **This file is the source of truth** for task titles, phases, waves, sizes and dependencies. The overview table is the master; the graph, the waves table and the task file headers must match it (`pnpm check:roadmap`). The [roadmap sync](../CONTRIBUTING.md#roadmap-sync) copies it to the task issues and the project board.
 - **Workflow, PR titles and the definition of done** are in [CONTRIBUTING.md](../CONTRIBUTING.md); agents also follow [AGENTS.md](../AGENTS.md).
-- **Conformance groups** listed for a task are the groups from the HL7 test suite (`tests-fhir-r5.xml`) that the task should turn green. Until the conformance runner and converted fixtures exist (T0022, T0023), they are informational. After that, the PR shows the conformance delta, and the baseline may only go up.
+- **Conformance groups** listed for a task are the groups from the HL7 test suites (`tests-fhir-r4.xml` and `tests-fhir-r5.xml`) that the task should turn green. A group that exists in only one suite says so. The runner and converted fixtures are in place (T0022, T0023), so every PR shows the conformance delta, and the baseline may only go up. There is no R6 suite ([FHIR versions](#fhir-versions)).
+- **FHIR versions:** a task whose behaviour depends on the FHIR model covers R4, R5 and R6 as described in [FHIR versions](#fhir-versions).
 - **Sizes** are rough, for one worker: **S** ≈ 1 day, **M** ≈ 2–4 days, **L** ≈ 1–2 weeks.
 
 ## Overview
@@ -170,15 +171,17 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 
 The first 0.1 release does not wait for full phase 1. The original engine/API/playground preparation is complete through T0037, on top of the original wave-3 engine tasks (including T0008 and T0023, with #110 fixing the UCUM conformance adapter). The owner's R6 inclusion decision adds T0039 and T0040 as requirements for the selected five-package release. Completed task history, including the T0035 site, is not reopened.
 
+**Published so far** ([GitHub Releases](https://github.com/losol/callis/releases)): the five-package `0.1.0` (core, UCUM, R4, R5, R6) from version PR #93 at `b92db53`, on 2026-11-06 UTC ([RELEASING](../RELEASING.md#release-tracking)); then `@callis/core` `0.2.0` with where, exists and count, and `0.1.1` of the four companions, from #138 at `b587e09`, on 2026-11-07. The release trackers [#115](https://github.com/losol/callis/issues/115) and [#131](https://github.com/losol/callis/issues/131) record the owner's post-publication verification and close after it.
+
 **First-release prerequisites:** the completed engine/API/playground path (original wave-3 engine tasks → T0010 → T0025 → T0036 → T0037, with T0035 also required by the playground), plus the R6 provider/integration path (T0019 → T0039 → T0040, with T0040 also depending on T0025). Both feed the [selected five-package inventory](releases/0.1.0.md); the regenerated exact version-PR head then requires its own checks, review and owner release decision. This extends release prerequisites without retroactively changing completed task dependencies. Neither the API nor the playground depends on an npm publish. T0036 records the accepted Lectio Docs/Ratio/editor research: retain the site, pin the Ratio JSON editor and use a labelled expression field.
 
-**Later 0.x releases:** function groups, model-aware evaluation, FHIR functions, hooks/async and static analysis land incrementally with updated support, limitations, examples and per-phase conformance. T0038 preserves the original T0025 completion work, including typed output, public parsing (after #107), analysis, async APIs, cache and moving full conformance onto the public API. The existing phase-1 specification target is unchanged; a phase is a scope grouping, not a release number.
+**Later 0.x releases:** function groups, model-aware evaluation, FHIR functions, hooks/async and static analysis land incrementally with updated support, limitations, examples and per-phase conformance. The engine side of model-aware evaluation is merged (T0018, with lossless JSON input); its public `model` and `lenient` options arrive with T0038. T0038 preserves the original T0025 completion work, including typed output, public parsing (after #107), analysis, async APIs, cache and moving full conformance onto the public API. The existing phase-1 specification target is unchanged; a phase is a scope grouping, not a release number.
 
-Every release documents exactly what is supported and what remains unimplemented, with committed R4/R5 conformance reports and exceptions. Package inclusion is explicit in the release inventory (T0037 preparation, extended by T0039/T0040 for R6), since the existing workflow may version several packages together. Publishing remains an owner action under [RELEASING.md](../RELEASING.md). No version number beyond the first 0.1 is promised for a particular feature.
+Every release documents exactly what is supported and what remains unimplemented, with committed R4/R5 conformance reports and exceptions. For R6 it states the engine-tested coverage and the known gaps instead of a pass count ([FHIR versions](#fhir-versions)). Package inclusion is explicit in the release inventory (T0037 preparation, extended by T0039/T0040 for R6), since the existing workflow may version several packages together. Publishing remains an owner action under [RELEASING.md](../RELEASING.md). No version number beyond the first 0.1 is promised for a particular feature.
 
 **1.0 is open:** scope, support commitments, conformance gates, API freeze and release criteria require a later owner decision. Neither the first 0.1 nor completing phase 1 or phase 2 automatically constitutes 1.0.
 
-**Conformance becomes measurable** once T0008, T0022 and T0023 are merged (end of the original engine wave 3). From wave 4 on, every PR reports its conformance delta.
+**Conformance is measurable** since T0008, T0022 and T0023 merged (the end of the original engine wave 3). From wave 4 on, every PR reports its conformance delta.
 
 **Phase 2 (T0026–T0032)** implements the STU parts of N1 and the additions in [FHIRPath 3.0.0](https://hl7.org/fhirpath/STU3/). These tasks are independent of each other and can all run in parallel after T0038 completes the phase-1 API. Each one must make its matching conformance tests (those classified *STU*) pass, and update the scope table in [architecture.md](architecture.md#specification-baseline-and-scope).
 
@@ -186,17 +189,41 @@ Every release documents exactly what is supported and what remains unimplemented
 
 The owner approved only where, exists and count for [0.2.0](https://github.com/losol/callis/milestone/2) on 2026-11-07 (release tracker [#131](https://github.com/losol/callis/issues/131)), using the existing synchronous model-less API. T0012 implements where and its shared predicate helper first; T0011 then implements exists/count using that helper, in a separate task PR. Documentation, synthetic playground examples, stable errors, public consumer checks and the conformance ratchet are part of those tasks. No model-aware evaluation, select/repeat, lossless JSON, public async or new API options are included.
 
-The remaining original T0011/T0012 scope and acceptance are preserved in T0041/T0042, with explicit dependencies into T0038's later full phase-1 completion. Those completion tasks have no selected release. Waves reflect these real helper/completion dependencies, not release numbers. GitHub milestone assignments are the release-scope authority under [CONTRIBUTING](../CONTRIBUTING.md#release-scope-and-tracking); the target does not authorize merge or publication and sets no due date or 1.0 criteria.
+T0012 and T0011 merged, and `@callis/core` `0.2.0` was published with them on 2026-11-07. The remaining original T0011/T0012 scope and acceptance are preserved in T0041/T0042, with explicit dependencies into T0038's later full phase-1 completion. Those completion tasks have no selected release. Waves reflect these real helper/completion dependencies, not release numbers. GitHub milestone assignments are the release-scope authority under [CONTRIBUTING](../CONTRIBUTING.md#release-scope-and-tracking); the target does not authorize merge or publication and sets no due date or 1.0 criteria.
 
-## R6 model delivery
+## FHIR versions
 
-[T0039](tasks/T0039-fhir-r6-model.md) adds real R6 provider metadata from the checksum-pinned `6.0.0-snapshot1` draft source, selected from HL7's published versions on 2026-11-06. [T0040](tasks/T0040-fhir-r6-validation.md) owns installed-package compatibility and shared CI/release-discovery evidence. These tasks extend version coverage without reopening completed T0019 or changing the FHIRPath specification baseline.
+Callis supports FHIR R4, R5 and R6 (owner direction, 2026-11-08). R6 is best effort: its provider is pinned to a draft, and there is no official R6 FHIRPath conformance suite.
 
-R6 metadata is not model-aware evaluator support, a public `model` option, a FHIR validator or R6 conformance. T0018 and T0038 retain those existing engine/API responsibilities. The owner selected R6 for the first 0.1 release on 2026-11-06: the target inventory is core, UCUM, R4, R5 and R6. Integrate the reviewed provider, five-package checks and release plan before the existing workflow regenerates a version PR; then validate and review that exact new five-package candidate. This target is distinct from the currently generated #93 and does not authorize its mutation, merge or publication. See the [inventory and owner gates](releases/0.1.0.md).
+| Version | Provider | Source | Conformance evidence |
+| --- | --- | --- | --- |
+| R4 | `r4` from `@callis/fhir-r4` | FHIR 4.0.1 | HL7 suite `tests-fhir-r4.xml`, [report](conformance/r4.md) |
+| R5 | `r5` from `@callis/fhir-r5` | FHIR 5.0.0 | HL7 suite `tests-fhir-r5.xml`, [report](conformance/r5.md) |
+| R6 | `r6` from `@callis/fhir-r6` | the September 2026 draft `6.0.0-snapshot1`, [pinned by T0039](tasks/T0039-fhir-r6-model.md#pinned-source-and-maturity) | No suite. Engine tests run model-aware cases against the real provider (`packages/core/test/generated-models.test.ts`). |
+
+The engine is provider-agnostic: version differences come from the provider's data, not from version-specific cases in the engine ([T0018](tasks/T0018-model-aware-evaluation.md)). Every task whose behaviour depends on the FHIR model (navigation, FHIR functions and variables, analysis, public model options, packaging, examples, benchmarks):
+
+- Runs its model-dependent cases against the real `r4`, `r5` and `r6` providers, as `generated-models.test.ts` does, including at least one case where the versions differ when the task has one (such as `Observation.value[x]`, `Observation.triggeredBy`, or the R6-only `DeviceAlert`).
+- Measures conformance with the R4 and R5 suites only. It never invents an R6 pass count, registers an R6 suite exception or presents the R4/R5 reports as R6 evidence.
+- Says where the R6 draft differs from R5 or is not final, with a link to the pinned [R6 FHIRPath page](https://hl7.org/fhir/6.0.0-snapshot1/fhirpath.html), and lists the known gaps in its task file and user docs. It never claims final-R6 stability.
+- Treats a newer R6 snapshot or the final R6 as a reviewed provider update with a new pin, checksum and tests ([T0039](tasks/T0039-fhir-r6-model.md)), never as a silent change.
+
+**Known R6 differences.** Comparing the pinned R6 FHIRPath page with R5's, together with the page's own change notes (which list changes since `6.0.0-ballot4`), shows these differences. The owner decided how to handle them on 2026-11-08:
+
+| R6 draft change | Decision | Affects |
+| --- | --- | --- |
+| The Type Factory (`%factory`), General Service API (`%server`) and Terminology Service API (`%terminologies`) moved out of the core specification into HL7's API incubator IG, which has only a CI build. | T0032 covers the R4/R5 APIs. The R6 ones wait until the IG is published; until then they are a known R6 gap. | [T0032](tasks/T0032-fhir-phase2.md#owner-decision-r6-service-apis) |
+| `htmlChecks()` also accepts a string, parsed as the content of a `div`. | Accept strings for every provider (R4, R5 and R6), as the pinned R5 suite already expects (`htmlTest02`/`03`); no suite exceptions ([spec notes](spec-notes.md#htmlchecks-on-strings)). | [T0021](tasks/T0021-hooks-async.md#owner-decision-htmlchecks-on-strings) |
+| A new function, `weight()`, and the `%profile` variable for profile invariants. | `weight()` is on the [backlog](#backlog-not-scheduled) until final R6 ([#151](https://github.com/losol/callis/issues/151)). Hosts can pass `%profile` as a variable. | [T0020](tasks/T0020-fhir-functions.md) |
+| `comparable()` is no longer a FHIR addition; it is in FHIRPath 3.0.0. | Already planned with the 3.0.0 additions. | [T0030](tasks/T0030-stu-precision-datetime.md) |
+| The type table maps `FHIR.date` to `System.Date`. | None needed: Callis already does this ([spec notes](spec-notes.md#fhirdate-maps-to-systemdate)). | – |
+
+**Delivery.** [T0039](tasks/T0039-fhir-r6-model.md) added the R6 provider from the checksum-pinned `6.0.0-snapshot1` source, and [T0040](tasks/T0040-fhir-r6-validation.md) the installed-package and release checks; both shipped in the five-package `0.1.0`. The engine tests of [T0018](tasks/T0018-model-aware-evaluation.md) run model-aware evaluation against all three providers. The public `model` option is [T0038](tasks/T0038-public-api-completion.md). R6 metadata is not a FHIR validator, and none of this is R6 conformance. These tasks extend version coverage without reopening T0019 or changing the FHIRPath specification baseline.
 
 ## Backlog (not scheduled)
 
-- R4B model (R6 is scheduled in T0039/T0040).
+- R4B model (R6 is delivered by T0039/T0040).
+- `weight()` from the R6 draft ([#151](https://github.com/losol/callis/issues/151)): waits for final R6 (owner decision, 2026-11-08). It needs cross-resource lookups, so it will likely build on the T0021 hooks.
 - Parser error recovery and a language-server or editor integration.
 - FHIR XML as an input format (a separate package that reuses the T0023 converter).
 - A SQL-on-FHIR `ViewDefinition` runner built on Callis.
@@ -206,6 +233,6 @@ R6 metadata is not model-aware evaluator support, a public `model` option, a FHI
 
 ## Bounded first/single increment
 
-The owner selected only first and single for the next implementation increment, without selecting a release version, milestone or due date. [T0044](tasks/T0044-fn-first-single.md) / [#141](https://github.com/losol/callis/issues/141) is a native child of the still-open [T0013](tasks/T0013-fn-subsetting-combining.md) / [#25](https://github.com/losol/callis/issues/25). T0044 needs only the delivered evaluator/equality kernels; T0013 depends on its child for full completion, avoiding a parent/child dependency cycle. T0041 and T0038 keep their full-completion dependencies on T0013. Only first-dependent acceptance references use the smaller child.
+The owner selected only first and single for the next implementation increment, without selecting a release version, milestone or due date. [T0044](tasks/T0044-fn-first-single.md) / [#141](https://github.com/losol/callis/issues/141) is a native child of the still-open [T0013](tasks/T0013-fn-subsetting-combining.md) / [#25](https://github.com/losol/callis/issues/25). T0044 merged in #143; T0013 stays open for its remaining functions. T0044 needs only the delivered evaluator/equality kernels; T0013 depends on its child for full completion, avoiding a parent/child dependency cycle. T0041 and T0038 keep their full-completion dependencies on T0013. Only first-dependent acceptance references use the smaller child.
 
 Function progress assigns first/single only to T0044 and the other eight functions only to T0013, so each original function appears once. The additional task row represents bounded work, not an additional feature or completed parent. No retroactive migration of historical tasks, model-aware FHIR, other collection functions, public API expansion or conformance explorer is selected.

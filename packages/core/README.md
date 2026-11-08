@@ -2,14 +2,14 @@
 
 A [FHIRPath](https://hl7.org/fhirpath/N1/) engine for TypeScript.
 
-> **Work in progress.** The initial API supports synchronous model-less evaluation. Full phase-1 conformance, a public model option and async evaluation remain future work. These examples do not imply a published release; 0.x changes may extend or change the API.
+> **Work in progress.** The initial API supports synchronous model-less evaluation. Full phase-1 conformance, a public model option and async evaluation remain future work. The examples follow the main branch, which can be ahead of the latest release; 0.x changes may extend or change the API.
 
 ## Goals
 
 - **Correct.** It follows FHIRPath N1 and the FHIR additions, and is checked against the official HL7 FHIRPath test suite.
 - **No runtime dependencies.** One ESM build (ES2022). Node 22/24/26 and a production Vite/Chromium consumer are checked; Deno, Bun and edge workers are not verified for 0.1.
 - **Compile once, evaluate many times.** It is built for repeated evaluation, such as search parameters, invariants and mappings.
-- **Works without a model, better with one.** The public API currently evaluates plain JSON only. The engine evaluates with the R4/R5 providers internally (choice elements, FHIR primitives and their extensions, inheritance), which the conformance runner uses; the public `model` option is deferred to the expanded API.
+- **Works without a model, better with one.** The public API currently evaluates plain JSON only. The engine evaluates with a model internally (choice elements, FHIR primitives and their extensions, inheritance): the conformance runner uses the R4 and R5 providers, and the engine's tests also run against the R6 provider, which comes from a draft (`6.0.0-snapshot1`) and has no conformance suite. The public `model` option is deferred to the expanded API.
 - **Precise values.** It uses exact decimals instead of binary floating point, keeps the precision of partial dates and times, and respects units in quantities.
 
 ## Quick start
@@ -34,7 +34,7 @@ The current synchronous API also supports `where(criteria)` on model-less JSON:
 export const filteredGiven: unknown[] = evaluate(patient, "name.where(given[0] = 'Ada').given");
 ```
 
-Filtering preserves input order, duplicates and input object identity. Criteria use FHIRPath singleton Boolean semantics; false/empty excludes an item and a multi-item criterion raises `eval/singleton-expected`. The existing single non-Boolean fallback is true. No public options or async surface are added. This is an implementation update, not a publication announcement; the 0.1 subset below describes the original release.
+Filtering preserves input order, duplicates and input object identity. Criteria use FHIRPath singleton Boolean semantics; false/empty excludes an item and a multi-item criterion raises `eval/singleton-expected`. The existing single non-Boolean fallback is true. No public options or async surface are added. `where`, `exists` and `count` were released in 0.2.0; the 0.1 subset below describes the original release.
 
 `exists([criteria])` and `count()` compose with filtering through the same public API:
 
@@ -69,7 +69,7 @@ This gives `['1.50']`; without `decimalOutput: 'string'` the result is the numbe
 
 ## First 0.1 subset
 
-Paths, literals, indexing, unary polarity, arithmetic, comparisons, equality/equivalence, membership/union, Boolean logic and system type operations are implemented. The only built-in functions are `not`, `is`, `as` and `ofType`; collection/filter/string/math/FHIR function groups are deferred. Exact Decimal string output is opt-in; input JavaScript number precision cannot be recovered. No public model option, async, hooks, analyzer, parser/AST or typed-output API is included.
+In 0.1.0, paths, literals, indexing, unary polarity, arithmetic, comparisons, equality/equivalence, membership/union, Boolean logic and system type operations were implemented. The only built-in functions were `not`, `is` and `as` (`ofType`, listed here before, was never registered: [#130](https://github.com/losol/callis/issues/130)); collection/filter/string/math/FHIR function groups were deferred, and later releases add them as described above. Exact Decimal string output is opt-in; input JavaScript number precision cannot be recovered. No public model option, async, hooks, analyzer, parser/AST or typed-output API is included.
 
 See the [version-specific support matrix](https://github.com/losol/callis/blob/main/docs/guide.md#first-01-support-matrix) and [release inventory](https://github.com/losol/callis/blob/main/docs/releases/0.1.0.md). Internal-adapter conformance is partial and does not certify this public model-less subset as fully FHIRPath compliant.
 

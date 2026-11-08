@@ -20,6 +20,7 @@ Semantic checks and type inference with a model ([design notes](#design-notes)).
   - obvious operator type errors
 - Strict mode ([N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation)) for operations that are unsafe on singletons.
 - A public `analyze()`. `compile()` throws `FhirPathSemanticError` with all diagnostics attached.
+- **FHIR versions** ([roadmap](../roadmap.md#fhir-versions)): what is a known element, type or choice type comes from the provider, so the analyzer has no version-specific code. The model-aware analysis cases also run against the real `r4`, `r5` and `r6` providers, with the differences of the pinned sources: `Observation.triggeredBy` is an element in R5 and R6 and unknown in R4; `Observation.instantiates` is an element in R5 only (the R6 draft removed it); `DeviceAlert` is an `inputType` and root type in R6 only; `Observation.value` allows `Reference` in R5 only and `Attachment` in R5 and R6. R6 results are engine tests on the pinned draft, not conformance.
 
 ## Design notes
 
@@ -39,6 +40,7 @@ The result is a list of `Diagnostic { severity: 'error' | 'warning'; code; messa
 ## Acceptance criteria
 
 - [ ] `name.given1` and `Encounter.name.given` on `inputType: 'Patient'` are semantic errors (tests `testSimpleFail`, `testSimpleWithWrongContext`), and so is `Observation.valueQuantity.unit` (`testPolymorphismB`).
-- [ ] Conformance group `isSemanticChecks` passes, as do all `invalid="semantic"` tests in phase 1.
+- [ ] Conformance group `isSemanticChecks` passes, as do all `invalid="semantic"` tests in phase 1, in R4 and R5.
+- [ ] With the real `r4`, `r5` and `r6` providers, the same expression gets each version's diagnostics: `Observation.triggeredBy` is `semantic/unknown-element` under R4 only, `Observation.instantiates` under R4 and R6, and `inputType: 'DeviceAlert'` is valid under R6 only. No R6 conformance result is claimed.
 - [ ] Analysis without a model never produces false errors for valid expressions in the suite.
 - [ ] Unknown-type warnings leave compilation successful and produce execution errors only at evaluated use sites, even in strict mode; model-less unqualified resource-name targets produce no unknown-type diagnostic. Known nonmatching types are not unknown-type errors.

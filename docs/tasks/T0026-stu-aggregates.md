@@ -10,4 +10,4 @@ Part of the [roadmap](../roadmap.md). Phase 2 · wave 8 · size M.
 
 ## Acceptance criteria
 
-The spec examples are tests; using `$total` outside `aggregate` is a semantic error; conformance groups `testAggregate` and `defineVariable` pass.
+The spec examples are tests; using `$total` outside `aggregate` is a semantic error; conformance groups `testAggregate` and `defineVariable` (R5 suite only) pass.
