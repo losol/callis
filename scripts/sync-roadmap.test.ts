@@ -2,8 +2,15 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  type Call,
+  type FakeGhResult,
+  type Fixture,
+  fakeGh,
+  type GraphqlReply,
+} from './fake-gh.ts';
 import {
   DELIVERED_BEFORE_AREAS,
   loadRoadmap,
@@ -13,6 +20,30 @@ import {
   TEXT_FIELDS,
   taskAreaLabels,
 } from './roadmap.ts';
+
+/**
+ * Most tests here run the script in this process. A test that started the command would pay for a
+ * Node process for the script and another for every `gh` call (the full roadmap makes about fifty),
+ * which takes seconds on an idle machine and longer than any sensible timeout on a busy one. The
+ * script calls `gh` only through `execFileSync`, so that is the one thing replaced: its own code
+ * still runs, including how it builds the `gh` arguments and reads a failed call.
+ */
+const gh = vi.hoisted(() => ({
+  /** Answers one `gh` call; unset outside `run()`, so nothing can reach a real `gh`. */
+  answer: undefined as
+    | ((file: string, args: readonly string[], input: string) => string)
+    | undefined,
+}));
+
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:child_process')>()),
+  execFileSync: (file: string, args: readonly string[], options?: { readonly input?: string }) => {
+    if (gh.answer === undefined) {
+      throw new Error(`execFileSync(${file}) ran outside run(): tests never start a real process`);
+    }
+    return gh.answer(file, args, options?.input ?? '');
+  },
+}));
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const milestone = { number: 7, title: 'Chosen release', state: 'open' };
@@ -26,77 +57,115 @@ const issue = {
   milestone: null,
 };
 
+/** The fixture with the defaults that most tests share, copied the way a file round trip would. */
+function withDefaults(fixture: Fixture): Fixture {
+  return JSON.parse(JSON.stringify({ milestonePages: [[milestone]], issues: [issue], ...fixture }));
+}
+
+/** A failed `gh` call as `execFileSync` reports it: an error that carries the output and status. */
+function commandFailed(file: string, args: readonly string[], result: FakeGhResult): Error {
+  return Object.assign(
+    new Error(`Command failed: ${[file, ...args].join(' ')}\n${result.stderr}`),
+    { status: result.status, stdout: result.stdout, stderr: result.stderr },
+  );
+}
+
+/** Stops the script where the real `process.exit` would. */
+class ProcessExit extends Error {
+  readonly code: number;
+
+  constructor(code: number) {
+    super(`process.exit(${code})`);
+    this.code = code;
+  }
+}
+
 /**
- * What the fake `gh` answers to a GraphQL request whose query contains `match`: it prints `stdout`
- * and `stderr`, then exits with `status`. Like the real `gh api graphql`, a reply that carries
- * GraphQL `errors` must exit 1 and still print the whole response.
+ * Runs the real script in this process with the arguments `args` and the fake `gh` for every GitHub
+ * call. The script runs when it is imported and keeps its state in module variables, so every run
+ * imports a fresh copy. Its output is collected instead of printed, and `process.exit` ends the run
+ * instead of the test process.
  */
-interface GraphqlReply {
-  readonly match: string;
-  readonly stdout?: unknown;
-  readonly stderr?: string;
-  readonly status?: number;
+async function run(args: readonly string[], fixture: Fixture = {}) {
+  const data = withDefaults(fixture);
+  const calls: Call[] = [];
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  gh.answer = (file, ghArgs, input) => {
+    if (file !== 'gh') {
+      throw new Error(`Unexpected command: ${file}`);
+    }
+    const result = fakeGh(data, ghArgs, input);
+    calls.push(result.call);
+    if (result.status !== 0) {
+      throw commandFailed(file, ghArgs, result);
+    }
+    return result.stdout;
+  };
+  const spies = [
+    vi.spyOn(console, 'log').mockImplementation((...values) => {
+      stdout.push(values.join(' '));
+    }),
+    vi.spyOn(console, 'error').mockImplementation((...values) => {
+      stderr.push(values.join(' '));
+    }),
+    // The script pauses after every write to stay below GitHub's rate limits. That is a sleep, not
+    // behaviour under test.
+    vi.spyOn(Atomics, 'wait').mockReturnValue('ok'),
+    vi.spyOn(process, 'exit').mockImplementation((code) => {
+      throw new ProcessExit(Number(code ?? 0));
+    }),
+  ];
+  const argv = process.argv;
+  process.argv = [argv[0] ?? 'node', 'scripts/sync-roadmap.ts', ...args];
+  vi.resetModules();
+  let status = 0;
+  try {
+    await import('./sync-roadmap.ts');
+  } catch (error) {
+    if (!(error instanceof ProcessExit)) {
+      throw error;
+    }
+    status = error.code;
+  } finally {
+    process.argv = argv;
+    gh.answer = undefined;
+    for (const spy of spies) {
+      spy.mockRestore();
+    }
+  }
+  return { status, output: [...stdout, ...stderr].join('\n'), calls };
 }
 
-interface Fixture {
-  readonly milestonePages?: readonly (readonly object[])[];
-  readonly issues?: readonly object[];
-  readonly currentIssue?: object;
-  readonly currentMilestone?: object;
-  readonly patchResponse?: object;
-  readonly labels?: readonly object[];
-  readonly blockers?: Readonly<Record<string, readonly object[]>>;
-  /** Without a matching reply, a GraphQL request fails the run. */
-  readonly graphql?: readonly GraphqlReply[];
-}
+/**
+ * A run takes well under a second on an idle machine, so this is far above what a busy one needs.
+ * A run that never ends is still reported: `spawnSync` kills it at this limit and the test fails
+ * with `ETIMEDOUT` and the output so far. The test's own timeout is just above, so that error, not
+ * Vitest's generic one, is what a hang shows.
+ */
+const COMMAND_TIMEOUT_MS = 60_000;
+const COMMAND_TEST = { timeout: COMMAND_TIMEOUT_MS + 5_000 };
 
-interface Call {
-  readonly args: readonly string[];
-  readonly method: string;
-  readonly path: string;
-  readonly body?: unknown;
-}
-
-/** Executes the real CLI with a fail-closed, local-only replacement for every `gh` call. */
-function run(args: readonly string[], fixture: Fixture = {}) {
+/**
+ * Runs the script as a command: a new Node process, with an executable named `gh` first on `PATH`
+ * that answers from the same fake. For the few tests of what an in-process run cannot show.
+ */
+function runCommand(args: readonly string[], fixture: Fixture = {}) {
   const temporary = mkdtempSync(join(tmpdir(), 'callis-sync-test-'));
   const callsFile = join(temporary, 'calls.jsonl');
   const dataFile = join(temporary, 'fixture.json');
-  writeFileSync(
-    dataFile,
-    JSON.stringify({ milestonePages: [[milestone]], issues: [issue], ...fixture }),
-  );
+  writeFileSync(dataFile, JSON.stringify(withDefaults(fixture)));
   writeFileSync(
     join(temporary, 'gh'),
     `#!${process.execPath}
-import {readFileSync, appendFileSync, writeSync} from 'node:fs';
+import { appendFileSync, readFileSync, writeSync } from 'node:fs';
+import { fakeGh } from ${JSON.stringify(pathToFileURL(join(root, 'scripts/fake-gh.ts')).href)};
 const data = JSON.parse(readFileSync(${JSON.stringify(dataFile)}, 'utf8'));
-const args = process.argv.slice(2);
-const method = args.includes('--method') ? args[args.indexOf('--method') + 1] : 'GET';
-const path = args.find(arg => arg.startsWith('repos/losol/callis/'));
-const input = readFileSync(0, 'utf8');
-const body = input === '' ? undefined : JSON.parse(input);
-if (args[0] === 'api' && args[1] === 'graphql') {
-  const mutation = body.query.trimStart().startsWith('mutation');
-  appendFileSync(${JSON.stringify(callsFile)}, JSON.stringify({args, method: mutation ? 'POST' : 'GET', path: 'graphql', body}) + String.fromCharCode(10));
-  const reply = (data.graphql ?? []).find(value => body.query.includes(value.match));
-  if (reply === undefined) throw new Error('Unexpected mocked gh graphql request: ' + body.query);
-  if (reply.stdout !== undefined) writeSync(1, JSON.stringify(reply.stdout));
-  if (reply.stderr !== undefined) writeSync(2, reply.stderr);
-  process.exit(reply.status ?? 0);
-}
-appendFileSync(${JSON.stringify(callsFile)}, JSON.stringify({args, method, path, body}) + String.fromCharCode(10));
-let result;
-if (method === 'GET' && path === 'repos/losol/callis/milestones?state=all&per_page=100') result = data.milestonePages;
-else if (method === 'GET' && path === 'repos/losol/callis/issues?state=all&labels=task&per_page=100') result = [data.issues];
-else if (method === 'GET' && path === 'repos/losol/callis/labels?per_page=100') result = [data.labels ?? []];
-else if (method === 'GET' && path.endsWith('/dependencies/blocked_by?per_page=100')) result = [data.blockers?.[path.split('/')[4]] ?? []];
-else if (method === 'GET' && path.startsWith('repos/losol/callis/milestones/')) result = data.currentMilestone ?? data.milestonePages.flat().find(value => value.number === Number(path.split('/').at(-1)));
-else if (method === 'GET' && path.startsWith('repos/losol/callis/issues/')) result = data.currentIssue ?? data.issues.find(value => value.number === Number(path.split('/').at(-1)));
-else if (method === 'PATCH' && path.startsWith('repos/losol/callis/issues/')) result = data.patchResponse ?? {...data.issues.find(value => value.number === Number(path.split('/').at(-1))), milestone: data.milestonePages.flat().find(value => value.number === body.milestone)};
-else if (method === 'POST' && path === 'repos/losol/callis/labels') result = body;
-else throw new Error('Unexpected mocked gh request: ' + JSON.stringify({args, body}));
-console.log(JSON.stringify(result));
+const result = fakeGh(data, process.argv.slice(2), readFileSync(0, 'utf8'));
+appendFileSync(${JSON.stringify(callsFile)}, JSON.stringify(result.call) + String.fromCharCode(10));
+writeSync(1, result.stdout);
+writeSync(2, result.stderr);
+process.exit(result.status);
 `,
     { mode: 0o755 },
   );
@@ -105,9 +174,11 @@ console.log(JSON.stringify(result));
       cwd: root,
       env: { ...process.env, PATH: `${temporary}:${process.env.PATH}`, GH_TOKEN: 'test-only' },
       encoding: 'utf8',
-      timeout: 15_000,
+      timeout: COMMAND_TIMEOUT_MS,
     });
-    if (result.error !== undefined) throw result.error;
+    if (result.error !== undefined) {
+      throw result.error;
+    }
     let calls: Call[] = [];
     try {
       calls = readFileSync(callsFile, 'utf8')
@@ -116,9 +187,16 @@ console.log(JSON.stringify(result));
         .filter(Boolean)
         .map((line) => JSON.parse(line));
     } catch (error) {
-      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+        throw error;
+      }
     }
-    return { status: result.status, output: result.stdout + result.stderr, calls };
+    return {
+      status: result.status,
+      output: result.stdout + result.stderr,
+      stderr: result.stderr,
+      calls,
+    };
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }
@@ -130,8 +208,8 @@ const writes = (calls: readonly Call[]): readonly Call[] =>
 
 // Release membership is explicit and independent of roadmap waves or worker-owned status.
 describe('roadmap milestone CLI', () => {
-  it('plans only the chosen milestone by default and reads every milestone page', () => {
-    const result = run(selection, { milestonePages: [[], [milestone]] });
+  it('plans only the chosen milestone by default and reads every milestone page', async () => {
+    const result = await run(selection, { milestonePages: [[], [milestone]] });
     expect(result.status).toBe(0);
     expect(result.output).toContain('(dry run) ~ #11 T0001 milestone: (none) → "Chosen release"');
     expect(writes(result.calls)).toEqual([]);
@@ -145,8 +223,8 @@ describe('roadmap milestone CLI', () => {
     expect(result.calls.every((call) => !call.args.includes('graphql'))).toBe(true);
   });
 
-  it('applies just one milestone field to an explicitly chosen unassigned task', () => {
-    const result = run([...selection, '--task', 'T0001', '--apply']);
+  it('applies just one milestone field to an explicitly chosen unassigned task', async () => {
+    const result = await run([...selection, '--task', 'T0001', '--apply']);
     expect(result.status).toBe(0);
     expect(writes(result.calls)).toEqual([
       expect.objectContaining({
@@ -155,7 +233,7 @@ describe('roadmap milestone CLI', () => {
         body: { milestone: 7 },
       }),
     ]);
-    const again = run([...selection, '--apply'], {
+    const again = await run([...selection, '--apply'], {
       issues: [{ ...issue, milestone }],
     });
     expect(again.status).toBe(0);
@@ -163,8 +241,8 @@ describe('roadmap milestone CLI', () => {
     expect(writes(again.calls)).toEqual([]);
   });
 
-  it('fails when GitHub accepts the PATCH but silently drops the milestone without push access', () => {
-    const result = run([...selection, '--apply'], { patchResponse: issue });
+  it('fails when GitHub accepts the PATCH but silently drops the milestone without push access', async () => {
+    const result = await run([...selection, '--apply'], { patchResponse: issue });
     expect(result.status).toBe(1);
     expect(result.output).toContain('GitHub did not assign milestone');
     expect(result.output).toContain('Verify repository push access');
@@ -178,12 +256,15 @@ describe('roadmap milestone CLI', () => {
     [[], 'found 0'],
     [[{ ...milestone, state: 'closed' }], 'is closed'],
     [[milestone, { ...milestone, number: 8 }], 'found 2'],
-  ])('rejects an unknown, completed or ambiguous release before any write (%j)', (values, text) => {
-    const result = run([...selection, '--apply'], { milestonePages: [values] });
-    expect(result.status).toBe(1);
-    expect(result.output).toContain(text);
-    expect(writes(result.calls)).toEqual([]);
-  });
+  ])(
+    'rejects an unknown, completed or ambiguous release before any write (%j)',
+    async (values, text) => {
+      const result = await run([...selection, '--apply'], { milestonePages: [values] });
+      expect(result.status).toBe(1);
+      expect(result.output).toContain(text);
+      expect(writes(result.calls)).toEqual([]);
+    },
+  );
 
   it.each([
     [['--release', milestone.title], 'at least one --task'],
@@ -192,8 +273,8 @@ describe('roadmap milestone CLI', () => {
     [['--release', milestone.title, '--task', 'T9999'], 'Unknown roadmap tasks'],
   ])(
     'requires an explicit valid release/task selection before contacting GitHub (%j)',
-    (args, text) => {
-      const result = run([...args, '--apply']);
+    async (args, text) => {
+      const result = await run([...args, '--apply']);
       expect(result.status).toBe(1);
       expect(result.output).toContain(text);
       expect(result.calls).toEqual([]);
@@ -207,8 +288,8 @@ describe('roadmap milestone CLI', () => {
       [{ ...issue, milestone: { number: 22, title: 'Manual choice', state: 'open' } }],
       'preserve existing',
     ],
-  ])('preserves missing, delivered or manually assigned issues (%j)', (issues, text) => {
-    const result = run([...selection, '--apply'], { issues });
+  ])('preserves missing, delivered or manually assigned issues (%j)', async (issues, text) => {
+    const result = await run([...selection, '--apply'], { issues });
     expect(result.status).toBe(0);
     expect(result.output).toContain(text);
     expect(writes(result.calls)).toEqual([]);
@@ -220,15 +301,18 @@ describe('roadmap milestone CLI', () => {
     { currentIssue: { ...issue, milestone: { ...milestone, number: 22 } } },
     { currentMilestone: { ...milestone, state: 'closed' } },
     { currentMilestone: { ...milestone, title: 'Renamed choice' } },
-  ])('aborts if the issue or release changes between planning and applying (%j)', (fixture) => {
-    const result = run([...selection, '--apply'], fixture);
-    expect(result.status).toBe(1);
-    expect(result.output).toContain('changed after planning');
-    expect(writes(result.calls)).toEqual([]);
-  });
+  ])(
+    'aborts if the issue or release changes between planning and applying (%j)',
+    async (fixture) => {
+      const result = await run([...selection, '--apply'], fixture);
+      expect(result.status).toBe(1);
+      expect(result.output).toContain('changed after planning');
+      expect(writes(result.calls)).toEqual([]);
+    },
+  );
 
-  it('leaves manual milestones intact during normal apply with no release input', () => {
-    const result = run(['--apply', '--skip-project'], syncedFixture());
+  it('leaves manual milestones intact during normal apply with no release input', async () => {
+    const result = await run(['--apply', '--skip-project'], syncedFixture());
     expect(result.status).toBe(0);
     expect(result.output).toContain('GitHub already matches the roadmap');
     expect(writes(result.calls)).toEqual([]);
@@ -284,18 +368,18 @@ describe('roadmap area labels', () => {
   const number = roadmap.tasks.indexOf(withAreas) + 1;
   const stale = withAreas.areas?.includes('docs') ? 'area:site' : 'area:docs';
 
-  it('replaces stale area labels and leaves those of a task without an Area line', () => {
+  it('replaces stale area labels and leaves those of a task without an Area line', async () => {
     const fixture = syncedFixture((task, labels) => {
       if (task.id === withAreas.id) return ['task', `wave-${task.wave}`, stale, 'help wanted'];
       if (task.id === delivered.id) return [...labels, 'area:docs'];
       return labels;
     });
-    const dryRun = run(['--skip-project'], fixture);
+    const dryRun = await run(['--skip-project'], fixture);
     expect(dryRun.status).toBe(0);
     expect(writes(dryRun.calls)).toEqual([]);
     expect(dryRun.output).toContain(`(dry run) ~ #${number} labels`);
 
-    const result = run(['--apply', '--skip-project'], fixture);
+    const result = await run(['--apply', '--skip-project'], fixture);
     expect(result.status).toBe(0);
     expect(writes(result.calls)).toEqual([
       {
@@ -309,10 +393,10 @@ describe('roadmap area labels', () => {
     ]);
   });
 
-  it('creates a missing area label with its color and description', () => {
+  it('creates a missing area label with its color and description', async () => {
     const [label] = taskAreaLabels(withAreas);
     const fixture = syncedFixture();
-    const result = run(['--apply', '--skip-project'], {
+    const result = await run(['--apply', '--skip-project'], {
       ...fixture,
       labels: (fixture.labels ?? []).filter((value) => 'name' in value && value.name !== label),
     });
@@ -384,8 +468,8 @@ describe('roadmap project lookup', () => {
   const readsOrganization = (calls: readonly Call[]) =>
     queries(calls).some((query) => query.includes(organizationList));
 
-  it('finds the project through the repository without reading the organization projects', () => {
-    const result = dryRun(list(repositoryList, 'repository', [project]));
+  it('finds the project through the repository without reading the organization projects', async () => {
+    const result = await dryRun(list(repositoryList, 'repository', [project]));
     expect(result.status).toBe(0);
     expect(result.output).toContain(`· ${project.url}`);
     expect(result.output).not.toContain('+ project "');
@@ -398,9 +482,9 @@ describe('roadmap project lookup', () => {
     });
   });
 
-  it('falls back to the organization projects when the repository list lacks an exact title match', () => {
+  it('falls back to the organization projects when the repository list lacks an exact title match', async () => {
     const similar = { ...project, id: 'PVT_other', title: 'Callis roadmap archive' };
-    const result = dryRun(
+    const result = await dryRun(
       list(repositoryList, 'repository', [similar]),
       list(organizationList, 'organization', [similar, project]),
     );
@@ -416,8 +500,8 @@ describe('roadmap project lookup', () => {
     ['last', [null, null, project], [0, 1]],
   ])(
     'uses the project when GitHub hides other organization projects (%s in the list)',
-    (_position, nodes, hidden) => {
-      const result = dryRun(
+    async (_position, nodes, hidden) => {
+      const result = await dryRun(
         list(repositoryList, 'repository', []),
         failed(
           organizationList,
@@ -431,8 +515,8 @@ describe('roadmap project lookup', () => {
     },
   );
 
-  it('uses the project when GitHub hides other projects linked to the repository', () => {
-    const result = dryRun(
+  it('uses the project when GitHub hides other projects linked to the repository', async () => {
+    const result = await dryRun(
       failed(repositoryList, { repository: { projectsV2: { nodes: [null, project] } } }, [
         forbidden('repository', 'projectsV2', 'nodes', 0),
       ]),
@@ -442,8 +526,8 @@ describe('roadmap project lookup', () => {
     expect(readsOrganization(result.calls)).toBe(false);
   });
 
-  it('falls back to the organization projects when the repository lookup is denied outright', () => {
-    const result = dryRun(
+  it('falls back to the organization projects when the repository lookup is denied outright', async () => {
+    const result = await dryRun(
       failed(repositoryList, { repository: { projectsV2: null } }, [
         forbidden('repository', 'projectsV2'),
       ]),
@@ -454,8 +538,8 @@ describe('roadmap project lookup', () => {
     expect(result.output).not.toContain('+ project "');
   });
 
-  it('plans to create the project only when both lists were read and lack it', () => {
-    const result = dryRun(
+  it('plans to create the project only when both lists were read and lack it', async () => {
+    const result = await dryRun(
       list(repositoryList, 'repository', []),
       list(organizationList, 'organization', [{ ...project, title: 'Eventuras backlog' }]),
     );
@@ -467,8 +551,8 @@ describe('roadmap project lookup', () => {
     expect(writes(result.calls)).toEqual([]);
   });
 
-  it('does not plan a second project when GitHub hid projects and the project is not among those it showed', () => {
-    const result = dryRun(
+  it('does not plan a second project when GitHub hid projects and the project is not among those it showed', async () => {
+    const result = await dryRun(
       list(repositoryList, 'repository', []),
       failed(organizationList, { organization: { projectsV2: { nodes: [null, null] } } }, [
         forbidden('organization', 'projectsV2', 'nodes', 0),
@@ -483,8 +567,8 @@ describe('roadmap project lookup', () => {
     expect(result.output).not.toContain('does not exist yet');
   });
 
-  it('names the missing permissions instead of only the project scope', () => {
-    const result = dryRun(
+  it('names the missing permissions instead of only the project scope', async () => {
+    const result = await dryRun(
       failed(repositoryList, { repository: { projectsV2: null } }, [
         forbidden('repository', 'projectsV2'),
       ]),
@@ -499,9 +583,9 @@ describe('roadmap project lookup', () => {
     expect(result.output).toContain('--skip-project');
   });
 
-  it('fails on an error that is not an access error, without trying the organization projects', () => {
+  it('fails on an error that is not an access error, without trying the organization projects', async () => {
     const message = "Could not resolve to a Repository with the name 'losol/callis'.";
-    const result = dryRun(
+    const result = await dryRun(
       failed(repositoryList, { repository: null }, [
         { type: 'NOT_FOUND', path: ['repository'], message } as { message: string },
       ]),
@@ -512,8 +596,8 @@ describe('roadmap project lookup', () => {
     expect(result.output).not.toContain('+ project "');
   });
 
-  it('fails on an access error outside the list entries even when the project was found', () => {
-    const result = dryRun(
+  it('fails on an access error outside the list entries even when the project was found', async () => {
+    const result = await dryRun(
       failed(repositoryList, { repository: { projectsV2: { nodes: [project] } } }, [
         forbidden('repository', 'projectsV2', 'totalCount'),
       ]),
@@ -523,8 +607,8 @@ describe('roadmap project lookup', () => {
     expect(result.output).not.toContain(`· ${project.url}`);
   });
 
-  it('fails on a failure without a GraphQL error list, as for bad credentials', () => {
-    const result = dryRun({
+  it('fails on a failure without a GraphQL error list, as for bad credentials', async () => {
+    const result = await dryRun({
       match: repositoryList,
       stdout: { message: 'Bad credentials', documentation_url: 'https://docs.github.com/rest' },
       stderr: 'gh: Bad credentials (HTTP 401)\n',
@@ -593,10 +677,8 @@ describe('roadmap project lookup', () => {
       },
     ];
 
-    it('creates the project when it exists in neither list, and then syncs it', {
-      timeout: 30_000,
-    }, () => {
-      const result = run(['--apply'], {
+    it('creates the project when it exists in neither list, and then syncs it', async () => {
+      const result = await run(['--apply'], {
         ...syncedFixture(),
         graphql: [
           empty(repositoryList, 'repository'),
@@ -618,10 +700,8 @@ describe('roadmap project lookup', () => {
       expect(result.output).toContain(`✓ 1 changes · ${project.url}`);
     });
 
-    it('writes nothing when access to the projects was denied and the project was not found', {
-      timeout: 30_000,
-    }, () => {
-      const result = run(['--apply'], {
+    it('writes nothing when access to the projects was denied and the project was not found', async () => {
+      const result = await run(['--apply'], {
         ...syncedFixture(),
         graphql: [
           {
@@ -657,8 +737,8 @@ describe('roadmap project lookup', () => {
       expect(writes(result.calls)).toEqual([]);
     });
 
-    it('still fails when a mutation answers with data and errors', { timeout: 30_000 }, () => {
-      const result = run(['--apply'], {
+    it('still fails when a mutation answers with data and errors', async () => {
+      const result = await run(['--apply'], {
         ...syncedFixture(),
         graphql: [
           empty(repositoryList, 'repository'),
@@ -685,4 +765,48 @@ describe('roadmap project lookup', () => {
       expect(mutations(result.calls)).toEqual(['createProjectV2']);
     });
   });
+});
+
+// The tests above run the script in this process. These start it as a command, for what an
+// in-process run cannot show: the real argument vector, `gh` found on PATH, a request body piped
+// through standard input, standard error, and the exit status.
+describe('roadmap sync as a command', () => {
+  it('plans a release without writing, through the gh on PATH', COMMAND_TEST, () => {
+    const result = runCommand(selection);
+    expect(result.status).toBe(0);
+    expect(result.output).toContain('(dry run) ~ #11 T0001 milestone: (none) → "Chosen release"');
+    expect(result.calls.map((call) => call.args)).toEqual([
+      ['api', '--paginate', '--slurp', 'repos/losol/callis/milestones?state=all&per_page=100'],
+      [
+        'api',
+        '--paginate',
+        '--slurp',
+        'repos/losol/callis/issues?state=all&labels=task&per_page=100',
+      ],
+    ]);
+  });
+
+  it('sends a request body to gh on standard input', COMMAND_TEST, () => {
+    const result = runCommand([...selection, '--apply']);
+    expect(result.status).toBe(0);
+    expect(writes(result.calls)).toEqual([
+      expect.objectContaining({
+        method: 'PATCH',
+        path: 'repos/losol/callis/issues/11',
+        body: { milestone: 7 },
+      }),
+    ]);
+    expect(writes(result.calls)[0]?.args.slice(-2)).toEqual(['--input', '-']);
+  });
+
+  it(
+    'exits with status 1 and explains on standard error when the release is unknown',
+    COMMAND_TEST,
+    () => {
+      const result = runCommand([...selection, '--apply'], { milestonePages: [[]] });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('found 0');
+      expect(writes(result.calls)).toEqual([]);
+    },
+  );
 });
