@@ -19,13 +19,16 @@ Everything in this repository is written in English.
 
 ## Workflow
 
+The owner is `losolio`. Agents act on GitHub as the machine user `filolos`: agent commits, pushes, pull requests, issue edits and comments, and native AO review comments all come from that account. GitHub does not let a PR's author approve it or request changes on it, so the owner can review agent PRs with GitHub's own *Approve* and *Request changes*.
+
 1. **Pick a task** from the [roadmap](docs/roadmap.md) whose dependencies are merged. One task is one pull request. Small fixes outside the task list are welcome as their own PRs.
 2. **Branch** from `main`.
 3. **Open a draft PR early** and fill in the template. It stays a draft until it meets the [ready-for-review criteria](#ready-for-review).
 4. **Make it pass** `pnpm check` (see [Commands](#commands)). CI runs on the draft, and so does the native AO review of agent work.
-5. **Address every review comment:** fix it, or reply with the reason you did not. Resolve the thread when it is done.
-6. **Mark it ready for review** once it meets the [criteria](#ready-for-review). For agent work, the orchestrator decides this, never the worker.
-7. **The owner approves and squash-merges.** Approval from an AI reviewer never replaces the owner's approval.
+5. **Address every review comment,** including the owner's: fix it, or reply with the reason you did not. Resolve the thread when it is done.
+6. **Mark it ready for review** once it meets the [criteria](#ready-for-review). For agent work, the orchestrator does this and requests the owner's review, never the worker.
+7. **The owner approves,** with a GitHub review or by telling the orchestrator in chat. Approval from an AI reviewer never replaces the owner's approval.
+8. **Squash-merge.** After the owner's approval, the orchestrator or the owner squash-merges. The orchestrator merges only under the conditions in [Owner review and merge](#owner-review-and-merge).
 
 ## Branches
 
@@ -86,7 +89,7 @@ PR titles follow [Conventional Commits 1.0.0](https://www.conventionalcommits.or
 - **One task per PR.** Stay within the task's scope. Open a follow-up issue for anything else and list it in the description ([Findings during a task](#findings-during-a-task)).
 - **Keep PRs reviewable.** If hand-written changes grow far beyond a few hundred lines, split along the task's natural seams (for example `T0008a` and `T0008b`) and update the task file. Generated files do not count.
 - **Fill in the template.** The description becomes the commit body on `main`, so it holds only what stays true after the merge, and test results go in the validation comment ([Description and validation comment](#description-and-validation-comment)). Delete the template comments. The description must start with `Task: T0001` (or `Task: none`) so `git log --grep "Task: T0001"` finds the commit.
-- **Reviews:** Copilot reviews PRs automatically once they are ready for review; the repository rules skip drafts. Agent-managed PRs also need the native AO review that their tier requires ([Review areas and model tiers](#review-areas-and-model-tiers)). The owner's approval is required to merge.
+- **Reviews:** Copilot reviews PRs automatically once they are ready for review; the repository rules skip drafts. Agent-managed PRs also need the native AO review that their tier requires ([Review areas and model tiers](#review-areas-and-model-tiers)). Its comments come from `filolos`, the account that opens agent PRs, so they are review comments and never a GitHub approval. The owner reviews with GitHub's *Approve* and *Request changes*, or in chat, and the owner's approval is required to merge ([Owner review and merge](#owner-review-and-merge)).
 - **Stay up to date** with `main` by merging it into your branch; avoid force-pushing after review has started.
 
 ## Description and validation comment
@@ -166,7 +169,7 @@ Every agent-managed work PR is opened as a draft and stays a draft until all of 
 4. Every required review finding is handled, and no actionable review thread is unresolved. In the light tier, only P1 and P2 findings are required.
 5. No task change is left unpublished: everything is committed and pushed.
 
-**Who decides.** The worker reports that its PR is ready, and the orchestrator checks the criteria and decides. The orchestrator may have another session carry out the transition once it has checked, but a worker never marks its own PR ready.
+**Who decides.** The worker reports that its PR is ready, and the orchestrator checks the criteria and decides. When they hold, the orchestrator confirms the exact head commit, marks the PR ready and requests a review from the owner, `losolio`, without asking first ([Owner review and merge](#owner-review-and-merge)). The orchestrator may have another session carry out the transition once it has checked, but a worker never marks its own PR ready, merges or releases.
 
 **What it means.** *Ready for review* is the agents' signal that the work is complete and waits for the owner's final review. It never authorizes a merge or a release. An AO approval is not a GitHub approval and does not replace the approvals the branch rules require ([Repository settings](#repository-settings)).
 
@@ -178,9 +181,17 @@ Every agent-managed work PR is opened as a draft and stays a draft until all of 
 
 **Release PRs** are not work PRs. The version PR keeps its own rules ([Releases](#releases)): it is never marked ready or merged automatically.
 
+### Owner review and merge
+
+For agent-managed work PRs, once the orchestrator has marked the PR ready and requested the owner's review:
+
+- **Approval.** The owner approves with a GitHub review, or tells the orchestrator in chat. An approval covers exactly one commit. A GitHub review covers its `commit_id`, the commit the owner reviewed, which can be older than the head when the review is submitted: a review started on one commit and submitted after a push still carries the earlier commit ([reviews API](https://docs.github.com/en/rest/pulls/reviews)). For a chat approval, the orchestrator records the full SHA the owner approved. Any other commit needs a new approval from the owner. A native AO approval or another AI review never replaces it.
+- **Merge.** After the owner's approval, the orchestrator or the owner squash-merges. The orchestrator merges only when the approval covers the exact current head commit, CI is green on that commit and no actionable review thread is open. For a GitHub approval, it checks that the `commit_id` of the owner's latest approving review equals the head SHA and that no later review from the owner requests changes; it never infers what a review covers from when it was submitted. For a chat approval, the SHA it recorded must equal the head SHA. While the branch rules on `main` require an approving review ([Repository settings](#repository-settings)), only a GitHub approval meets them; an approval in chat does not.
+- **Feedback.** The owner's feedback arrives as GitHub review comments, for example with *Request changes*, or in chat. The orchestrator routes it to the PR's worker, and the worker addresses it like any other review comment ([Workflow](#workflow), step 5). A fix is a new commit, so the PR goes back to draft until the new head meets the criteria again, and then returns to the owner the same way.
+
 ## Review areas and model tiers
 
-Work on central code gets strong models and a thorough review; documentation and site work gets cheaper models and a lighter review. A PR's review areas set its tier, and the tier sets the worker model and the reviewers in the [model matrix](#model-matrix). The owner's GitHub approval is required in every tier.
+Work on central code gets strong models and a thorough review; documentation and site work gets cheaper models and a lighter review. A PR's review areas set its tier, and the tier sets the worker model and the reviewers in the [model matrix](#model-matrix). The owner's approval ([Owner review and merge](#owner-review-and-merge)) is required in every tier.
 
 ### Areas
 
@@ -336,6 +347,7 @@ This mode changes only selected issue milestone assignments: no labels, dependen
 A PR is ready to merge when:
 
 - it has been marked ready for review; an agent-managed PR meets the [ready-for-review criteria](#ready-for-review) on its current head
+- the owner approved its current head commit, with a GitHub review or in chat ([Owner review and merge](#owner-review-and-merge)), and no actionable review thread is open
 - the acceptance criteria in its task file are met
 - `pnpm check` is green
 - new behaviour has tests that cite the spec section they cover ([testing guide](docs/guides/testing.md))
@@ -401,7 +413,8 @@ For maintainers. These settings make the rules above hold:
 
 - **Merging:** squash merge only. The squash commit takes the PR title as its subject and the PR description as its body. Branches are deleted automatically after merge.
 - **Required checks:** `CI result` and `Conventional Commits`. `CI result` is the last job in the CI workflow and fails when any other CI job fails, so CI jobs can change without changing this setting. `Conventional Commits` is the PR-title check.
-- **Approval:** the owner's approval is required.
+- **Approval:** the owner's approval is required ([Owner review and merge](#owner-review-and-merge)). Recommended: the ruleset on `main` requires one approving review, so nothing merges without the owner, `losolio`. GitHub never counts an author's own approval; agent PRs come from `filolos`, so the owner's approval counts. [#155](https://github.com/losol/callis/issues/155) tracks applying it.
+- **Agent account:** the machine user `filolos` has the *Write* role on this repository: never *Admin*, and never in a ruleset's bypass list. Its token is a fine-grained personal access token with `losol` as resource owner, access to this repository only, read and write access to Contents, Pull requests, Issues and Workflows, and an expiry date. The AO project configuration gives every agent session that token as `GH_TOKEN`, `filolos` as Git author and committer (`GIT_AUTHOR_*`, `GIT_COMMITTER_*`), and a Git credential helper that goes through `gh` (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_*`, `GIT_CONFIG_VALUE_*`), so `git push` uses the token and not a login stored on the machine.
 - **Secrets:** `ROADMAP_SYNC_TOKEN` for the [roadmap sync](#roadmap-sync). A fine-grained token with `losol` as resource owner and access to this repository is enough with the repository permission *Issues: read and write* and the organization permission *Projects: read and write*. It does not need to read the organization's other projects. A classic token needs the `repo` and `project` scopes.
 - **Environments:** `npm`, for the release workflow, with `main` as its only deployment branch.
 - **Documentation site:** the [deploy workflow](#documentation-site) needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, as organization secrets that include this repository or as repository secrets, and a `site` environment whose only deployment branch is `main`. The Worker is named `callis`, and the custom domain `callis.losol.no` is attached to it in Cloudflare; the deploy adds no route, domain or DNS configuration. GitHub Pages stays off: the site is served from Cloudflare.
