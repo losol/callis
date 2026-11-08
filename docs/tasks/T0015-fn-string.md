@@ -17,5 +17,12 @@ Part of the [roadmap](../roadmap.md). Phase 1 · wave 4 · size M.
 
 ## Acceptance criteria
 
-- [ ] The spec examples are tests, including empty and edge cases (`substring` out of range, `''.length()`).
-- [ ] Conformance groups: `testCase`, `testToChars`, `testIndexOf`, `testSubstring`, `testStartsWith`, `testEndsWith`, `testContainsString`, `testMatches`, `testReplaceMatches`, `testReplace`, `testLength` (except STU cases with regex flags).
+- [x] The spec examples are tests, including empty and edge cases (`substring` out of range, `''.length()`).
+- [x] Conformance groups: `testCase`, `testToChars`, `testIndexOf`, `testSubstring`, `testStartsWith`, `testEndsWith`, `testContainsString`, `testMatches`, `testReplaceMatches`, `testReplace`, `testLength` (except STU cases with regex flags). Every test that does not pass yet calls `empty()` ([T0041](T0041-fn-existence-completion.md)), `select()` ([T0042](T0042-fn-projection-completion.md)) or `toString()` ([T0014](T0014-fn-conversion.md)), or is `matchesFull()` ([T0029](T0029-stu-strings.md)); the generated reports list them as "not implemented".
+
+## Implementation notes
+
+- `functions/string.ts` defines the twelve functions. The input and each argument go through singleton evaluation as a String (an `Integer` for `substring()`), whether or not another one is empty, so an error does not depend on the data. `functions/characters.ts` holds the code point arithmetic and `functions/regex.ts` the regular expressions; both are internal.
+- The decisions are in [spec notes](../spec-notes.md#characters-are-unicode-scalar-values): characters are Unicode scalar values, regular expressions are JavaScript's with the `u` and `s` flags, the substitution of `replaceMatches()` takes `${name}` and JavaScript's patterns, and an empty regex changes nothing.
+- No new error code: an invalid pattern, or a substitution that refers to a missing group, is `eval/invalid-argument`. Messages do not repeat the pattern, which can come from input data.
+- [T0029](T0029-stu-strings.md) adds the optional `flags` parameter to `matches()` and `replaceMatches()`: `compileRegex()` already takes the flags, and an optional parameter does not change the calls written today.

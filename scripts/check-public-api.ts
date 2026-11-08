@@ -72,6 +72,9 @@ assert.deepEqual(core.evaluate(null, "'1.a'.convertsToDecimal()"), [false]);
 assert.deepEqual(core.evaluate(null, "'4 days'.toQuantity('h')", { units: ucum }),
   [{ value: 96, unit: 'h', system: 'http://unitsofmeasure.org', code: 'h' }]);
 assert.throws(() => core.evaluate(null, '(1 | 2).toInteger()'), error => error.code === 'eval/singleton-expected');
+assert.deepEqual(core.evaluate({ name: 'Ada' }, 'name.upper()'), ['ADA']);
+assert.deepEqual(core.evaluate(null, "'a🔥b'.length()"), [3]);
+assert.throws(() => core.evaluate(null, "'a'.matches('(')"), error => error.code === 'eval/invalid-argument');
 assert.throws(() => core.compile('intentionallyMissingFunction()'), core.FhirPathSemanticError);
 assert.throws(() => core.evaluate(null, '%missing'), core.FhirPathEvaluationError);
 assert.equal(core.Decimal.name, 'Decimal');
