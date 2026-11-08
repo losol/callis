@@ -254,6 +254,43 @@ export function strictestTier(areas: Iterable<AreaName>): Tier {
   return tier;
 }
 
+/** Whether a label is one of the review labels: an `area:*` label or `risk:high`. */
+export function isReviewLabel(label: string): boolean {
+  return label === RISK_LABEL || areaOfLabel(label) !== undefined;
+}
+
+/** The tier that a set of labels gives. */
+export interface LabelTier {
+  /** The review labels among them, in the order of {@link REVIEW_LABELS}. */
+  readonly labels: readonly string[];
+  /** The strictest tier of the `area:*` labels, before risk. */
+  readonly baseTier: Tier;
+  /** One step above the base tier with `risk:high`, and never above core. */
+  readonly tier: Tier;
+  /** `risk:high` on a core change adds a second reviewer from the other vendor instead of a step. */
+  readonly secondReviewer: boolean;
+}
+
+/**
+ * The tier of a set of labels: the strictest `area:*` label, raised one step by `risk:high`.
+ * Labels that are not review labels are ignored. A pull request's tier comes from all its review
+ * labels, so one set by hand or kept from an earlier push counts as much as an inferred one.
+ */
+export function tierOfLabels(labels: Iterable<string>): LabelTier {
+  const present = new Set(labels);
+  const reviewLabels = REVIEW_LABELS.map((label) => label.name).filter((name) => present.has(name));
+  const baseTier = strictestTier(AREA_NAMES.filter((area) => present.has(areaLabel(area))));
+  const risky = present.has(RISK_LABEL);
+  return {
+    labels: reviewLabels,
+    baseTier,
+    tier: risky
+      ? (TIERS[Math.min(tierIndex(baseTier) + 1, TIERS.length - 1)] ?? baseTier)
+      : baseTier,
+    secondReviewer: risky && baseTier === 'core',
+  };
+}
+
 /** How a file changed, as the GitHub API names it. */
 export type FileStatus =
   | 'added'
@@ -388,6 +425,41 @@ export function isTestCode(file: ChangedFile): boolean {
   return filePaths(file).every((path) => matchesAny(path, TEST_CODE));
 }
 
+/** Source code, as opposed to documentation, data and metadata such as changesets. */
+const SOURCE_CODE = /\.(?:[cm]?[jt]sx?|css)$/;
+
+/**
+ * The package or top-level directory that a path belongs to: `packages/core`, `apps/site`,
+ * `tools/conformance`, `scripts`, or `` for a file in the root.
+ */
+export function scopeOf(path: string): string {
+  const parts = path.split('/');
+  const [top = '', name] = parts;
+  if (parts.length > 2 && name !== undefined && ['packages', 'apps', 'tools'].includes(top)) {
+    return `${top}/${name}`;
+  }
+  return parts.length > 1 ? top : '';
+}
+
+/**
+ * The scopes ({@link scopeOf}) in which a change touches implementation code: source files that
+ * are neither tests nor documentation.
+ */
+function implementationScopes(files: readonly ChangedFile[]): Set<string> {
+  const scopes = new Set<string>();
+  for (const file of files) {
+    if (isTestCode(file)) {
+      continue;
+    }
+    for (const path of filePaths(file)) {
+      if (SOURCE_CODE.test(path) && areaOfPath(path) !== 'docs') {
+        scopes.add(scopeOf(path));
+      }
+    }
+  }
+  return scopes;
+}
+
 /** The risks of one changed file. */
 function fileRisks(file: ChangedFile, publicModules: ReadonlySet<string>): Risk[] {
   const risks: Risk[] = [];
@@ -456,9 +528,11 @@ export function reExportedModules(entryPoint: string, source: string): string[] 
 /**
  * Classifies a change: its areas from the paths, its risks, and the resulting tier and labels.
  *
- * Test code follows the code it tests: it counts toward the areas only when the change touches
- * nothing but tests. A function PR that adds cases to the shared tests in `packages/core/test/`
- * therefore stays in `area:functions`. Removing or weakening a test raises `risk:high` instead.
+ * Test code follows the code it tests: a test file adds no area when the change also touches
+ * implementation code in the same package or top-level directory ({@link scopeOf}). A function
+ * PR that adds cases to the shared tests in `packages/core/test/` therefore stays in
+ * `area:functions`. Tests that come with only documentation or metadata, or with code in another
+ * package, keep their own area. Removing or weakening a test raises `risk:high` as well.
  *
  * @param publicModules Modules that package entry points re-export ({@link reExportedModules}).
  * @param extraRisks Risks found outside the files, such as an incomplete file list.
@@ -468,8 +542,9 @@ export function classify(
   publicModules: ReadonlySet<string> = new Set(),
   extraRisks: readonly Risk[] = [],
 ): Classification {
-  const code = files.filter((file) => !isTestCode(file));
-  const areaFiles = new Set(code.length > 0 ? code : files);
+  const scopes = implementationScopes(files);
+  const followsCode = (file: ChangedFile) =>
+    isTestCode(file) && filePaths(file).every((path) => scopes.has(scopeOf(path)));
   const found = new Set<AreaName>();
   const unmapped: string[] = [];
   const risks: Risk[] = [...extraRisks];
@@ -482,7 +557,7 @@ export function classify(
           path,
           reason: 'outside every review area: add it to scripts/review-areas.ts',
         });
-      } else if (areaFiles.has(file)) {
+      } else if (!followsCode(file)) {
         found.add(area);
       }
     }
@@ -490,18 +565,9 @@ export function classify(
   }
 
   const areas = AREA_NAMES.filter((area) => found.has(area));
-  const baseTier = strictestTier(areas);
-  const risky = risks.length > 0;
-  const tier = risky
-    ? (TIERS[Math.min(tierIndex(baseTier) + 1, TIERS.length - 1)] ?? baseTier)
-    : baseTier;
-  return {
-    areas,
-    unmapped,
-    risks,
-    baseTier,
-    tier,
-    secondReviewer: risky && baseTier === 'core',
-    labels: [...areas.map(areaLabel), ...(risky ? [RISK_LABEL] : [])],
-  };
+  const { labels, baseTier, tier, secondReviewer } = tierOfLabels([
+    ...areas.map(areaLabel),
+    ...(risks.length > 0 ? [RISK_LABEL] : []),
+  ]);
+  return { areas, unmapped, risks, baseTier, tier, secondReviewer, labels };
 }

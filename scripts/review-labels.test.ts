@@ -119,6 +119,37 @@ describe('labelling a pull request', () => {
     ]);
   });
 
+  // A label set by hand, or kept from an earlier push, keeps the review stricter.
+  it('counts a risk:high set by hand in the tier', () => {
+    const result = run(['--pr', '7', '--apply'], {
+      pull: { changed_files: 1, labels: [{ name: 'risk:high' }] },
+      files: [file('packages/core/src/functions/existence.ts')],
+    });
+    expect(result.status).toBe(0);
+    expect(result.output).toContain('Already on the pull request, and counted: risk:high');
+    expect(result.output).toContain('Tier: core (raised from standard)\n');
+    expect(result.output).toContain('Labels: area:functions, risk:high');
+    expect(writes(result.calls)).toEqual([
+      expect.objectContaining({ body: { labels: ['area:functions'] } }),
+    ]);
+  });
+
+  it('counts a stricter area label kept from an earlier push in the tier', () => {
+    const result = run(['--pr', '7', '--apply'], {
+      pull: { changed_files: 1, labels: [{ name: 'area:core' }, { name: 'risk:high' }] },
+      files: [file('docs/guide.md')],
+    });
+    expect(result.status).toBe(0);
+    expect(result.output).toContain('Areas: docs');
+    expect(result.output).toContain(
+      'Already on the pull request, and counted: area:core, risk:high',
+    );
+    expect(result.output).toContain('Tier: core, with a second reviewer from the other vendor');
+    expect(writes(result.calls)).toEqual([
+      expect.objectContaining({ body: { labels: ['area:docs'] } }),
+    ]);
+  });
+
   it('raises the risk when GitHub lists fewer files than the pull request changes', () => {
     const result = run(['--pr', '7', '--apply'], {
       pull: { ...pull, changed_files: 3001 },

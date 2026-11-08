@@ -24,9 +24,11 @@ import {
   type Classification,
   classify,
   type FileStatus,
+  isReviewLabel,
   REVIEW_LABELS,
   type Risk,
   reExportedModules,
+  tierOfLabels,
 } from './review-areas.ts';
 import { REPOSITORY } from './roadmap.ts';
 
@@ -224,8 +226,12 @@ const TIER_TEXT = {
   light: 'light (only P1 and P2 findings block)',
 } as const;
 
-/** Prints a classification. Paths are JSON strings, so a file name cannot inject log commands. */
-function report(result: Classification): void {
+/**
+ * Prints a classification. The tier comes from the inferred labels and the review labels the pull
+ * request already has (`existing`): one set by hand, or kept from an earlier push, counts too.
+ * Paths are JSON strings, so a file name cannot inject log commands.
+ */
+function report(result: Classification, existing: readonly string[] = []): void {
   console.log(`Areas: ${result.areas.length === 0 ? '(none)' : result.areas.join(', ')}`);
   if (result.risks.length > 0) {
     console.log('risk:high, because of:');
@@ -233,10 +239,16 @@ function report(result: Classification): void {
       console.log(`  - ${JSON.stringify(risk.path)}: ${risk.reason}`);
     }
   }
-  const raised = result.tier === result.baseTier ? '' : ` (raised from ${result.baseTier})`;
-  const second = result.secondReviewer ? ', with a second reviewer from the other vendor' : '';
-  console.log(`Tier: ${TIER_TEXT[result.tier]}${raised}${second}`);
-  console.log(`Labels: ${result.labels.length === 0 ? '(none)' : result.labels.join(', ')}`);
+  const kept = existing.filter((label) => isReviewLabel(label) && !result.labels.includes(label));
+  if (kept.length > 0) {
+    console.log(`Already on the pull request, and counted: ${kept.join(', ')}`);
+  }
+  const effective = tierOfLabels([...result.labels, ...kept]);
+  const raised =
+    effective.tier === effective.baseTier ? '' : ` (raised from ${effective.baseTier})`;
+  const second = effective.secondReviewer ? ', with a second reviewer from the other vendor' : '';
+  console.log(`Tier: ${TIER_TEXT[effective.tier]}${raised}${second}`);
+  console.log(`Labels: ${effective.labels.length === 0 ? '(none)' : effective.labels.join(', ')}`);
   console.log('Workers and reviewers per tier: CONTRIBUTING.md, "Model matrix".');
 }
 
@@ -282,8 +294,8 @@ function labelPullRequest(number: string): void {
   }
   const { pull, files, risks } = pullRequestFiles(number);
   const result = classify(files, publicModules(), risks);
-  report(result);
   const current = new Set(pull.labels.map((label) => label.name));
+  report(result, [...current]);
   const missing = result.labels.filter((label) => !current.has(label));
   if (missing.length === 0) {
     console.log(`✓ #${number} has every label already.`);

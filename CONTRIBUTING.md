@@ -196,7 +196,7 @@ Work on central code gets strong models and a thorough review; documentation and
 
 - The paths are globs in [`scripts/review-areas.ts`](scripts/review-areas.ts). The first matching rule wins, so a package README is `area:docs`. A test fails when a file in the repository is in no area, so a new top-level directory or package needs a rule first.
 - A PR that touches several areas takes the strictest tier.
-- Test code follows the code it tests: it adds its area only to a PR that changes nothing but tests. A function PR that adds cases to `packages/core/test/` stays in `area:functions`; removing or weakening a test raises `risk:high` instead.
+- Test code follows the code it tests: a test file adds no area when the PR also changes implementation code (a source file outside `area:docs`) in the same package or top-level directory. A function PR that adds cases to `packages/core/test/` stays in `area:functions`. Tests that come with only documentation, changelogs or metadata, or with code in another package, keep their own area. Removing or weakening a test raises `risk:high` as well.
 - Every task file has an `- **Area:**` line ([task issues](#task-issues-and-the-project-board)). A worker's tier is the strictest of that line and the PR's labels.
 
 ### risk:high
@@ -216,7 +216,7 @@ The rules are heuristics that err on the strict side. Anyone may add `risk:high`
 
 - The [PR labels workflow](.github/workflows/pr-labels.yml) labels every PR when it is opened and on every push, from the changed paths and diffs. It only adds labels: a stale one keeps the review stricter until the owner or the orchestrator removes it.
 - It runs on `pull_request_target`, so it can also label PRs from forks. That event runs the base branch's workflow with a token that can write, so the job never runs the PR's code: it checks out the base branch, installs nothing, uses no secrets, has only `contents: read` and `pull-requests: write`, and reads the changed files and diffs through the API as data. A PR that changes the workflow or the rules is labelled by the versions on `main`.
-- `pnpm review:labels` shows the areas, risk and tier of your branch against `origin/main`, including uncommitted and untracked files. `pnpm review:labels --pr 123` does the same for a PR on GitHub.
+- `pnpm review:labels` shows the areas, risk and tier of your branch against `origin/main`, including uncommitted and untracked files. `pnpm review:labels --pr 123` does the same for a PR on GitHub. The tier of a PR comes from all its review labels, so one set by hand or kept from an earlier push counts like an inferred one.
 - The labels exist on GitHub. To create missing ones, for example in a fork, run `pnpm review:labels --setup`, check the dry run, and add `--apply`. The [roadmap sync](#roadmap-sync) also creates the area labels that task files use.
 
 ### Model matrix

@@ -18,6 +18,9 @@ import {
   RISK_LABEL,
   reExportedModules,
   removedBaselineEntries,
+  scopeOf,
+  type Tier,
+  tierOfLabels,
 } from './review-areas.ts';
 
 // The rules come from CONTRIBUTING.md, "Review areas and model tiers".
@@ -164,12 +167,90 @@ describe('tiers', () => {
   });
 
   // A function PR extends the shared core tests; the tests follow the code they test.
-  it('let test code follow the code it tests, unless the change is only tests', () => {
+  it('let test code follow implementation code in the same package', () => {
     const test = modified('packages/core/test/public-docs.test.ts', '+  it("works", () => {});');
     const functionChange = classify([modified('packages/core/src/functions/subsetting.ts'), test]);
     expect(functionChange.areas).toEqual(['functions']);
     expect(functionChange.tier).toBe('standard');
-    expect(classify([test]).areas).toEqual(['core']);
+    const siteChange = classify([
+      modified('apps/site/app/root.tsx'),
+      modified('apps/site/app/doc-links.test.ts', '+  it("links", () => {});'),
+    ]);
+    expect(siteChange.areas).toEqual(['site']);
+  });
+
+  // Documentation, changelogs and metadata are no code for a test to follow.
+  const coreTest = 'packages/core/src/runtime/equality.test.ts';
+  it.each<[string, ChangedFile[], AreaName[], Tier, boolean]>([
+    ['only a core test', [modified(coreTest, '+  it("a", () => {});')], ['core'], 'core', false],
+    [
+      'an added core test and a README',
+      [
+        { ...modified(coreTest, '+  it("a", () => {});'), status: 'added' },
+        modified('packages/core/README.md'),
+      ],
+      ['core', 'docs'],
+      'core',
+      false,
+    ],
+    [
+      'a modified core test, a changelog and a changeset',
+      [
+        modified(coreTest, '-  expect(a).toBe(1);\n+  expect(a).toBe(2);'),
+        modified('packages/core/CHANGELOG.md'),
+        modified('.changeset/equality.md'),
+      ],
+      ['core', 'tooling', 'docs'],
+      'core',
+      false,
+    ],
+    [
+      'a deleted core test and a README',
+      [{ ...modified(coreTest), status: 'removed' }, modified('README.md')],
+      ['core', 'docs'],
+      'core',
+      true,
+    ],
+    [
+      'a core test and site code',
+      [modified(coreTest, '+  it("a", () => {});'), modified('apps/site/app/root.tsx')],
+      ['core', 'site'],
+      'core',
+      false,
+    ],
+  ])('keep the area of %s', (_name, files, areas, tier, secondReviewer) => {
+    const result = classify(files);
+    expect(result.areas).toEqual(areas);
+    expect(result.tier).toBe(tier);
+    expect(result.secondReviewer).toBe(secondReviewer);
+  });
+
+  it.each([
+    ['packages/core/test/a.test.ts', 'packages/core'],
+    ['apps/site/app/root.tsx', 'apps/site'],
+    ['tools/conformance/src/cli.ts', 'tools/conformance'],
+    ['scripts/roadmap.ts', 'scripts'],
+    ['packages/core', 'packages'],
+    ['README.md', ''],
+  ])('put %s in the scope %j', (path, scope) => {
+    expect(scopeOf(path)).toBe(scope);
+  });
+
+  // A label set by hand, or kept from an earlier push, counts like an inferred one.
+  it.each<[string[], Tier, Tier, boolean]>([
+    [[], 'light', 'light', false],
+    [['area:functions', 'risk:high', 'help wanted'], 'standard', 'core', false],
+    [['area:docs', 'area:core'], 'core', 'core', false],
+    [['risk:high', 'area:core'], 'core', 'core', true],
+    [['area:docs', 'risk:high'], 'light', 'tooling', false],
+  ])('give the labels %j the tier %s, raised to %s', (labels, baseTier, tier, second) => {
+    const result = tierOfLabels(labels);
+    expect(result.baseTier).toBe(baseTier);
+    expect(result.tier).toBe(tier);
+    expect(result.secondReviewer).toBe(second);
+    expect(result.labels).toEqual(
+      REVIEW_LABELS.map((label) => label.name).filter((name) => labels.includes(name)),
+    );
   });
 });
 
