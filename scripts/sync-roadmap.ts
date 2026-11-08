@@ -16,7 +16,9 @@
  *                                     only plan an explicit milestone assignment
  *
  * Needs the GitHub CLI (`gh`) logged in with the `repo` and `project` scopes, or a token in
- * `GH_TOKEN` with the same access.
+ * `GH_TOKEN` with the same access. A fine-grained token is enough with Issues: read and write on
+ * this repository and Projects: read and write for the organization; it does not need to read the
+ * organization's other projects.
  */
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
@@ -102,6 +104,16 @@ function change<T>(description: string, run: () => T): T | undefined {
   return result;
 }
 
+/** A failed `gh` call. `stdout` is what `gh` printed before it failed: for GraphQL, the response. */
+class GhFailure extends Error {
+  readonly stdout: string;
+
+  constructor(message: string, stdout: string, options: ErrorOptions) {
+    super(message, options);
+    this.stdout = stdout;
+  }
+}
+
 /** Runs `gh` and parses its JSON output. `body` is sent as the request body. */
 function gh(args: readonly string[], body?: unknown): unknown {
   let output: string;
@@ -113,11 +125,20 @@ function gh(args: readonly string[], body?: unknown): unknown {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
   } catch (error) {
-    throw new Error(`gh ${args.slice(0, 4).join(' ')} failed: ${ghErrorMessage(error)}`, {
-      cause: error,
-    });
+    throw new GhFailure(
+      `gh ${args.slice(0, 4).join(' ')} failed: ${ghErrorMessage(error)}`,
+      failedStdout(error),
+      { cause: error },
+    );
   }
   return output.trim() === '' ? undefined : JSON.parse(output);
+}
+
+/** What a failed `gh` process printed on stdout, which is empty when it printed nothing. */
+function failedStdout(error: unknown): string {
+  return error instanceof Error && 'stdout' in error && typeof error.stdout === 'string'
+    ? error.stdout
+    : '';
 }
 
 /**
@@ -134,8 +155,7 @@ function ghErrorMessage(error: unknown): string {
     'stderr' in error && typeof error.stderr === 'string'
       ? error.stderr.trim().replace(/\s*\n\s*/g, ' ')
       : '';
-  const body = 'stdout' in error && typeof error.stdout === 'string' ? error.stdout : '';
-  const details = apiErrorDetails(body).filter((detail) => !stderr.includes(detail));
+  const details = apiErrorDetails(failedStdout(error)).filter((detail) => !stderr.includes(detail));
   const parts = stderr === '' ? details : [stderr, ...details];
   return parts.length > 0 ? parts.join('; ') : error.message;
 }
@@ -203,12 +223,114 @@ function restList<T>(path: string): T[] {
   return (gh(['api', '--paginate', '--slurp', path]) as T[][]).flat();
 }
 
+/** Throws on any GraphQL error, partial ones included. Every mutation goes through this. */
 function graphql<T>(query: string, variables: Record<string, unknown> = {}): T {
   const result = (gh(['api', 'graphql'], { query, variables }) as { data: T }).data;
   if (query.trimStart().startsWith('mutation')) {
     writes++;
   }
   return result;
+}
+
+interface GraphqlError {
+  readonly message: string;
+  readonly type?: string;
+  readonly path?: readonly (string | number)[];
+}
+
+interface GraphqlResponse<T> {
+  /** What GitHub could resolve; `null` when it resolved nothing. */
+  readonly data: T | null;
+  readonly errors: readonly GraphqlError[];
+}
+
+/**
+ * Runs a read-only query and returns the answer together with the errors GitHub reported. `gh api
+ * graphql` exits non-zero for any GraphQL error, partial ones included, but still prints the whole
+ * response on stdout, so the data GitHub could resolve survives, for example when a fine-grained
+ * token cannot read some of the nodes in a list. A failure that carries no GraphQL error list, such
+ * as bad credentials or no network, throws like `graphql()`. The caller must decide which errors it
+ * can live with; nothing is hidden. Not for mutations, which must fail on any error.
+ */
+function graphqlQuery<T>(
+  query: string,
+  variables: Record<string, unknown> = {},
+): GraphqlResponse<T> {
+  if (query.trimStart().startsWith('mutation')) {
+    throw new Error('graphqlQuery is only for read-only queries; use graphql() for mutations.');
+  }
+  try {
+    return { data: (gh(['api', 'graphql'], { query, variables }) as { data: T }).data, errors: [] };
+  } catch (error) {
+    const response = error instanceof GhFailure ? parseGraphqlResponse<T>(error.stdout) : undefined;
+    if (response === undefined) {
+      throw error;
+    }
+    return response;
+  }
+}
+
+/** The data and errors of a GraphQL response body, or `undefined` when it has no error list. */
+function parseGraphqlResponse<T>(body: string): GraphqlResponse<T> | undefined {
+  let response: unknown;
+  try {
+    response = JSON.parse(body);
+  } catch {
+    // Not a JSON body, so there is no partial answer to use; the caller rethrows the failure.
+    return undefined;
+  }
+  if (typeof response !== 'object' || response === null) {
+    return undefined;
+  }
+  const fields = new Map<string, unknown>(Object.entries(response));
+  const list = fields.get('errors');
+  if (!Array.isArray(list) || list.length === 0) {
+    return undefined;
+  }
+  const errors: GraphqlError[] = [];
+  for (const item of list) {
+    const error = parseGraphqlError(item);
+    if (error === undefined) {
+      return undefined;
+    }
+    errors.push(error);
+  }
+  const data = fields.get('data');
+  // The body was parsed, not typed: the caller names the shape it reads, as `rest()` does.
+  return { data: typeof data === 'object' && data !== null ? (data as T) : null, errors };
+}
+
+function parseGraphqlError(value: unknown): GraphqlError | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+  const fields = new Map<string, unknown>(Object.entries(value));
+  const message = fields.get('message');
+  if (typeof message !== 'string') {
+    return undefined;
+  }
+  const type = fields.get('type');
+  const path = fields.get('path');
+  return {
+    message,
+    ...(typeof type === 'string' ? { type } : {}),
+    ...(Array.isArray(path) && path.every((p) => typeof p === 'string' || typeof p === 'number')
+      ? { path }
+      : {}),
+  };
+}
+
+/** Whether GitHub refused the token, not the query: a missing permission or token scope. */
+function isAccessError(error: GraphqlError): boolean {
+  return (
+    error.type === 'FORBIDDEN' ||
+    error.type === 'INSUFFICIENT_SCOPES' ||
+    /not accessible by|required scopes/i.test(error.message)
+  );
+}
+
+function describeGraphqlError(error: GraphqlError): string {
+  return error.path === undefined ? error.message : `${error.message} at ${error.path.join('.')}`;
 }
 
 // --- Issues and labels ---
@@ -427,16 +549,106 @@ function syncBlockedBy(
 
 // --- Project board ---
 
-function findProject(): { id: string; url: string } | undefined {
-  const data = graphql<{
-    organization: { projectsV2: { nodes: { id: string; title: string; url: string }[] } };
-  }>(
-    `query($login: String!) {
-      organization(login: $login) { projectsV2(first: 100) { nodes { id title url } } }
-    }`,
-    { login: PROJECT_OWNER },
+/** What the project lookups read. An entry the token cannot read comes back as `null`. */
+type ProjectLists = Partial<
+  Record<
+    'repository' | 'organization',
+    {
+      readonly projectsV2?: {
+        readonly nodes?: readonly ({ id: string; title: string; url: string } | null)[];
+      } | null;
+    } | null
+  >
+>;
+
+/**
+ * What a lookup found: the project, and the access errors from a lookup that did not find it. An
+ * empty `denied` next to no project means the project is not in that list.
+ */
+interface ProjectLookup {
+  readonly project: { id: string; url: string } | undefined;
+  readonly denied: readonly GraphqlError[];
+}
+
+/**
+ * Looks for the project in the `projectsV2` list of the repository or the organization.
+ *
+ * A fine-grained token that can read only this project gets "Resource not accessible by personal
+ * access token" for every other project in the organization's list, and GitHub still returns the
+ * rest of the list. Those errors are fine when the project was found. Without it, they leave the
+ * answer open: the project may be one of the unreadable ones, so they are returned in `denied`. Any
+ * other error, and any error outside the entries of this list, throws.
+ */
+function lookUpProject(
+  list: 'repository' | 'organization',
+  query: string,
+  variables: Record<string, unknown>,
+): ProjectLookup {
+  const { data, errors } = graphqlQuery<ProjectLists>(query, variables);
+  const found = (data?.[list]?.projectsV2?.nodes ?? []).find(
+    (node) => node?.title === PROJECT_TITLE,
   );
-  return data.organization.projectsV2.nodes.find((p) => p.title === PROJECT_TITLE);
+  const project = found == null ? undefined : { id: found.id, url: found.url };
+  const isUnreadableEntry = (error: GraphqlError): boolean => {
+    const [root, field, nodes, index] = error.path ?? [];
+    return (
+      root === list && field === 'projectsV2' && nodes === 'nodes' && typeof index === 'number'
+    );
+  };
+  const unexpected = errors.find(
+    (error) => !isAccessError(error) || (project !== undefined && !isUnreadableEntry(error)),
+  );
+  if (unexpected !== undefined) {
+    throw new Error(
+      `GitHub reported an error while looking for the project "${PROJECT_TITLE}": ${describeGraphqlError(unexpected)}`,
+    );
+  }
+  return { project, denied: project === undefined ? errors : [] };
+}
+
+/**
+ * Finds the project through the projects linked to the repository, which a token needs access to
+ * only for this project, and falls back to the organization's whole list. Returns `undefined` only
+ * when both lists were read without an access error and the project is in neither, so that
+ * `createProject()` never makes a duplicate because the real cause is a missing permission.
+ */
+function findProject(): { id: string; url: string } | undefined {
+  const [owner, name] = REPOSITORY.split('/');
+  const denied: GraphqlError[] = [];
+  const lookups: readonly (() => ProjectLookup)[] = [
+    () =>
+      lookUpProject(
+        'repository',
+        `query($owner: String!, $name: String!, $title: String!) {
+          repository(owner: $owner, name: $name) {
+            projectsV2(first: 100, query: $title) { nodes { id title url } }
+          }
+        }`,
+        { owner, name, title: PROJECT_TITLE },
+      ),
+    () =>
+      lookUpProject(
+        'organization',
+        `query($login: String!) {
+          organization(login: $login) { projectsV2(first: 100) { nodes { id title url } } }
+        }`,
+        { login: PROJECT_OWNER },
+      ),
+  ];
+  for (const lookup of lookups) {
+    const result = lookup();
+    if (result.project !== undefined) {
+      return result.project;
+    }
+    denied.push(...result.denied);
+  }
+  if (denied.length > 0) {
+    const reasons = [...new Set(denied.map((error) => error.message))].join('; ');
+    throw new Error(
+      `The project "${PROJECT_TITLE}" was not found, and GitHub denied access while looking for it (${reasons}). It may exist, so it is not created again.`,
+    );
+  }
+  return undefined;
 }
 
 function createProject(): { id: string; url: string } | undefined {
@@ -698,7 +910,8 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-// The project board is the only part that uses GraphQL and the `project` token scope.
+// The project board is the only part that uses GraphQL and needs access to the organization's
+// projects.
 let syncingProject = false;
 try {
   let projectUrl: string | undefined;
@@ -740,7 +953,16 @@ try {
   console.error(`✗ ${message}`);
   if (syncingProject) {
     console.error(
-      'This happened while syncing the project board, which needs the "project" token scope. If the token lacks it, run `gh auth refresh -h github.com -s project`, or pass --skip-project.',
+      `This happened while syncing the project board, which needs read and write access to the "${PROJECT_TITLE}" project in ${PROJECT_OWNER}. If the token lacks it:`,
+    );
+    console.error(
+      `  - fine-grained token: owner ${PROJECT_OWNER}, repository ${REPOSITORY}, permissions Issues: read and write (repository) and Projects: read and write (organization).`,
+    );
+    console.error(
+      '  - classic token or `gh` login: the `project` scope (`gh auth refresh -h github.com -s project`).',
+    );
+    console.error(
+      "Access to the organization's other projects is not needed. Or pass --skip-project.",
     );
   }
   if (writes > 0) {
