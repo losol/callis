@@ -208,21 +208,22 @@ The engine is provider-agnostic: version differences come from the provider's da
 - Says where the R6 draft differs from R5 or is not final, with a link to the pinned [R6 FHIRPath page](https://hl7.org/fhir/6.0.0-snapshot1/fhirpath.html), and lists the known gaps in its task file and user docs. It never claims final-R6 stability.
 - Treats a newer R6 snapshot or the final R6 as a reviewed provider update with a new pin, checksum and tests ([T0039](tasks/T0039-fhir-r6-model.md)), never as a silent change.
 
-**Known R6 differences.** Comparing the pinned R6 FHIRPath page with R5's, together with the page's own change notes (which list changes since `6.0.0-ballot4`), shows these differences, which later tasks must handle:
+**Known R6 differences.** Comparing the pinned R6 FHIRPath page with R5's, together with the page's own change notes (which list changes since `6.0.0-ballot4`), shows these differences. The owner decided how to handle them on 2026-11-08:
 
-| R6 draft change | Affects |
-| --- | --- |
-| The Type Factory (`%factory`), General Service API (`%server`) and Terminology Service API (`%terminologies`) moved out of the core specification into HL7's API incubator IG, which has only a CI build. | [T0032](tasks/T0032-fhir-phase2.md) |
-| `htmlChecks()` also accepts a string, parsed as the content of a `div`. | [T0021](tasks/T0021-hooks-async.md) |
-| A new function, `weight()`, and the `%profile` variable for profile invariants. No task covers `weight()` ([#151](https://github.com/losol/callis/issues/151)). | [T0020](tasks/T0020-fhir-functions.md) |
-| `comparable()` is no longer a FHIR addition; it is in FHIRPath 3.0.0. | [T0030](tasks/T0030-stu-precision-datetime.md) |
-| The type table maps `FHIR.date` to `System.Date`, as Callis already does ([spec notes](spec-notes.md#fhirdate-maps-to-systemdate)). | none |
+| R6 draft change | Decision | Affects |
+| --- | --- | --- |
+| The Type Factory (`%factory`), General Service API (`%server`) and Terminology Service API (`%terminologies`) moved out of the core specification into HL7's API incubator IG, which has only a CI build. | T0032 covers the R4/R5 APIs. The R6 ones wait until the IG is published; until then they are a known R6 gap. | [T0032](tasks/T0032-fhir-phase2.md#owner-decision-r6-service-apis) |
+| `htmlChecks()` also accepts a string, parsed as the content of a `div`. | Keep the R4/R5 behaviour (xhtml only) for every provider; the string variant waits for final R6. | [T0021](tasks/T0021-hooks-async.md#owner-decision-htmlchecks-on-strings) |
+| A new function, `weight()`, and the `%profile` variable for profile invariants. | `weight()` is on the [backlog](#backlog-not-scheduled) until final R6 ([#151](https://github.com/losol/callis/issues/151)). Hosts can pass `%profile` as a variable. | [T0020](tasks/T0020-fhir-functions.md) |
+| `comparable()` is no longer a FHIR addition; it is in FHIRPath 3.0.0. | Already planned with the 3.0.0 additions. | [T0030](tasks/T0030-stu-precision-datetime.md) |
+| The type table maps `FHIR.date` to `System.Date`. | None needed: Callis already does this ([spec notes](spec-notes.md#fhirdate-maps-to-systemdate)). | – |
 
 **Delivery.** [T0039](tasks/T0039-fhir-r6-model.md) added the R6 provider from the checksum-pinned `6.0.0-snapshot1` source, and [T0040](tasks/T0040-fhir-r6-validation.md) the installed-package and release checks; both shipped in the five-package `0.1.0`. The engine tests of [T0018](tasks/T0018-model-aware-evaluation.md) run model-aware evaluation against all three providers. The public `model` option is [T0038](tasks/T0038-public-api-completion.md). R6 metadata is not a FHIR validator, and none of this is R6 conformance. These tasks extend version coverage without reopening T0019 or changing the FHIRPath specification baseline.
 
 ## Backlog (not scheduled)
 
 - R4B model (R6 is delivered by T0039/T0040).
+- `weight()` from the R6 draft ([#151](https://github.com/losol/callis/issues/151)): waits for final R6 (owner decision, 2026-11-08). It needs cross-resource lookups, so it will likely build on the T0021 hooks.
 - Parser error recovery and a language-server or editor integration.
 - FHIR XML as an input format (a separate package that reuses the T0023 converter).
 - A SQL-on-FHIR `ViewDefinition` runner built on Callis.

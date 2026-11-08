@@ -1,6 +1,6 @@
 # Callis
 
-> Work in progress. Not ready for use yet.
+> **Before 1.0.** 0.x releases are published on npm, and the API can still change before 1.0. Public API is designed with later work in mind to avoid breaking changes, and a breaking change states its reason and migration ([API changes](CONTRIBUTING.md#api-changes), [releasing](RELEASING.md)).
 
 Callis is about finding data. It is a [FHIRPath](https://hl7.org/fhirpath/N1/) engine for TypeScript, with no runtime dependencies, for Node.js and browsers.
 
