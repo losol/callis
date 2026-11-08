@@ -352,6 +352,71 @@ describe('risk', () => {
       ]);
       expect(reasons([{ ...modified(path), status: 'removed' }])).toEqual([lowered]);
     });
+
+    // A baseline entry is a suite and a test ID (tools/conformance/src/baseline.ts).
+    it.each([
+      [
+        'an ID that leaves r4 and joins r5 in another hunk',
+        [
+          '@@ -10,3 +10,2 @@',
+          '     "testA",',
+          '-    "testX",',
+          '     "testB",',
+          '@@ -500,3 +499,4 @@',
+          '     "testC",',
+          '+    "testX",',
+          '     "testD",',
+        ],
+      ],
+      [
+        'an ID that leaves the end of r4 and joins the start of r5 in one hunk',
+        [
+          '@@ -488,6 +488,6 @@',
+          '-    "testW",',
+          '-    "testX"',
+          '+    "testW"',
+          '   ],',
+          '   "r5": [',
+          '+    "testX",',
+          '     "testY",',
+        ],
+      ],
+      [
+        'an ID removed from r4 while the end of r5 re-adds it with a comma',
+        [
+          '@@ -10,3 +10,2 @@',
+          '     "testA",',
+          '-    "testX",',
+          '     "testB",',
+          '@@ -900,3 +899,4 @@',
+          '     "testW",',
+          '-    "testX"',
+          '+    "testX",',
+          '+    "testZ"',
+          '   ]',
+        ],
+      ],
+    ])('flags %s', (_name, lines) => {
+      const patch = lines.join('\n');
+      expect(removedBaselineEntries(patch)).toEqual(['"testX"']);
+      expect(reasons([modified(path, patch)])).toEqual([
+        `${path}: lowers the conformance baseline`,
+      ]);
+    });
+
+    it('accepts a new suite after the last one, whose closing bracket gets a comma', () => {
+      const patch = [
+        '@@ -900,3 +900,6 @@',
+        '     "testX"',
+        '-  ]',
+        '+  ],',
+        '+  "r6": [',
+        '+    "testA"',
+        '+  ]',
+        ' }',
+      ].join('\n');
+      expect(removedBaselineEntries(patch)).toEqual([]);
+    });
   });
 
   describe('tests', () => {

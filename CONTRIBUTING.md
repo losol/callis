@@ -204,7 +204,7 @@ Work on central code gets strong models and a thorough review; documentation and
 `risk:high` raises the tier one step: light → tooling → standard → core. In the core tier it adds a second reviewer from the other vendor instead. The PR labels workflow sets it when a PR:
 
 - changes public exports or API signatures: a package entry point (`packages/*/src/index.ts`) or a module that one re-exports
-- lowers the conformance baseline, that is, removes an entry from `tools/conformance/baseline.json` (adding newly passing tests is normal), or changes the conformance exceptions
+- lowers the conformance baseline, that is, removes an entry from a suite in `tools/conformance/baseline.json` (adding newly passing tests is normal; an ID that moves to another suite counts as removed), or changes the conformance exceptions
 - removes or weakens tests: deletes a test file or moves it out of the tests, removes more test cases and assertions than it adds, adds `.skip`, `.only` or `.todo`, shrinks the conformance fixtures, or changes a Vitest or Playwright configuration
 - touches a release workflow (`release.yml`, `deploy.yml`) or the changeset configuration, any other CI workflow (workflows hold the permissions and secrets), or the review-area rules themselves
 - touches dependencies: a `package.json`, `pnpm-lock.yaml` or `pnpm-workspace.yaml`
