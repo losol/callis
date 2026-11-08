@@ -30,6 +30,7 @@ function context(model: EvalContext['model'] = undefined): EvalContext {
     now: () => {
       throw new Error('not used');
     },
+    trace: undefined,
   };
 }
 

@@ -16,6 +16,7 @@ function context(variables: unknown): EvalContext {
     now: () => {
       throw new Error('not used');
     },
+    trace: undefined,
   };
 }
 

@@ -58,6 +58,37 @@ const observation = {
   valueQuantity: { value: 185, unit: 'lbs', system: UCUM, code: '[lb_av]' },
 };
 
+/**
+ * An Observation whose JSON keys are not in definition order. `triggeredBy` is an element in R5
+ * and R6 only ([R5](https://hl7.org/fhir/R5/observation-definitions.html#Observation.triggeredBy)).
+ */
+const triggered = {
+  resourceType: 'Observation',
+  valueQuantity: { value: 5, unit: 'mg', system: UCUM, code: 'mg' },
+  subject: { reference: 'Patient/p1' },
+  code: { text: 'glucose' },
+  _status: { extension: [syllables] },
+  status: 'final',
+  triggeredBy: [{ observation: { reference: 'Observation/o0' }, type: 'reflex' }],
+};
+
+/** Items nested three levels deep: `Questionnaire.item.item` is a recursive element. */
+const questionnaire = {
+  resourceType: 'Questionnaire',
+  item: [
+    {
+      linkId: '1',
+      type: 'group',
+      item: [
+        { linkId: '1.1', type: 'group', item: [{ linkId: '1.1.1', type: 'string' }] },
+        { linkId: '1.2', type: 'boolean' },
+      ],
+    },
+    { type: 'display', text: 'End', linkId: '2' },
+  ],
+  status: 'draft',
+};
+
 /** An R6 resource ([DeviceAlert](https://hl7.org/fhir/6.0.0-snapshot1/devicealert.html)). */
 const deviceAlert = {
   resourceType: 'DeviceAlert',
@@ -74,19 +105,43 @@ interface Expectations {
   readonly valueAttachment: boolean;
   /** Whether `DeviceAlert` is a type of the model (R6 only). */
   readonly deviceAlert: boolean;
+  /** Whether `Observation.triggeredBy` is an element (R5 and R6). */
+  readonly triggeredBy: boolean;
 }
 
 const PROVIDERS: ReadonlyArray<readonly [string, ModelProvider, Expectations]> = [
   [
     'R4',
     r4,
-    { version: '4.0.1', valueReference: false, valueAttachment: false, deviceAlert: false },
+    {
+      version: '4.0.1',
+      valueReference: false,
+      valueAttachment: false,
+      deviceAlert: false,
+      triggeredBy: false,
+    },
   ],
-  ['R5', r5, { version: '5.0.0', valueReference: true, valueAttachment: true, deviceAlert: false }],
+  [
+    'R5',
+    r5,
+    {
+      version: '5.0.0',
+      valueReference: true,
+      valueAttachment: true,
+      deviceAlert: false,
+      triggeredBy: true,
+    },
+  ],
   [
     'R6',
     r6,
-    { version: '6.0.0-snapshot1', valueReference: false, valueAttachment: true, deviceAlert: true },
+    {
+      version: '6.0.0-snapshot1',
+      valueReference: false,
+      valueAttachment: true,
+      deviceAlert: true,
+      triggeredBy: true,
+    },
   ],
 ];
 
@@ -298,6 +353,61 @@ describe.each(PROVIDERS)(
         expect(run(input, '(Patient.name[0] | Patient.address).count()')).toEqual([2]);
         expect(run(input, 'Patient.name[0] = Patient.name[1]')).toEqual([true]);
         expect(run(input, 'Patient.name.count()')).toEqual([2]);
+      });
+    });
+
+    // https://hl7.org/fhirpath/N1/#tree-navigation, docs/spec-notes.md#order-of-descendants
+    describe('children() and descendants()', () => {
+      const names = (input: unknown, expression: string): string[] =>
+        typed(input, expression).map((item) => (item instanceof ModelNode ? item.name : '?'));
+
+      it("lists this version's elements in definition order, not in JSON order", () => {
+        const elements = ['status', 'code', 'subject', 'value'];
+        expect(names(triggered, 'Observation.children()')).toEqual(
+          expected.triggeredBy ? ['triggeredBy', ...elements] : elements,
+        );
+        expect(typed(triggered, 'Observation.children()').map(typeName)).toEqual([
+          ...(expected.triggeredBy ? ['Observation.triggeredBy'] : []),
+          'code',
+          'CodeableConcept',
+          'Reference',
+          'Quantity',
+        ]);
+      });
+
+      it('folds _status into the status node, and only lists elements', () => {
+        expect(names(triggered, 'Observation.children()')).not.toContain('_status');
+        expect(run(triggered, 'Observation.status.children().url')).toEqual([syllables.url]);
+        expect(run(triggered, 'Observation.children().where($this is code)')).toEqual(['final']);
+      });
+
+      it("reaches triggeredBy's data only where it is an element", () => {
+        expect(run(triggered, 'Observation.descendants().type')).toEqual(
+          expected.triggeredBy ? ['reflex'] : [],
+        );
+        expect(run(triggered, 'Observation.descendants().reference')).toEqual(
+          expected.triggeredBy ? ['Observation/o0', 'Patient/p1'] : ['Patient/p1'],
+        );
+      });
+
+      it('terminates on nested Questionnaire.item and keeps document order', () => {
+        expect(run(questionnaire, 'Questionnaire.descendants().linkId')).toEqual([
+          '1',
+          '1.1',
+          '1.1.1',
+          '1.2',
+          '2',
+        ]);
+        expect(
+          typed(questionnaire, 'Questionnaire.descendants().where(linkId.exists())').map(typeName),
+        ).toEqual(Array(5).fill('Questionnaire.item'));
+        // status, 5 items, and the 11 primitives inside them
+        expect(run(questionnaire, 'Questionnaire.descendants().count()')).toEqual([17]);
+        expect(run(questionnaire, 'Questionnaire.item[1].children()')).toEqual([
+          '2',
+          'End',
+          'display',
+        ]);
       });
     });
 

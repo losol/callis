@@ -1,8 +1,10 @@
 /**
  * End-to-end tests of model-aware evaluation through the internal API, with the mini FHIR model
  * ([T0018 acceptance criteria](../../../docs/tasks/T0018-model-aware-evaluation.md#acceptance-criteria)).
- * `ofType()` (T0042), `children()` (T0017) and `hasValue()` (T0020) are not registered yet; the
- * matching rule of `ofType()` and the children helper are covered in the runtime tests.
+ * `ofType()` (T0042) and `hasValue()` (T0020) are not registered yet; the matching rule of
+ * `ofType()` is covered in the runtime tests. `children()` and `descendants()` (T0017) are tested
+ * with the stub model in `src/functions/tree.test.ts` and with the generated models in
+ * `generated-models.test.ts`.
  */
 import { describe, expect, it } from 'vitest';
 import {

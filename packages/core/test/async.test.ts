@@ -193,6 +193,33 @@ describe('host results that are thenables', () => {
   });
 });
 
+// The trace hook is a host boundary too (T0017, docs/spec-notes.md#trace-names-and-projections).
+describe('a trace hook that returns a thenable', () => {
+  const results: readonly [string, () => PromiseLike<void>][] = [
+    ['a promise from another realm', () => crossRealmPromise(undefined)],
+    ['a custom thenable', () => customThenable(undefined)],
+  ];
+
+  it.each(results)('waits for %s in async mode', async (_label, result) => {
+    const names: string[] = [];
+    const hooks = {
+      trace: (event: { readonly name: string }) => {
+        names.push(event.name);
+        return result();
+      },
+    };
+    await expect(
+      evaluateAsync(input, "trace('a').name.trace('b').count()", { hooks }),
+    ).resolves.toEqual([3]);
+    expect(names).toEqual(['a', 'b']);
+  });
+
+  it.each(results)('rejects %s with eval/async-in-sync in sync mode', async (_label, result) => {
+    const hooks = { trace: result };
+    expect(await codeOf(() => evaluate(input, "trace('a')", { hooks }))).toBe('eval/async-in-sync');
+  });
+});
+
 describe('concurrent evaluations', () => {
   it('runs two overlapping async evaluations of one compiled expression without interference', async () => {
     const release: (() => void)[] = [];
