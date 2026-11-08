@@ -3,6 +3,7 @@
 Part of the [roadmap](../roadmap.md). Phase 2 · wave 8 · size M.
 
 - **Depends on:** [T0038](T0038-public-api-completion.md)
+- **Area:** `area:functions`, `area:core`
 
 ## Goal
 

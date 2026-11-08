@@ -3,6 +3,7 @@
 Part of the [roadmap](../roadmap.md). Phase 1 · wave 4 · size M.
 
 - **Depends on:** [T0008](T0008-compiler-evaluator.md)
+- **Area:** `area:functions`
 - **Parallel with:** [T0010](T0010-operators.md)–[T0014](T0014-fn-conversion.md), [T0016](T0016-fn-math.md)–[T0018](T0018-model-aware-evaluation.md)
 
 ## Goal

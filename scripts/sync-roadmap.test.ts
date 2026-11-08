@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { loadRoadmap } from './roadmap.ts';
+import {
+  DELIVERED_BEFORE_AREAS,
+  loadRoadmap,
+  type RoadmapTask,
+  taskAreaLabels,
+} from './roadmap.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const milestone = { number: 7, title: 'Chosen release', state: 'open' };
@@ -63,6 +68,7 @@ else if (method === 'GET' && path.endsWith('/dependencies/blocked_by?per_page=10
 else if (method === 'GET' && path.startsWith('repos/losol/callis/milestones/')) result = data.currentMilestone ?? data.milestonePages.flat().find(value => value.number === Number(path.split('/').at(-1)));
 else if (method === 'GET' && path.startsWith('repos/losol/callis/issues/')) result = data.currentIssue ?? data.issues.find(value => value.number === Number(path.split('/').at(-1)));
 else if (method === 'PATCH' && path.startsWith('repos/losol/callis/issues/')) result = data.patchResponse ?? {...data.issues.find(value => value.number === Number(path.split('/').at(-1))), milestone: data.milestonePages.flat().find(value => value.number === body.milestone)};
+else if (method === 'POST' && path === 'repos/losol/callis/labels') result = body;
 else throw new Error('Unexpected mocked gh request: ' + JSON.stringify({args, body}));
 console.log(JSON.stringify(result));
 `,
@@ -196,36 +202,101 @@ describe('roadmap milestone CLI', () => {
   });
 
   it('leaves manual milestones intact during normal apply with no release input', () => {
-    const { roadmap } = loadRoadmap(root);
-    const issues = roadmap.tasks.map((task, index) => ({
-      ...issue,
-      number: index + 1,
-      id: index + 100,
-      title: `${task.id}: ${task.title}`,
-      state: 'closed',
-      labels: [{ name: 'task' }, { name: `wave-${task.wave}` }],
-      milestone: { number: 22, title: 'Manual choice', state: 'closed' },
-    }));
-    const blockers = Object.fromEntries(
-      roadmap.tasks.map((task, index) => [
-        index + 1,
-        task.dependsOn.map((id) => {
-          const blocker = issues[roadmap.tasks.findIndex((item) => item.id === id)];
-          if (blocker === undefined) throw new Error(`Fixture has no task ${id}`);
-          return blocker;
-        }),
-      ]),
-    );
-    const result = run(['--apply', '--skip-project'], {
-      issues,
-      blockers,
-      labels: [...new Set(roadmap.tasks.map((task) => `wave-${task.wave}`))].map((name) => ({
-        name,
-      })),
-    });
+    const result = run(['--apply', '--skip-project'], syncedFixture());
     expect(result.status).toBe(0);
     expect(result.output).toContain('GitHub already matches the roadmap');
     expect(writes(result.calls)).toEqual([]);
     expect(result.calls.every((call) => !call.path.includes('/milestones'))).toBe(true);
+  });
+});
+
+/**
+ * A GitHub that matches the roadmap of this repository: one closed issue per task with its labels
+ * and "blocked by" links, every wave and area label, and a manual milestone on each issue. `edit`
+ * changes the labels of single tasks.
+ */
+function syncedFixture(
+  edit: (task: RoadmapTask, labels: string[]) => string[] = (_task, labels) => labels,
+): Fixture {
+  const { roadmap } = loadRoadmap(root);
+  const issues = roadmap.tasks.map((task, index) => ({
+    ...issue,
+    number: index + 1,
+    id: index + 100,
+    title: `${task.id}: ${task.title}`,
+    state: 'closed',
+    labels: edit(task, ['task', `wave-${task.wave}`, ...taskAreaLabels(task)]).map((name) => ({
+      name,
+    })),
+    milestone: { number: 22, title: 'Manual choice', state: 'closed' },
+  }));
+  const blockers = Object.fromEntries(
+    roadmap.tasks.map((task, index) => [
+      index + 1,
+      task.dependsOn.map((id) => {
+        const blocker = issues[roadmap.tasks.findIndex((item) => item.id === id)];
+        if (blocker === undefined) throw new Error(`Fixture has no task ${id}`);
+        return blocker;
+      }),
+    ]),
+  );
+  const labels = new Set([
+    ...roadmap.tasks.map((task) => `wave-${task.wave}`),
+    ...roadmap.tasks.flatMap(taskAreaLabels),
+  ]);
+  return { issues, blockers, labels: [...labels].map((name) => ({ name })) };
+}
+
+// CONTRIBUTING.md, "Roadmap sync": the task file's Area line is the source of the area labels.
+describe('roadmap area labels', () => {
+  const { roadmap } = loadRoadmap(root);
+  const withAreas = roadmap.tasks.find((task) => (task.areas?.length ?? 0) > 0);
+  const delivered = roadmap.tasks.find((task) => DELIVERED_BEFORE_AREAS.has(task.id));
+  if (withAreas === undefined || delivered === undefined) {
+    throw new Error('The roadmap needs a task with areas and one delivered before areas.');
+  }
+  const number = roadmap.tasks.indexOf(withAreas) + 1;
+  const stale = withAreas.areas?.includes('docs') ? 'area:site' : 'area:docs';
+
+  it('replaces stale area labels and leaves those of a task without an Area line', () => {
+    const fixture = syncedFixture((task, labels) => {
+      if (task.id === withAreas.id) return ['task', `wave-${task.wave}`, stale, 'help wanted'];
+      if (task.id === delivered.id) return [...labels, 'area:docs'];
+      return labels;
+    });
+    const dryRun = run(['--skip-project'], fixture);
+    expect(dryRun.status).toBe(0);
+    expect(writes(dryRun.calls)).toEqual([]);
+    expect(dryRun.output).toContain(`(dry run) ~ #${number} labels`);
+
+    const result = run(['--apply', '--skip-project'], fixture);
+    expect(result.status).toBe(0);
+    expect(writes(result.calls)).toEqual([
+      {
+        args: expect.any(Array),
+        method: 'PATCH',
+        path: `repos/losol/callis/issues/${number}`,
+        body: {
+          labels: ['task', `wave-${withAreas.wave}`, ...taskAreaLabels(withAreas), 'help wanted'],
+        },
+      },
+    ]);
+  });
+
+  it('creates a missing area label with its color and description', () => {
+    const [label] = taskAreaLabels(withAreas);
+    const fixture = syncedFixture();
+    const result = run(['--apply', '--skip-project'], {
+      ...fixture,
+      labels: (fixture.labels ?? []).filter((value) => 'name' in value && value.name !== label),
+    });
+    expect(result.status).toBe(0);
+    expect(writes(result.calls)).toEqual([
+      expect.objectContaining({
+        method: 'POST',
+        path: 'repos/losol/callis/labels',
+        body: { name: label, color: expect.any(String), description: expect.any(String) },
+      }),
+    ]);
   });
 });

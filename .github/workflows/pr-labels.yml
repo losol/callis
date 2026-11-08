@@ -1,0 +1,46 @@
+name: PR labels
+
+# Adds the review labels of a pull request: its area:* labels and risk:high, from the paths and
+# diffs it changes (CONTRIBUTING.md, "Review areas and model tiers"). The rules live in
+# scripts/review-areas.ts. The labels are only ever added: a label set by hand stays, and a stale
+# one only makes the review stricter until someone removes it.
+#
+# pull_request_target runs this workflow from the base branch with a token that may write labels,
+# also for pull requests from forks; a pull_request run from a fork only gets a read-only token.
+# The price is that the job must never run the pull request's code. So it checks out the base
+# branch (the default for pull_request_target), installs nothing, uses no secrets, and the script
+# reads the changed files and their diffs through the API as data. A pull request that changes
+# this workflow or the scripts is labelled by the versions on the base branch.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+# Only the latest push counts. Labels are only added, so a cancelled run loses nothing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  label:
+    name: Review labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      # No ref: pull_request_target checks out the base branch, never the pull request's head.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      # The script uses only Node.js built-ins and the preinstalled GitHub CLI.
+      - name: Label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/review-labels.ts --pr "$PR_NUMBER" --apply

@@ -3,6 +3,8 @@
 Part of the [roadmap](../roadmap.md). Phase 1 · wave 5 · size L.
 
 - **Depends on:** [T0018](T0018-model-aware-evaluation.md), [T0019](T0019-fhir-model-generator.md)
+- **Area:** `area:core`
+- **Tier hint:** likely `risk:high`: a public `analyze()` and diagnostics on `compile()`, so the core tier with a second reviewer from the other vendor.
 - **Parallel with:** [T0020](T0020-fhir-functions.md), [T0021](T0021-hooks-async.md)
 
 ## Goal

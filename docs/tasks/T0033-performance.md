@@ -3,6 +3,8 @@
 Part of the [roadmap](../roadmap.md). Phase 3 · wave 8 · size L.
 
 - **Depends on:** [T0038](T0038-public-api-completion.md)
+- **Area:** `area:core`, `area:tooling`
+- **Tier hint:** likely `risk:high`: a new dev dependency (`fhirpath.js`) and a CI job, so the core tier with a second reviewer from the other vendor.
 
 ## Goal
 

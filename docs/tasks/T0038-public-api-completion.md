@@ -3,6 +3,8 @@
 Part of the [roadmap](../roadmap.md). Phase 1 · wave 7 · size L.
 
 - **Depends on:** [T0041](T0041-fn-existence-completion.md), [T0042](T0042-fn-projection-completion.md), [T0025](T0025-public-api-release.md), [T0007](T0007-ucum.md), [T0010](T0010-operators.md), [T0011](T0011-fn-existence.md), [T0012](T0012-fn-filtering.md), [T0013](T0013-fn-subsetting-combining.md), [T0014](T0014-fn-conversion.md), [T0015](T0015-fn-string.md), [T0016](T0016-fn-math.md), [T0017](T0017-fn-tree-utility.md), [T0021](T0021-hooks-async.md), [T0023](T0023-xml-fixture-conversion.md), [T0024](T0024-static-analysis.md) (together they cover all of phase 1)
+- **Area:** `area:core`, `area:docs`, `area:tooling`
+- **Tier hint:** likely `risk:high`: the final public API and exports, so the core tier with a second reviewer from the other vendor.
 - **Parallel with:** –
 - **Background:** [ADR-0009](../adr/0009-esm-only-zero-deps.md), [ADR-0012](../adr/0012-evaluation-defaults.md) (option and output defaults)
 

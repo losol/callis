@@ -2,11 +2,13 @@
  * Reads `docs/roadmap.md` and the task files, and checks that they agree. The overview table in
  * the roadmap is the source of truth for task titles, phases, waves, sizes and dependencies; the
  * dependency graph, the waves table and the header of each task file repeat that data and must
- * match it. `sync-roadmap.ts` copies the same data to the GitHub task issues and project board.
+ * match it. The `- **Area:**` line of a task file is the source of truth for its review areas.
+ * `sync-roadmap.ts` copies the same data to the GitHub task issues and project board.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { AREA_NAMES, type AreaName, areaLabel, areaOfLabel } from './review-areas.ts';
 
 /** One row of the overview table in `docs/roadmap.md`. */
 export interface RoadmapTask {
@@ -18,6 +20,11 @@ export interface RoadmapTask {
   readonly wave: string;
   readonly size: string;
   readonly dependsOn: readonly string[];
+  /**
+   * The review areas from the task file's `- **Area:**` line. {@link loadRoadmap} fills them in;
+   * undefined for a task without the line ({@link DELIVERED_BEFORE_AREAS}).
+   */
+  readonly areas?: readonly AreaName[];
 }
 
 /** The parsed roadmap, plus the rows that could not be read. */
@@ -33,6 +40,39 @@ export interface Roadmap {
 const TASK_ID = /T\d{4}[a-z]?/g;
 const TASK_ID_ONLY = /^T\d{4}[a-z]?$/;
 const SIZES: ReadonlySet<string> = new Set(['S', 'M', 'L']);
+const AREA_LINE = '- **Area:**';
+
+/**
+ * Tasks delivered before review areas existed (2026-11-08). Their files need no `- **Area:**`
+ * line; every other task file has one. Never add a task to this list.
+ */
+export const DELIVERED_BEFORE_AREAS: ReadonlySet<string> = new Set([
+  'T0000',
+  'T0001',
+  'T0002',
+  'T0003',
+  'T0004',
+  'T0005',
+  'T0006',
+  'T0007',
+  'T0008',
+  'T0009',
+  'T0010',
+  'T0011',
+  'T0012',
+  'T0018',
+  'T0019',
+  'T0022',
+  'T0023',
+  'T0025',
+  'T0035',
+  'T0036',
+  'T0037',
+  'T0039',
+  'T0040',
+  'T0043',
+  'T0044',
+]);
 
 const OVERVIEW_ROW =
   /^\| \[(?<id>[^\]]+)\]\((?<file>[^)]+)\) \| (?<title>.+?) \| (?<phase>[^|]+?) \| (?<dependsOn>[^|]+?) \| (?<wave>[^|]+?) \| (?<size>[^|]+?) \|$/;
@@ -155,8 +195,44 @@ function list(ids: readonly string[]): string {
 }
 
 /**
+ * Reads the review areas of a task file's `` - **Area:** `area:functions`, `area:core` `` line.
+ * Returns undefined areas when the file has no such line.
+ */
+export function parseTaskAreas(content: string): {
+  readonly areas?: readonly AreaName[];
+  readonly problems: readonly string[];
+} {
+  const lines = content.split('\n').filter((line) => line.startsWith(AREA_LINE));
+  const [line, ...others] = lines;
+  if (line === undefined) {
+    return { problems: [] };
+  }
+  const problems: string[] = [];
+  if (others.length > 0) {
+    problems.push(`has ${lines.length} "${AREA_LINE}" lines; keep one.`);
+  }
+  const areas: AreaName[] = [];
+  for (const part of line.slice(AREA_LINE.length).split(',')) {
+    const value = part.trim();
+    const area = /^`(area:[a-z]+)`$/.exec(value)?.[1];
+    const name = area === undefined ? undefined : areaOfLabel(area);
+    if (name === undefined) {
+      problems.push(
+        `the area ${JSON.stringify(value)} is not one of ${AREA_NAMES.map((a) => `\`${areaLabel(a)}\``).join(', ')}.`,
+      );
+    } else if (areas.includes(name)) {
+      problems.push(`lists \`${area}\` twice.`);
+    } else {
+      areas.push(name);
+    }
+  }
+  return { areas, problems };
+}
+
+/**
  * Checks a task file header against its roadmap row: the title line, the
- * `Phase 1 · wave 1 · size M.` line and the `**Depends on:**` line.
+ * `Phase 1 · wave 1 · size M.` line and the `**Depends on:**` line. Also checks the
+ * `- **Area:**` line, which every task file has except those in {@link DELIVERED_BEFORE_AREAS}.
  */
 function checkTaskFile(task: RoadmapTask, content: string): string[] {
   const problems: string[] = [];
@@ -183,6 +259,14 @@ function checkTaskFile(task: RoadmapTask, content: string): string[] {
         `${where}: depends on ${list(fileDeps)}, but the roadmap says ${list(task.dependsOn)}.`,
       );
     }
+  }
+
+  const areas = parseTaskAreas(content);
+  problems.push(...areas.problems.map((problem) => `${where}: ${problem}`));
+  if (areas.areas === undefined && !DELIVERED_BEFORE_AREAS.has(task.id)) {
+    problems.push(
+      `${where}: no "${AREA_LINE}" line. List the task's review areas, for example "${AREA_LINE} \`area:functions\`" (CONTRIBUTING.md, "Review areas and model tiers").`,
+    );
   }
   return problems;
 }
@@ -271,16 +355,25 @@ export function checkRoadmap(roadmap: Roadmap, taskFiles: ReadonlyMap<string, st
   return problems;
 }
 
-/** Reads and checks `docs/roadmap.md` and `docs/tasks/*.md` under the repository root. */
+/**
+ * Reads and checks `docs/roadmap.md` and `docs/tasks/*.md` under the repository root. The tasks
+ * carry the review areas of their task files.
+ */
 export function loadRoadmap(root: string): { roadmap: Roadmap; problems: string[] } {
   const docs = join(root, 'docs');
-  const roadmap = parseRoadmap(readFileSync(join(docs, 'roadmap.md'), 'utf8'));
+  const parsed = parseRoadmap(readFileSync(join(docs, 'roadmap.md'), 'utf8'));
   const taskFiles = new Map<string, string>();
   for (const name of readdirSync(join(docs, 'tasks'))) {
     if (/^T\d{4}.*\.md$/.test(name)) {
       taskFiles.set(`tasks/${name}`, readFileSync(join(docs, 'tasks', name), 'utf8'));
     }
   }
+  const tasks = parsed.tasks.map((task) => {
+    const content = taskFiles.get(task.file);
+    const areas = content === undefined ? undefined : parseTaskAreas(content).areas;
+    return areas === undefined ? task : { ...task, areas };
+  });
+  const roadmap = { ...parsed, tasks };
   return { roadmap, problems: checkRoadmap(roadmap, taskFiles) };
 }
 
@@ -304,13 +397,25 @@ export function waveLabel(task: RoadmapTask): string {
   return `wave-${task.wave}`;
 }
 
+/** The `area:*` labels of a task issue, from its task file. */
+export function taskAreaLabels(task: RoadmapTask): string[] {
+  return (task.areas ?? []).map(areaLabel);
+}
+
 /**
  * The labels a task issue should have: its current labels without stale wave labels, plus
- * `task` and the task's wave label.
+ * `task`, the task's wave label and its area labels. A task without an `- **Area:**` line leaves
+ * the issue's area labels as they are.
  */
 export function issueLabels(task: RoadmapTask, current: readonly string[]): string[] {
-  const kept = current.filter((label) => label !== 'task' && !/^wave-\d+$/.test(label));
-  return ['task', waveLabel(task), ...kept];
+  const areas = taskAreaLabels(task);
+  const kept = current.filter(
+    (label) =>
+      label !== 'task' &&
+      !/^wave-\d+$/.test(label) &&
+      !(areas.length > 0 && areaOfLabel(label) !== undefined),
+  );
+  return ['task', waveLabel(task), ...areas, ...kept];
 }
 
 /** The body of a new task issue. The sync never rewrites the body of an existing issue. */

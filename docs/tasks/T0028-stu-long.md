@@ -3,6 +3,8 @@
 Part of the [roadmap](../roadmap.md). Phase 2 · wave 8 · size M.
 
 - **Depends on:** [T0038](T0038-public-api-completion.md)
+- **Area:** `area:core`, `area:functions`
+- **Tier hint:** likely `risk:high`: a new System type that reaches the public types and outputs, so the core tier with a second reviewer from the other vendor.
 
 ## Goal
 

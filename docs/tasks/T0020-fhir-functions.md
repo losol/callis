@@ -3,6 +3,8 @@
 Part of the [roadmap](../roadmap.md). Phase 1 · wave 5 · size M.
 
 - **Depends on:** [T0009](T0009-equality-kernels.md), [T0018](T0018-model-aware-evaluation.md)
+- **Area:** `area:functions`, `area:core`
+- **Tier hint:** likely `risk:high`: the override options for `%resource` and `%rootResource` change the public evaluation options, so the core tier with a second reviewer from the other vendor.
 - **Parallel with:** [T0024](T0024-static-analysis.md)
 
 ## Goal

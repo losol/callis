@@ -3,6 +3,7 @@
 Part of the [roadmap](../roadmap.md). Phase 1 · wave 5 · size S.
 
 - **Depends on:** [T0008](T0008-compiler-evaluator.md), [T0009](T0009-equality-kernels.md), [T0044](T0044-fn-first-single.md)
+- **Area:** `area:functions`
 - **Issue:** [#25](https://github.com/losol/callis/issues/25)
 - **Child:** [T0044](T0044-fn-first-single.md) / [#141](https://github.com/losol/callis/issues/141) (first and single)
 
