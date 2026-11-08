@@ -19,7 +19,12 @@ function definition(params: readonly ParamSpec[]): FunctionDefinition {
   return { name: 'f', params, impl: (_call, input) => input };
 }
 
-const lambda: LambdaArg = { kind: 'lambda', forItem: () => [], inPlace: () => [] };
+const lambda: LambdaArg = {
+  kind: 'lambda',
+  forItem: () => [],
+  forInput: () => [],
+  inPlace: () => [],
+};
 const type: Arg = { kind: 'type', target: { kind: 'resource', name: 'Patient' } };
 
 describe('arityOf and paramAt', () => {

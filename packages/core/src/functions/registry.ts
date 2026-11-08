@@ -3,6 +3,7 @@
  * ([T0008: function library](https://github.com/losol/callis/blob/main/docs/tasks/T0008-compiler-evaluator.md#function-library)).
  */
 import { type FhirPathErrorOptions, FhirPathSemanticError } from '../errors/fhirpath-error.ts';
+import { CONVERSION_FUNCTIONS } from './conversion.ts';
 import { arityOf, defineFunction, type FunctionDefinition } from './define.ts';
 import { EXISTENCE_FUNCTIONS } from './existence.ts';
 import { FILTERING_FUNCTIONS } from './filtering.ts';
@@ -48,6 +49,7 @@ export interface RegistryOptions {
 
 /** The standard library. Later tasks add their functions here (T0011–T0017). */
 const STANDARD_FUNCTIONS: readonly FunctionDefinition[] = Object.freeze([
+  ...CONVERSION_FUNCTIONS,
   ...EXISTENCE_FUNCTIONS,
   ...FILTERING_FUNCTIONS,
   ...LOGIC_FUNCTIONS,
