@@ -15,7 +15,7 @@
     "url": "git+https://github.com/losol/callis.git",
     "directory": "packages/fhir-r6"
   },
-  "homepage": "https://github.com/losol/callis/tree/main/packages/fhir-r6#readme",
+  "homepage": "https://callis.losol.no/packages/fhir-r6/",
   "bugs": "https://github.com/losol/callis/issues",
   "type": "module",
   "sideEffects": false,

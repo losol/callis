@@ -15,7 +15,7 @@
     "url": "git+https://github.com/losol/callis.git",
     "directory": "packages/core"
   },
-  "homepage": "https://github.com/losol/callis/tree/main/packages/core#readme",
+  "homepage": "https://callis.losol.no/packages/core/",
   "bugs": "https://github.com/losol/callis/issues",
   "type": "module",
   "sideEffects": false,
