@@ -17,7 +17,7 @@
     "url": "git+https://github.com/losol/callis.git",
     "directory": "packages/ucum"
   },
-  "homepage": "https://github.com/losol/callis/tree/main/packages/ucum#readme",
+  "homepage": "https://callis.losol.no/packages/ucum/",
   "bugs": "https://github.com/losol/callis/issues",
   "type": "module",
   "sideEffects": false,
