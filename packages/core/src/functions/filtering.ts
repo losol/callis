@@ -5,7 +5,9 @@
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
 import { appendAll, type Collection, EMPTY, type Item } from '../runtime/collection.ts';
 import type { EvalContext } from '../runtime/context.ts';
+import { itemEquals } from '../runtime/equality.ts';
 import { andThen, isThenable, type MaybePromise, mapSequential } from '../runtime/maybe-promise.ts';
+import { isSameNode } from '../runtime/node-value.ts';
 import { assertResolved, matchesTypeTarget } from '../runtime/type-target.ts';
 import { matchesCriteria } from './criteria.ts';
 import {
@@ -15,7 +17,6 @@ import {
   lambdaArg,
   typeArg,
 } from './define.ts';
-import { includesEqual } from './subsetting.ts';
 
 /**
  * `where(criteria)`: retains matching input items in order, with their original provenance.
@@ -57,9 +58,10 @@ export const selectFunction: FunctionDefinition = defineFunction({
 
 /**
  * `repeat(projection)`: the projection of the input items, then of each new item it gives, until
- * no new item comes. An item is new when no item of the result equals it (`=` is true); the result
- * lists the new items in the order they are found, and the input items only if the projection
- * gives them. The projection is evaluated on one item at a time, as its focus and `$this`; 3.0.0
+ * no new item comes. An item is new unless `=` is true for an item of the result, or it is the
+ * same input node as one, so an element reached again is found once even when it holds only
+ * extensions. The result lists the new items in the order they are found, and the input items only
+ * if the projection gives them. The projection is evaluated on one item at a time, as its focus and `$this`; 3.0.0
  * does not set `$index` there, so it stays that of the call.
  *
  * Deduplication ends the walk on data, but a projection that makes new values, such as
@@ -159,7 +161,10 @@ async function finishRepeat(
 }
 
 /**
- * Adds the items of a projection that are not in the result yet to the result and the queue.
+ * Adds the items of a projection that are not in the result yet to the result and the queue: an
+ * item is in the result when it is the same node as an item there, or `=` is true for one. An
+ * undetermined comparison is not equality, as for `|`, but without the node check an element that
+ * holds only extensions would never be found and a walk back to it would never end.
  *
  * @throws {@link FhirPathEvaluationError} `eval/limit-exceeded` when the result would have more
  *   than `limits.maxRepeatItems` items.
@@ -167,7 +172,7 @@ async function finishRepeat(
 function addNewItems(ctx: EvalContext, queue: Item[], result: Item[], projected: Collection): void {
   const limit = ctx.limits.maxRepeatItems;
   for (const item of projected) {
-    if (includesEqual(result, item, ctx)) continue;
+    if (isFound(result, item, ctx)) continue;
     if (result.length >= limit) {
       throw new FhirPathEvaluationError(
         'eval/limit-exceeded',
@@ -177,4 +182,11 @@ function addNewItems(ctx: EvalContext, queue: Item[], result: Item[], projected:
     result.push(item);
     queue.push(item);
   }
+}
+
+function isFound(result: readonly Item[], item: Item, ctx: EvalContext): boolean {
+  for (const found of result) {
+    if (isSameNode(found, item) || itemEquals(found, item, ctx) === true) return true;
+  }
+  return false;
 }

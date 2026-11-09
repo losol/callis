@@ -10,7 +10,12 @@ import { describe, expect, it } from 'vitest';
 import { r4 } from '../../fhir-r4/src/index.ts';
 import { r5 } from '../../fhir-r5/src/index.ts';
 import { r6 } from '../../fhir-r6/src/index.ts';
-import { type CompileOptions, type EvaluateOptions, evaluate } from '../src/api/compile.ts';
+import {
+  type CompileOptions,
+  type EvaluateOptions,
+  evaluate,
+  evaluateAsync,
+} from '../src/api/compile.ts';
 import { FhirPathError } from '../src/errors/fhirpath-error.ts';
 import { parseJson } from '../src/model/lossless-json.ts';
 import { ModelNode } from '../src/model/model-node.ts';
@@ -692,6 +697,33 @@ describe.each(PROVIDERS)(
       });
 
       // https://hl7.org/fhirpath/N1/#repeatprojection-expression-collection
+      // docs/spec-notes.md#repeat: `=` on an element that holds only extensions is empty, so only
+      // the node check stops repeat() from adding it again and again until the limit.
+      it('finds an element that holds only extensions once, in sync and async mode', async () => {
+        const absent = { extension: [syllables] };
+        const extended = {
+          resourceType: 'Patient',
+          _active: absent,
+          name: [{ given: ['Ann', null, null], _given: [null, absent, absent] }],
+        };
+        const cases: [string, unknown[]][] = [
+          ['Patient.active.repeat($this).count()', [1]],
+          ['Patient.active.repeat(%resource.active).count()', [1]],
+          ['Patient.repeat(active).count()', [1]],
+          ['Patient.active.repeat($this).hasValue()', [false]],
+          // Two elements without a value stay two items, also when they share one JSON object.
+          ['Patient.name.given.repeat($this).count()', [3]],
+          ['Patient.name.repeat(given).count()', [3]],
+          ['Patient.name.given.combine(Patient.name.given).repeat($this).count()', [3]],
+        ];
+        for (const [expression, result] of cases) {
+          expect(run(extended, expression)).toEqual(result);
+          expect(await evaluateAsync(extended, expression, { model })).toEqual(result);
+        }
+        const tight = { limits: { maxRepeatItems: 3 } };
+        expect(run(extended, 'Patient.name.given.repeat($this).count()', tight)).toEqual([3]);
+      });
+
       it('repeats item to every nested Questionnaire.item, breadth first', () => {
         expect(run(questionnaire, 'Questionnaire.repeat(item).linkId')).toEqual([
           '1',

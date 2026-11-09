@@ -8,7 +8,7 @@ import { TimeValue } from '../values/datetime/time.ts';
 import { Decimal } from '../values/decimal/decimal.ts';
 import { Quantity } from '../values/quantity/quantity.ts';
 import type { Item } from './collection.ts';
-import { toSystemValue } from './node-value.ts';
+import { isSameNode, toSystemValue } from './node-value.ts';
 
 function node(value: unknown): ModelNode {
   return new ModelNode({ value, name: 'element' });
@@ -253,5 +253,40 @@ describe('toSystemValue', () => {
       expect(birthDate.systemValue()).toBe(first);
       expect(birthDate.value).toBe('1974-12-25');
     });
+  });
+});
+
+// repeat() finds an element only once, also one that holds only extensions (docs/spec-notes.md#repeat).
+describe('isSameNode', () => {
+  const absent = { extension: [{ url: 'http://example.org/absent', valueCode: 'unknown' }] };
+  const json = { resourceType: 'Patient', _active: absent, name: [{ given: ['Ann'] }] };
+  const root = new ModelNode({ value: json, name: 'Patient' });
+  const active = (parent: ModelNode, name = 'active'): ModelNode =>
+    new ModelNode({ value: undefined, name, parent, primitiveElement: absent });
+  const given = (index: number, value: unknown = 'Ann'): ModelNode => {
+    const humanName = new ModelNode({ value: json.name[0], name: 'name', parent: root, index: 0 });
+    return new ModelNode({ value, name: 'given', parent: humanName, index });
+  };
+
+  it('is true for the same object, and for the same element reached twice', () => {
+    const node = active(root);
+    expect(isSameNode(node, node)).toBe(true);
+    expect(isSameNode(active(root), active(root))).toBe(true);
+    expect(isSameNode(given(0), given(0))).toBe(true);
+    expect(isSameNode(active(root), active(new ModelNode({ value: json, name: '' })))).toBe(true);
+    expect(isSameNode('a', 'a')).toBe(true);
+  });
+
+  it('is false for other elements, other inputs and other values', () => {
+    expect(isSameNode(active(root), active(root, 'deceased'))).toBe(false);
+    expect(isSameNode(given(0), given(1))).toBe(false);
+    expect(isSameNode(given(0), given(0, 'Bea'))).toBe(false);
+    const copy = new ModelNode({ value: { ...json }, name: 'Patient' });
+    expect(isSameNode(active(root), active(copy))).toBe(false);
+    expect(isSameNode(active(root), new ModelNode({ value: undefined, name: 'active' }))).toBe(
+      false,
+    );
+    expect(isSameNode(given(0), 'Ann')).toBe(false);
+    expect(isSameNode(Decimal.ONE, Decimal.of(1n))).toBe(false);
   });
 });
