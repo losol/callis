@@ -55,5 +55,5 @@ Document later features as planned with task links. A parsed expression is not e
 - [ ] Plain output and exact Decimal/Quantity string output work; no promise, internal node or AST leaks through the advertised API.
 - [ ] Errors can be caught and displayed through public exports; invalid and unsupported options produce stable errors. Type tests reject deferred options and members.
 - [ ] Existing public exports and internal compiler/conformance consumers remain compatible.
-- [ ] Quick-start examples run in CI; support and limitations are explicit and link to the committed R4/R5 conformance reports without claiming full phase-1 compliance.
-- [ ] `pnpm check` and conformance pass without baseline regressions; relevant reports and changeset are committed. No package is published by this task.
+- [ ] Quick-start examples run in CI; support and limitations are explicit and link to the published [R4](https://callis.losol.no/conformance/r4) and [R5](https://callis.losol.no/conformance/r5) conformance reports without claiming full phase-1 compliance.
+- [ ] `pnpm check` and conformance pass without baseline regressions; the baseline and changeset are committed, and the reports are generated, never committed ([#187](https://github.com/losol/callis/pull/187)). No package is published by this task.
