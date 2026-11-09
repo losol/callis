@@ -138,27 +138,31 @@ export default function ProgressPage() {
 
       <section className="pg-player" aria-label="Commit player">
         <div className="pg-player-row">
-          <button type="button" onClick={() => select(0)} title="First commit">
-            |◀
-          </button>
-          <button type="button" onClick={() => select(active - 1)} title="Previous commit (←)">
-            ◀
-          </button>
-          <button type="button" onClick={togglePlay} title="Play or pause (space)">
-            {playing ? '❚❚ pause' : '▶ play'}
-          </button>
-          <button type="button" onClick={() => select(active + 1)} title="Next commit (→)">
-            ▶
-          </button>
-          <input
-            type="range"
-            min={0}
-            max={count - 1}
-            value={active}
-            aria-label="Commit"
-            onChange={(event) => select(Number(event.target.value))}
-          />
-          <span className="pg-pos">{`${active + 1}/${count}`}</span>
+          <div className="pg-player-buttons">
+            <button type="button" onClick={() => select(0)} title="First commit">
+              |◀
+            </button>
+            <button type="button" onClick={() => select(active - 1)} title="Previous commit (←)">
+              ◀
+            </button>
+            <button type="button" onClick={togglePlay} title="Play or pause (space)">
+              {playing ? '❚❚ pause' : '▶ play'}
+            </button>
+            <button type="button" onClick={() => select(active + 1)} title="Next commit (→)">
+              ▶
+            </button>
+          </div>
+          <div className="pg-player-seek">
+            <input
+              type="range"
+              min={0}
+              max={count - 1}
+              value={active}
+              aria-label="Commit"
+              onChange={(event) => select(Number(event.target.value))}
+            />
+            <span className="pg-pos">{`${active + 1}/${count}`}</span>
+          </div>
         </div>
         <div className="pg-now" aria-live="polite">
           <div className="pg-subject">
