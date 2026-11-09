@@ -4,6 +4,7 @@ isEffectOnLogic2
 isEffectOnLogic2Base
 isEffectOnLogic3
 isGuardAnd
+isGuardAndOtherImplies
 isGuardAs
 isGuardFnImplies
 isGuardIifElse
@@ -14,8 +15,10 @@ isGuardNotImplies
 isGuardOr
 isGuardOr2
 isGuardOrBoth
+isGuardOrInnerImplies
 isGuardOrTypesImplies
 isGuardOrTypesImpliesAll
+isGuardOtherAndImplies
 isGuardXorBad2
 testAbs1
 testAbs2
@@ -233,6 +236,8 @@ testExists5
 testExp1
 testExp2
 testExpressionsEqual
+testExtension1
+testExtension2
 testExtractBirthDate
 testFHIRPathAsFunction12
 testFHIRPathAsFunction13
@@ -241,12 +246,15 @@ testFHIRPathAsFunction15
 testFHIRPathAsFunction21
 testFHIRPathAsFunction23
 testFHIRPathIsFunction1
+testFHIRPathIsFunction10
 testFHIRPathIsFunction2
 testFHIRPathIsFunction3
 testFHIRPathIsFunction4
 testFHIRPathIsFunction5
 testFHIRPathIsFunction6
 testFHIRPathIsFunction7
+testFHIRPathIsFunction8
+testFHIRPathIsFunction9
 testFalseLiteralConvertsToBoolean
 testFirstLast1
 testFloor1
@@ -274,6 +282,7 @@ testGreaterThan26
 testGreaterThan27
 testGreaterThan28
 testGreaterThan3
+testGreaterThan30
 testGreaterThan4
 testGreaterThan5
 testGreaterThan6
@@ -315,6 +324,9 @@ testGreatorOrEqual9
 testGreatorOrEqualEmpty1
 testGreatorOrEqualEmpty2
 testGreatorOrEqualEmpty3
+testHasCodingValue1
+testHasCodingValue2
+testHasCodingValue3
 testIif1
 testIif10
 testIif11
@@ -386,6 +398,7 @@ testLessOrEqual26
 testLessOrEqual27
 testLessOrEqual29
 testLessOrEqual3
+testLessOrEqual30
 testLessOrEqual4
 testLessOrEqual5
 testLessOrEqual6
@@ -415,10 +428,12 @@ testLessThan24
 testLessThan25
 testLessThan26
 testLessThan27
+testLessThan28
 testLessThan3
 testLessThan30
 testLessThan31
 testLessThan32
+testLessThan33
 testLessThan4
 testLessThan5
 testLessThan6
@@ -531,6 +546,7 @@ testMod9
 testModEmpty1
 testModEmpty2
 testModEmpty3
+testMultipleResolve
 testMultiply1
 testMultiply2
 testMultiply3
@@ -567,6 +583,7 @@ testNegativeIntegerLiteralToString
 testNoValueComparison
 testNoValueExists
 testNoValueExistsElement
+testNoValueHasValue
 testNoValueInvariant
 testNoValueInvariantElement
 testNoValueLength
@@ -813,7 +830,10 @@ testUnion12
 testUnion13
 testUnion2
 testUnion3
+testVariables1
+testVariables2
 testVariables3
+testVariables4
 testWhere1
 testWhere2
 testWhere3

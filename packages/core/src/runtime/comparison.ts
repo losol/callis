@@ -12,6 +12,7 @@ import { Quantity } from '../values/quantity/quantity.ts';
 import type { UnitSystem } from '../values/quantity/unit-system.ts';
 import { compareIntegers, compareStrings } from '../values/string.ts';
 import type { Item } from './collection.ts';
+import { fhirQuantityCompare, fhirQuantityPair } from './fhir-quantity.ts';
 import {
   asQuantity,
   isDateOrDateTime,
@@ -64,13 +65,14 @@ export interface ComparisonContext {
  * | Quantity | in a common unit; an Integer or Decimal converts to a Quantity with unit `'1'` |
  * | Date, DateTime | by time span, respecting offsets; a Date converts to a DateTime |
  * | Time | by time span |
+ * | FHIR Quantity, when one of the two has no UCUM code | by value, when their `code` or `unit` match ({@link fhirQuantityPair}) |
  *
  * Input nodes are compared by their System values, including the model-less date convenience
  * ({@link operandValue}).
  *
  * @returns the order, or undefined (empty) when it is unknown: date/time values with different
- *   precisions, quantities whose units cannot be related, or an input node that has only
- *   extensions.
+ *   precisions, quantities whose units cannot be related or that have no value, or an input node
+ *   that has only extensions.
  * @throws {@link FhirPathEvaluationError} `eval/type-mismatch` when the types cannot be ordered:
  *   different types without an implicit conversion between them (a String and a Date, a Time and a
  *   DateTime), and types without an order (Boolean, complex values).
@@ -83,6 +85,10 @@ export interface ComparisonContext {
  * ```
  */
 export function compare(left: Item, right: Item, ctx: ComparisonContext): Ordering | undefined {
+  const quantities = fhirQuantityPair(left, right);
+  if (quantities !== undefined) {
+    return fhirQuantityCompare(quantities);
+  }
   const a = operandValue(left, right, ctx.model);
   const b = operandValue(right, left, ctx.model);
   if (a === undefined || b === undefined) {

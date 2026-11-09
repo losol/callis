@@ -78,6 +78,12 @@ assert.deepEqual(core.evaluate(null, "'4 days'.toQuantity('h')", { units: ucum }
   [{ value: 96, unit: 'h', system: 'http://unitsofmeasure.org', code: 'h' }]);
 assert.throws(() => core.evaluate(null, '(1 | 2).toInteger()'), error => error.code === 'eval/singleton-expected');
 assert.deepEqual(core.evaluate({ name: 'Ada' }, 'name.upper()'), ['ADA']);
+const container = { resourceType: 'Patient', id: 'p', contained: [{ resourceType: 'Organization', id: 'o' }],
+  managingOrganization: { reference: '#o' } };
+assert.deepEqual(core.evaluate(container, 'managingOrganization.resolve().id | %rootResource.id | %sct'),
+  ['o', 'p', 'http://snomed.info/sct']);
+assert.deepEqual(core.evaluate(container.contained[0], '%resource.id | %rootResource.id', { rootResource: container }),
+  ['o', 'p']);
 assert.deepEqual(core.evaluate(null, "'a🔥b'.length()"), [3]);
 assert.throws(() => core.evaluate(null, "'a'.matches('(')"), error => error.code === 'eval/invalid-argument');
 assert.throws(() => core.compile('intentionallyMissingFunction()'), core.FhirPathSemanticError);
@@ -160,6 +166,7 @@ const units: UnitSystem = minimalUnitSystem;
 const options: CompileOptions = { units };
 const run: CompiledExpression = compile('1', options);
 const output: unknown[] = run.evaluate(null, { variables: { value: Decimal.ONE }, timezoneOffset: 60, decimalOutput: 'string' });
+const fhir: unknown[] = run.evaluate(null, { resource: { resourceType: 'Patient' }, rootResource: null });
 const oneOff: unknown[] = evaluate(null, '1', options);
 const quantity: PlainQuantity = { value: '1.20', unit: 'mg' };
 const error: FhirPathError = new FhirPathEvaluationError('eval/invalid-argument', 'bad option');

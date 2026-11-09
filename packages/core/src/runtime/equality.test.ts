@@ -405,7 +405,7 @@ describe('equality and equivalence', () => {
         );
       });
 
-      it('compares by code when either has one, ignoring the unit text', () => {
+      it('compares by code when both have one, otherwise by unit text', () => {
         expectEquality(
           quantity({ value: 1, code: 'x', system: 'http://a' }),
           quantity({ value: 1, code: 'x', unit: 'other', system: 'http://b' }),
@@ -427,6 +427,14 @@ describe('equality and equivalence', () => {
           false,
           typed,
         );
+        // Only one has a code, so the unit texts decide, as in the HL7 Java engine's ordering.
+        expectEquality(
+          quantity({ value: 1, code: 'x', unit: 'tablets', system: 'http://a' }),
+          quantity({ value: 1, unit: 'tablets' }),
+          true,
+          true,
+          typed,
+        );
       });
 
       it('treats missing values like the Java engine', () => {
@@ -446,11 +454,85 @@ describe('equality and equivalence', () => {
         );
       });
 
-      it('does not apply to a quantity that converts to a System.Quantity', () => {
+      it('converts two UCUM quantities, and compares one with a quantity without a code by unit text', () => {
         const ucum = { value: 1, system: 'http://unitsofmeasure.org', code: 'mg' };
         expectEquality(quantity(ucum), quantity({ ...ucum, unit: 'milligram' }), true, true, typed);
-        // A UCUM quantity against one without a code: different types (T0020 refines this).
-        expectEquality(quantity(ucum), quantity({ value: 1, unit: 'mg' }), false, false, typed);
+        // Both convert, so the units relate through the unit system, whatever the unit text says.
+        expectEquality(
+          quantity({ ...ucum, value: 60, code: 'min', unit: 'minutes' }),
+          quantity({ ...ucum, code: 'h', unit: 'hour' }),
+          true,
+          true,
+          typed,
+        );
+        // #150, parameters-quantity-unit-text: one has no code, so the unit texts decide.
+        const coded = { ...ucum, unit: 'mg' };
+        expectEquality(quantity(coded), quantity({ value: 1, unit: 'mg' }), true, true, typed);
+        expectEquality(quantity(coded), quantity({ value: 2, unit: 'mg' }), false, false, typed);
+        expectEquality(quantity(ucum), quantity({ value: 1, unit: 'mg' }), undefined, false, typed);
+        // No unit conversion without a code on both sides.
+        expectEquality(
+          quantity({ ...coded, value: 1000, code: 'ug', unit: 'ug' }),
+          quantity({ value: 1, unit: 'mg' }),
+          undefined,
+          false,
+          typed,
+        );
+      });
+
+      it('needs the unit text on both sides when only one has a code', () => {
+        // 5 mg with a code but no unit text, against 5 with no unit at all: not the same unit.
+        const noUnit = quantity({ value: 5 });
+        expectEquality(
+          quantity({ value: 5, system: 'http://unitsofmeasure.org', code: 'mg' }),
+          noUnit,
+          undefined,
+          false,
+          typed,
+        );
+        expectEquality(
+          quantity({ value: 5, system: 'http://a', code: 'tab' }),
+          noUnit,
+          undefined,
+          false,
+          typed,
+        );
+        expectEquality(
+          quantity({ value: 5, system: 'http://a', code: 'tab', unit: 'tablets' }),
+          noUnit,
+          undefined,
+          false,
+          typed,
+        );
+        // Neither has a code nor a unit: the same (missing) unit.
+        expectEquality(noUnit, quantity({ value: 5 }), true, true, typed);
+      });
+
+      it('applies to specializations such as Age, whatever the model type', () => {
+        const age = (json: object): Item => {
+          const [observation] = toInputCollection(
+            { resourceType: 'Observation', extension: [{ url: 'x', valueAge: json }] },
+            'o',
+            stubModel,
+          );
+          const [value] = navigateMember(
+            navigateMember(observation === undefined ? [] : [observation], 'extension', {
+              model: stubModel,
+              lenientChoiceSuffix: false,
+            }),
+            'value',
+            { model: stubModel, lenientChoiceSuffix: false },
+          );
+          if (value === undefined) throw new Error('no value');
+          return value;
+        };
+        expectEquality(
+          age({ value: 3, unit: 'years' }),
+          quantity({ value: 3, unit: 'years' }),
+          true,
+          true,
+          typed,
+        );
       });
     });
 
@@ -533,7 +615,7 @@ describe('equality and equivalence', () => {
       expectEquality(node({ a: 'x' }), node({ a: 'y' }), false, false, fhir);
     });
 
-    it('is called with both nodes and the context, and not for the same object', () => {
+    it('is called with both nodes and the context, and never for =', () => {
       const hook = vi.fn<ModelEquivalence>(() => true);
       const context: EquivalenceContext = { ...ctx, modelEquivalence: hook };
       const a = node({ a: 1 });
@@ -541,9 +623,21 @@ describe('equality and equivalence', () => {
       expect(itemEquivalent(a, b, context)).toBe(true);
       expect(hook).toHaveBeenCalledWith(a, b, context);
       hook.mockClear();
-      expect(itemEquivalent(a, node(a.value), context)).toBe(true);
       expect(itemEquals(a, b, context)).toBe(false);
       expect(hook).not.toHaveBeenCalled();
+    });
+
+    // A model's rule can make a value not equivalent to itself (a CodeableConcept without codings,
+    // R5 §2.1.9.1.6), so it decides before the shortcut for one shared JSON object.
+    it('decides for two nodes holding the same JSON object too', () => {
+      const a = node({ a: 1 });
+      const same = node(a.value);
+      const never = vi.fn<ModelEquivalence>(() => false);
+      expect(itemEquivalent(a, same, { ...ctx, modelEquivalence: never })).toBe(false);
+      expect(never).toHaveBeenCalledWith(a, same, expect.anything());
+      // Undefined falls back to the default, where the same object is equivalent.
+      expect(itemEquivalent(a, same, { ...ctx, modelEquivalence: () => undefined })).toBe(true);
+      expect(itemEquivalent(a, same, ctx)).toBe(true);
     });
   });
 

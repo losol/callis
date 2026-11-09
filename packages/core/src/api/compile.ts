@@ -7,6 +7,8 @@
 import { compileExpression } from '../compiler/compile.ts';
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
 import type { SourceSpan } from '../errors/source-span.ts';
+import { fhirEquivalence } from '../fhir/equivalence.ts';
+import { createFhirEnvironment } from '../fhir/variables.ts';
 import { createRegistry, type FunctionRegistry } from '../functions/registry.ts';
 import type { ModelProvider } from '../model/model-provider.ts';
 import type { ExpressionNode } from '../parser/ast.ts';
@@ -87,8 +89,25 @@ export interface EvaluationHooks {
 
 /** Options for one evaluation. */
 export interface EvaluateOptions extends OutputOptions {
-  /** User variables, by name without the `%`: JSON values, nodes, value classes or arrays. */
+  /**
+   * User variables, by name without the `%`: JSON values, nodes, value classes or arrays.
+   * `context` and `ucum` cannot be redefined. A variable named like a FHIR variable (`resource`,
+   * `sct`, …) hides it; the `resource` and `rootResource` options are the way to set those two.
+   */
   readonly variables?: Readonly<Record<string, unknown>>;
+  /**
+   * The value of `%resource`, the resource the input is part of
+   * ([R5 §2.1.9.1.4](https://hl7.org/fhir/R5/fhirpath.html#variables)), converted like a variable;
+   * `null` and `[]` make it empty. By default it is the input when it is a resource, or for an
+   * input node, the nearest resource it was navigated from; otherwise the input itself.
+   */
+  readonly resource?: unknown;
+  /**
+   * The value of `%rootResource`, the resource that contains `%resource`, converted like a
+   * variable; `null` and `[]` make it empty. By default it is the container of `%resource` when
+   * that is a contained resource, and otherwise `%resource` itself.
+   */
+  readonly rootResource?: unknown;
   /** Functions the host supplies, such as the `trace` hook; none by default. */
   readonly hooks?: EvaluationHooks;
   /** The current time for `now()`, `today()` and `timeOfDay()`; the clock by default. */
@@ -216,10 +235,13 @@ function createContext(
   );
   let snapshot: NowSnapshot | undefined;
   const model = environment.model;
+  const context = toInputCollection(input, '', model);
   return {
     isAsync,
-    context: toInputCollection(input, '', model),
+    context,
     variables: createVariables(options.variables, model),
+    environment: createFhirEnvironment(context, options, model),
+    modelEquivalence: fhirEquivalence,
     model,
     lenientChoiceSuffix: environment.lenientChoiceSuffix,
     units: environment.units,

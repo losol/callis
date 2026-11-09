@@ -1,6 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { literal } from '../../test/support/literals.ts';
+import { stubModel } from '../../test/support/stub-model.ts';
 import { stubUnitSystem } from '../../test/support/stub-unit-system.ts';
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
 import { ModelNode } from '../model/model-node.ts';
@@ -11,6 +12,7 @@ import { minimalUnitSystem } from '../values/quantity/unit-system.ts';
 import { compareIntegers, compareStrings } from '../values/string.ts';
 import type { Item } from './collection.ts';
 import { type ComparisonContext, compare, type Ordering } from './comparison.ts';
+import { navigateMember, toInputCollection } from './navigation.ts';
 
 const ctx: ComparisonContext = { model: undefined, units: minimalUnitSystem, timezoneOffset: 0 };
 
@@ -127,6 +129,92 @@ describe('compare', () => {
       const b = literal("1 'm'");
       expect(compare(a, b, ctx)).toBeUndefined();
       expect(compare(a, b, { ...ctx, units: stubUnitSystem })).toBe(1);
+    });
+  });
+
+  // docs/spec-notes.md#fhir-quantities-without-a-ucum-code (#150: testLessThan33,
+  // testLessOrEqual30, testGreaterThan30)
+  describe('FHIR Quantities', () => {
+    const UCUM = 'http://unitsofmeasure.org';
+    const typed: ComparisonContext = { ...ctx, model: stubModel };
+    const quantity = (json: object): Item => {
+      const [value] = navigateMember(
+        toInputCollection({ resourceType: 'Observation', valueQuantity: json }, 'o', stubModel),
+        'value',
+        { model: stubModel, lenientChoiceSuffix: false },
+      );
+      if (value === undefined) throw new Error('no value');
+      return value;
+    };
+    const expectOrder = (a: Item, b: Item, expected: Ordering | undefined): void => {
+      expect(compare(a, b, typed)).toBe(expected);
+      expect(compare(b, a, typed)).toBe(negate(expected));
+    };
+
+    it('orders one with unit text against a UCUM-coded one by value when the unit texts match', () => {
+      const text = quantity({ value: 1, unit: 'mg/dL' });
+      const coded = quantity({ value: 2, unit: 'mg/dL', system: UCUM, code: 'mg/dL' });
+      expectOrder(text, coded, -1);
+      expectOrder(text, quantity({ value: 1.0, unit: 'mg/dL', system: UCUM, code: 'x' }), 0);
+      expectOrder(text, quantity({ value: 2, system: UCUM, code: 'mg/dL' }), undefined);
+    });
+
+    it('orders two without a UCUM code by value when their units match', () => {
+      expectOrder(
+        quantity({ value: 1, unit: 'tablets' }),
+        quantity({ value: 3, unit: 'tablets' }),
+        -1,
+      );
+      expectOrder(quantity({ value: 1 }), quantity({ value: 0.5 }), 1);
+      expectOrder(
+        quantity({ value: 1, code: 'tab', system: 'http://a' }),
+        quantity({ value: 2, code: 'tab', unit: 'other', system: 'http://b' }),
+        -1,
+      );
+    });
+
+    it('is empty when the units do not match or a value is missing', () => {
+      expectOrder(quantity({ value: 1, unit: 'tablets' }), quantity({ value: 2 }), undefined);
+      // Only one has a code, so both need the same unit text; 5 mg without one is not 4 of nothing.
+      expectOrder(
+        quantity({ value: 5, system: UCUM, code: 'mg' }),
+        quantity({ value: 4 }),
+        undefined,
+      );
+      expectOrder(
+        quantity({ value: 5, system: 'http://a', code: 'tab', unit: 'tablets' }),
+        quantity({ value: 4 }),
+        undefined,
+      );
+      expectOrder(
+        quantity({ value: 1, unit: 'tablets' }),
+        quantity({ value: 2, unit: 'Tablets' }),
+        undefined,
+      );
+      expectOrder(
+        quantity({ value: 1, code: 'a', system: 'http://a' }),
+        quantity({ value: 2, code: 'b', system: 'http://a' }),
+        undefined,
+      );
+      expectOrder(
+        quantity({ unit: 'tablets' }),
+        quantity({ value: 2, unit: 'tablets' }),
+        undefined,
+      );
+    });
+
+    it('converts two UCUM-coded ones and relates their units', () => {
+      expectOrder(
+        quantity({ value: 59, system: UCUM, code: 'min', unit: 'minutes' }),
+        quantity({ value: 1, system: UCUM, code: 'h', unit: 'minutes' }),
+        -1,
+      );
+    });
+
+    it('keeps one without a UCUM code a complex value against a System Quantity', () => {
+      expectTypeMismatch(() =>
+        compare(quantity({ value: 1, unit: 'mg' }), literal("2 'mg'"), typed),
+      );
     });
   });
 

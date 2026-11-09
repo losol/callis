@@ -36,6 +36,26 @@ export const variable: unknown[] = compile('%value').evaluate(null, {
 export const lossless: unknown[] = evaluate(parseJson('{"value": 1.50}'), 'value', {
   decimalOutput: 'string',
 });
+export const organization: Readonly<{ resourceType: string; id: string; name: string }> = {
+  resourceType: 'Organization',
+  id: 'o1',
+  name: 'Acme',
+};
+export const withContained: Readonly<{
+  resourceType: string;
+  contained: readonly object[];
+  managingOrganization: { reference: string };
+}> = {
+  resourceType: 'Patient',
+  contained: [organization],
+  managingOrganization: { reference: '#o1' },
+};
+export const managedBy: unknown[] = evaluate(withContained, 'managingOrganization.resolve().name');
+export const containerReference: unknown[] = evaluate(
+  organization,
+  '%rootResource.managingOrganization.reference',
+  { rootResource: withContained },
+);
 
 /** Keep non-expression errors distinguishable from FHIRPath diagnostics. */
 export function expressionError(): string {

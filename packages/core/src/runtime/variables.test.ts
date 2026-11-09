@@ -10,6 +10,8 @@ function context(variables: unknown): EvalContext {
     context: ['input'],
     variables: createVariables(variables),
     model: undefined,
+    environment: () => undefined,
+    modelEquivalence: undefined,
     lenientChoiceSuffix: false,
     units: minimalUnitSystem,
     timezoneOffset: 0,
@@ -79,5 +81,16 @@ describe('lookUpVariable', () => {
     const ctx = context({ context: 'other', ucum: 'other' });
     expect(lookUpVariable(ctx, 'context')).toEqual(['input']);
     expect(lookUpVariable(ctx, 'ucum')).toEqual([UCUM_URL]);
+  });
+
+  // https://hl7.org/fhir/R5/fhirpath.html#vars: the FHIR variables come from the environment.
+  it('asks the environment for the names the user does not define', () => {
+    const environment = (name: string) => (name.startsWith('s') ? ['built in'] : undefined);
+    const ctx = { ...context({ sct: 'user' }), environment };
+    expect(lookUpVariable(ctx, 'sct')).toHaveLength(1);
+    expect(lookUpVariable(ctx, 'sct')).not.toEqual(['built in']);
+    expect(lookUpVariable(ctx, 'snomed')).toEqual(['built in']);
+    expect(lookUpVariable(ctx, 'other')).toBeUndefined();
+    expect(lookUpVariable({ ...ctx, environment: () => ['x'] }, 'context')).toEqual(['input']);
   });
 });

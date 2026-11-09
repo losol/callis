@@ -3,6 +3,7 @@
  * ([T0008: function library](https://github.com/losol/callis/blob/main/docs/tasks/T0008-compiler-evaluator.md#function-library)).
  */
 import { type FhirPathErrorOptions, FhirPathSemanticError } from '../errors/fhirpath-error.ts';
+import { FHIR_FUNCTIONS } from '../fhir/functions.ts';
 import { CONVERSION_FUNCTIONS } from './conversion.ts';
 import { arityOf, defineFunction, type FunctionDefinition } from './define.ts';
 import { EXISTENCE_FUNCTIONS } from './existence.ts';
@@ -45,7 +46,11 @@ export interface FunctionRegistry {
 export interface RegistryOptions {
   /** The FHIRPath standard library ([N1 §5](https://hl7.org/fhirpath/N1/#functions)). */
   readonly standard?: boolean;
-  /** The FHIR additions ([R5 §2.1.9.1.5](https://hl7.org/fhir/R5/fhirpath.html#functions)); T0020. */
+  /**
+   * The FHIR additions ([R5 §2.1.9.1.5](https://hl7.org/fhir/R5/fhirpath.html#functions)):
+   * `extension`, `hasValue`, `getValue`, `resolve`, and `memberOf`, `subsumes`, `subsumedBy`,
+   * `conformsTo` and `htmlChecks`, which need host hooks.
+   */
   readonly fhir?: boolean;
 }
 
@@ -62,9 +67,6 @@ const STANDARD_FUNCTIONS: readonly FunctionDefinition[] = Object.freeze([
   ...TYPE_FUNCTIONS,
   ...UTILITY_FUNCTIONS,
 ]);
-
-/** The FHIR functions (T0020). */
-const FHIR_FUNCTIONS: readonly FunctionDefinition[] = Object.freeze([]);
 
 /**
  * Creates a function registry with the standard library and the FHIR functions, or only the parts

@@ -16,8 +16,25 @@ export interface CompileOptions {
 
 /** Options read independently for each synchronous evaluation. */
 export interface EvaluateOptions {
-  /** Values keyed by variable name without `%`; only own properties are read. */
+  /**
+   * Values keyed by variable name without `%`; only own properties are read. `context` and `ucum`
+   * cannot be redefined. A variable named like a FHIR variable (`resource`, `sct`, …) hides it;
+   * prefer the `resource` and `rootResource` options, which `resolve()` also uses.
+   */
   readonly variables?: Readonly<Record<string, unknown>>;
+  /**
+   * The value of `%resource`, converted like a variable; `null` and `[]` make it empty. By
+   * default `%resource` is the input.
+   * @see https://hl7.org/fhir/R5/fhirpath.html#variables
+   */
+  readonly resource?: unknown;
+  /**
+   * The value of `%rootResource`, converted like a variable; `null` and `[]` make it empty. By
+   * default it is `%resource`: the option's value when given, otherwise the input. `resolve()`
+   * looks up the contained references (`#id`) of a contained resource evaluated on its own in it.
+   * @see https://hl7.org/fhir/R5/fhirpath.html#variables
+   */
+  readonly rootResource?: unknown;
   /** Minutes east of UTC, or the host's current offset; defaults to 0 (UTC). */
   readonly timezoneOffset?: number | 'local';
   /**
@@ -56,7 +73,7 @@ export function compile(expression: string, options: CompileOptions = {}): Compi
   return Object.freeze({
     expression,
     evaluate(input: unknown, options: EvaluateOptions = {}): unknown[] {
-      checkOptions(options, ['variables', 'timezoneOffset', 'decimalOutput']);
+      checkOptions(options, EVALUATE_OPTION_KEYS);
       return compiled.evaluate(input, evaluateOptions(options));
     },
   });
@@ -76,12 +93,20 @@ export function evaluate(
   options: CompileOptions & EvaluateOptions = {},
 ): unknown[] {
   checkExpression(expression);
-  checkOptions(options, ['units', 'variables', 'timezoneOffset', 'decimalOutput']);
+  checkOptions(options, ['units', ...EVALUATE_OPTION_KEYS]);
   return compileInternal(expression, compileOptions(options)).evaluate(
     input,
     evaluateOptions(options),
   );
 }
+
+const EVALUATE_OPTION_KEYS: readonly string[] = [
+  'variables',
+  'resource',
+  'rootResource',
+  'timezoneOffset',
+  'decimalOutput',
+];
 
 function checkExpression(expression: unknown): asserts expression is string {
   if (typeof expression !== 'string') {
@@ -135,6 +160,8 @@ function compileOptions(options: CompileOptions): InternalCompileOptions {
 
 function evaluateOptions(options: EvaluateOptions): InternalEvaluateOptions {
   const variables = own(options, 'variables');
+  const resource = own(options, 'resource');
+  const rootResource = own(options, 'rootResource');
   const timezoneOffset = own(options, 'timezoneOffset');
   const decimalOutput = own(options, 'decimalOutput');
   if (decimalOutput !== undefined && decimalOutput !== 'number' && decimalOutput !== 'string') {
@@ -143,6 +170,8 @@ function evaluateOptions(options: EvaluateOptions): InternalEvaluateOptions {
   return {
     output: 'plain',
     ...(variables === undefined ? {} : { variables }),
+    ...(resource === undefined ? {} : { resource }),
+    ...(rootResource === undefined ? {} : { rootResource }),
     ...(timezoneOffset === undefined ? {} : { timezoneOffset }),
     ...(decimalOutput === undefined ? {} : { decimalOutput }),
   };

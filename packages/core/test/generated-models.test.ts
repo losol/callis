@@ -1,6 +1,7 @@
 /**
  * Model-aware evaluation against the generated providers, R4, R5 and R6, through the internal
- * API ([T0018](../../../docs/tasks/T0018-model-aware-evaluation.md)). The same cases run for every
+ * API ([T0018](../../../docs/tasks/T0018-model-aware-evaluation.md)), with the FHIR functions and
+ * variables ([T0020](../../../docs/tasks/T0020-fhir-functions.md)). The same cases run for every
  * provider: the engine has no version-specific code, and the models differ only in their data. The
  * R6 provider is a draft snapshot; these tests show that the engine evaluates with it, and make no
  * R6 conformance claim.
@@ -96,6 +97,51 @@ const deviceAlert = {
   label: 'SpO2 low',
   acknowledged: false,
   occurrence: { start: '2026-01-01T10:00:00Z' },
+};
+
+/**
+ * A Patient that contains a DeviceAlert (an R6 resource) and two Observations whose codes share a
+ * LOINC coding, for the FHIR functions and variables
+ * ([T0020](../../../docs/tasks/T0020-fhir-functions.md)).
+ */
+const container = {
+  resourceType: 'Patient',
+  id: 'p1',
+  contained: [
+    { ...deviceAlert, id: 'da1' },
+    {
+      resourceType: 'Observation',
+      id: 'o1',
+      status: 'final',
+      code: {
+        coding: [{ system: 'http://loinc.org', code: '8480-6', display: 'Systolic' }],
+        text: 'SBP',
+      },
+      subject: { reference: '#' },
+    },
+    {
+      resourceType: 'Observation',
+      id: 'o2',
+      status: 'final',
+      code: {
+        coding: [
+          { system: 'http://snomed.info/sct', code: '271649006' },
+          { system: 'http://loinc.org', code: '8480-6', version: '2.77' },
+        ],
+      },
+      subject: { reference: '#' },
+    },
+  ],
+  managingOrganization: { reference: '#da1' },
+};
+
+/** Two quantities of the suite's parameters-quantity-unit-text: unit text only, and UCUM-coded. */
+const unitText = {
+  resourceType: 'Parameters',
+  parameter: [
+    { name: 'unit-text', valueQuantity: { value: 1, unit: 'mg/dL' } },
+    { name: 'ucum-code', valueQuantity: { value: 2, unit: 'mg/dL', system: UCUM, code: 'mg/dL' } },
+  ],
 };
 
 interface Expectations {
@@ -408,6 +454,84 @@ describe.each(PROVIDERS)(
           'End',
           'display',
         ]);
+      });
+    });
+
+    // https://hl7.org/fhir/R5/fhirpath.html#functions, docs/tasks/T0020-fhir-functions.md
+    describe('FHIR functions and variables', () => {
+      it('reads extension() and hasValue() on a primitive with only extensions', () => {
+        expect(run(patient, 'Patient.name[0].given[1].exists()')).toEqual([true]);
+        expect(run(patient, 'Patient.name[0].given[1].hasValue()')).toEqual([false]);
+        expect(run(patient, 'Patient.name[0].given[1].getValue()')).toEqual([]);
+        expect(
+          run(patient, `Patient.name[0].given[1].extension('${syllables.url}').value`),
+        ).toEqual(['five']);
+        expect(run(patient, 'Patient.name[0].given[0].hasValue()')).toEqual([true]);
+        expect(run(patient, 'Patient.name[0].hasValue()')).toEqual([false]);
+        expect(run(patient, `Patient.birthDate.extension('${birthTime.url}').value`)).toEqual([
+          birthTime.valueDateTime,
+        ]);
+        expect(
+          run(patient, 'Patient.birthDate.extension(%`ext-patient-birthTime`).exists()'),
+        ).toEqual([true]);
+        expect(run(patient, 'Patient.birthDate.getValue() is System.Date')).toEqual([true]);
+      });
+
+      it('derives %resource and %rootResource for a node in a contained resource', () => {
+        const [status] = typed(container, "Patient.contained.where(id = 'o1').status");
+        expect(run(status, '%resource.id')).toEqual(['o1']);
+        expect(run(status, '%rootResource.id')).toEqual(['p1']);
+        expect(run(status, '%resource is Observation and %rootResource is Patient')).toEqual([
+          true,
+        ]);
+        const [alert] = typed(container, "Patient.contained.where(id = 'da1')");
+        expect(run(alert, '%resource.id | %rootResource.id')).toEqual(['da1', 'p1']);
+        expect(run(container, '%resource.id | %rootResource.id')).toEqual(['p1']);
+      });
+
+      it('compares Coding and CodeableConcept by FHIR equivalence', () => {
+        expect(run(container, 'Patient.contained[1].code ~ Patient.contained[2].code')).toEqual([
+          true,
+        ]);
+        expect(run(container, 'Patient.contained[1].code = Patient.contained[2].code')).toEqual([
+          false,
+        ]);
+        expect(
+          run(container, 'Patient.contained[1].code.coding ~ Patient.contained[2].code.coding[1]'),
+        ).toEqual([true]);
+        expect(
+          run(container, 'Patient.contained[1].code.coding ~ Patient.contained[2].code.coding[0]'),
+        ).toEqual([false]);
+        // The ids differ and are ignored; the codes are equivalent.
+        expect(run(container, 'Patient.contained[1] ~ Patient.contained[2]')).toEqual([true]);
+        expect(run(container, 'Patient.contained[1] = Patient.contained[2]')).toEqual([false]);
+      });
+
+      it('resolves a contained DeviceAlert, typed where the model has it and as Resource elsewhere', () => {
+        expect(run(container, 'Patient.managingOrganization.resolve().id')).toEqual(['da1']);
+        expect(run(container, 'Patient.contained[1].subject.resolve().id')).toEqual(['p1']);
+        const resolved = typed(container, "'#da1'.resolve()");
+        expect(resolved.map(typeName)).toEqual([expected.deviceAlert ? 'DeviceAlert' : 'Resource']);
+        expect(run(container, "'#da1'.resolve() is Resource")).toEqual([true]);
+        if (expected.deviceAlert) {
+          expect(run(container, "'#da1'.resolve() is DeviceAlert")).toEqual([true]);
+          expect(run(container, "'#da1'.resolve().label")).toEqual(['SpO2 low']);
+        } else {
+          expect(codeOf(() => run(container, "'#da1'.resolve() is DeviceAlert"))).toBe(
+            'eval/unknown-type',
+          );
+          // The declared type of `contained` has no `label` element.
+          expect(run(container, "'#da1'.resolve().label")).toEqual([]);
+        }
+      });
+
+      it('orders a quantity with unit text against a UCUM-coded one (#150)', () => {
+        expect(
+          run(unitText, 'Parameters.parameter[0].value < Parameters.parameter[1].value'),
+        ).toEqual([true]);
+        expect(
+          run(unitText, 'Parameters.parameter[1].value >= Parameters.parameter[0].value'),
+        ).toEqual([true]);
       });
     });
 
