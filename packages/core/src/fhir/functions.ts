@@ -5,19 +5,26 @@
  * [R6 draft §2.1.9.3](https://hl7.org/fhir/6.0.0-snapshot1/fhirpath.html#functions)), which the
  * default function registry includes.
  *
- * `extension()`, `hasValue()`, `getValue()` and `resolve()` need no host. `memberOf()`,
- * `subsumes()`, `subsumedBy()`, `conformsTo()` and `htmlChecks()` need a terminology server, a
- * validator or an HTML checker; they are registered so expressions that use them compile, and
- * return empty until the host hooks of [T0021](https://github.com/losol/callis/blob/main/docs/tasks/T0021-hooks-async.md)
- * back them.
+ * `extension()`, `hasValue()` and `getValue()` need no host, and `resolve()` finds what is in the
+ * data on its own. `memberOf()`, `subsumes()`, `subsumedBy()`, `conformsTo()` and `htmlChecks()`
+ * need a terminology server, a validator or an HTML checker, which the host supplies as hooks
+ * ([T0021: host hooks](https://github.com/losol/callis/blob/main/docs/tasks/T0021-hooks-async.md#host-hooks),
+ * [spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#hook-backed-functions-errors-and-empty-results)).
+ * Without the hook a function gives empty and never throws; its arguments are still evaluated
+ * and checked, so their errors surface. With one, it gives what the hook answers, and empty where
+ * the hook answers undefined; an error the hook throws ends the evaluation.
  */
 import {
+  defineFunction,
   defineValueFunction,
   type FunctionDefinition,
-  type ParamSpec,
+  type TypeHint,
+  valueArg,
 } from '../functions/define.ts';
 import { ModelNode } from '../model/model-node.ts';
 import { type Collection, EMPTY, fromBoolean, type Item } from '../runtime/collection.ts';
+import type { BoundHooks, Coding, HookContext, SubsumptionOutcome } from '../runtime/hooks.ts';
+import { andThen, type MaybePromise } from '../runtime/maybe-promise.ts';
 import { navigateMember } from '../runtime/navigation.ts';
 import { toSystemValue } from '../runtime/node-value.ts';
 import { singleton } from '../runtime/singleton.ts';
@@ -25,6 +32,7 @@ import { DateValue } from '../values/datetime/date.ts';
 import { DateTimeValue } from '../values/datetime/datetime.ts';
 import { TimeValue } from '../values/datetime/time.ts';
 import { Decimal } from '../values/decimal/decimal.ts';
+import { codedValueOf, codingsOf, hookContext, htmlOf, isSameCoding, jsonOf } from './hooks.ts';
 import { resolveFunction } from './resolve.ts';
 
 /**
@@ -87,63 +95,194 @@ export const getValueFunction: FunctionDefinition = defineValueFunction(
   { returns: { singleton: true } },
 );
 
+const BOOLEAN: TypeHint = { type: 'Boolean', singleton: true };
+
 /**
- * A function that needs a host hook ([T0021](https://github.com/losol/callis/blob/main/docs/tasks/T0021-hooks-async.md#host-hooks)).
- * Without one it returns empty and never throws; its arguments are still evaluated, so their
- * errors surface.
+ * `memberOf(valueset)`: whether the single input item, a `code` or String, a `Coding` or a
+ * `CodeableConcept`, is in the value set with the canonical URL `valueset`, as the terminology
+ * provider's `memberOf` answers. Empty without a provider, for empty or several input items, for
+ * an item that is not coded, for an empty `valueset`, and where the provider cannot tell, as the
+ * R5 text asks for a value set that cannot be resolved; the provider throws to raise the error of
+ * the R4 text instead.
+ *
+ * @see https://hl7.org/fhir/R5/fhirpath.html#functions
+ * @throws {@link FhirPathEvaluationError} `eval/singleton-expected` or `eval/type-mismatch` when
+ *   `valueset` is not a single String.
  */
-function defineHostFunction(name: string, params: readonly ParamSpec[]): FunctionDefinition {
-  return defineValueFunction(name, params, () => EMPTY, {
-    returns: { type: 'Boolean', singleton: true },
+export const memberOfFunction: FunctionDefinition = defineFunction({
+  name: 'memberOf',
+  params: [{ kind: 'value', name: 'valueset' }],
+  returns: BOOLEAN,
+  async: true,
+  impl: (call, input, args) => {
+    const valueSet = singleton(valueArg(args, 0), 'String', asString);
+    const memberOf = call.ctx.hooks.memberOf;
+    const [item] = input;
+    if (valueSet === undefined || valueSet === '' || memberOf === undefined) {
+      return EMPTY;
+    }
+    const coded =
+      item === undefined || input.length !== 1 ? undefined : codedValueOf(item, call.ctx.model);
+    if (coded === undefined) {
+      return EMPTY;
+    }
+    return andThen(memberOf(coded, valueSet, hookContext(call.ctx)), fromBoolean);
+  },
+});
+
+/**
+ * `subsumes(code)`: whether the single input `Coding` or `CodeableConcept` is equivalent to or
+ * subsumes the single given one: true when any coding of the input is, by the terminology
+ * provider's `subsumes`, equivalent to or subsumes any coding of the argument. Two codings with
+ * the same system and code are equivalent without a call.
+ *
+ * Empty without a provider, when the input or the argument is not a single `Coding` or
+ * `CodeableConcept`, for a concept without codings, and when no pair matches and the provider
+ * could not tell for one of them, as the R5 text asks for codings of different systems; false
+ * when every pair is known not to match.
+ *
+ * @see https://hl7.org/fhir/R5/fhirpath.html#functions
+ */
+export const subsumesFunction: FunctionDefinition = defineSubsumption(
+  'subsumes',
+  (outcome) => outcome === 'equivalent' || outcome === 'subsumes',
+);
+
+/**
+ * `subsumedBy(code)`: whether the single input `Coding` or `CodeableConcept` is equivalent to or
+ * subsumed by the single given one, with the rules of `subsumes()` the other way round.
+ *
+ * @see https://hl7.org/fhir/R5/fhirpath.html#functions
+ */
+export const subsumedByFunction: FunctionDefinition = defineSubsumption(
+  'subsumedBy',
+  (outcome) => outcome === 'equivalent' || outcome === 'subsumed-by',
+);
+
+function defineSubsumption(
+  name: string,
+  matches: (outcome: SubsumptionOutcome) => boolean,
+): FunctionDefinition {
+  return defineFunction({
+    name,
+    params: [{ kind: 'value', name: 'code' }],
+    returns: BOOLEAN,
+    async: true,
+    impl: (call, input, args) => {
+      const subsumes = call.ctx.hooks.subsumes;
+      const code = valueArg(args, 0);
+      const [source] = input;
+      const [given] = code;
+      if (subsumes === undefined || source === undefined || given === undefined) {
+        return EMPTY;
+      }
+      const model = call.ctx.model;
+      const sources = input.length === 1 ? codingsOf(source, model) : undefined;
+      const givens = code.length === 1 ? codingsOf(given, model) : undefined;
+      if (sources === undefined || givens === undefined) {
+        return EMPTY;
+      }
+      const pairs: (readonly [Coding, Coding])[] = [];
+      for (const a of sources) {
+        for (const b of givens) {
+          pairs.push([a, b]);
+        }
+      }
+      return andThen(
+        relate(pairs, 0, false, subsumes, hookContext(call.ctx), matches),
+        fromBoolean,
+      );
+    },
   });
 }
 
 /**
- * `memberOf(valueset)`: whether a code is in a value set. Needs a terminology hook (T0021).
- *
- * @see https://hl7.org/fhir/R5/fhirpath.html#functions
+ * Asks the provider about each pair in turn until one matches: true for the first match, and
+ * otherwise false when every outcome was known, or empty when one was not.
  */
-export const memberOfFunction: FunctionDefinition = defineHostFunction('memberOf', [
-  { kind: 'value', name: 'valueset' },
-]);
+function relate(
+  pairs: readonly (readonly [Coding, Coding])[],
+  index: number,
+  undecided: boolean,
+  subsumes: NonNullable<BoundHooks['subsumes']>,
+  context: HookContext,
+  matches: (outcome: SubsumptionOutcome) => boolean,
+): MaybePromise<boolean | undefined> {
+  const pair = pairs[index];
+  if (pair === undefined) {
+    return undecided || pairs.length === 0 ? undefined : false;
+  }
+  const [a, b] = pair;
+  const outcome: MaybePromise<SubsumptionOutcome | undefined> = isSameCoding(a, b)
+    ? 'equivalent'
+    : subsumes(a, b, context);
+  return andThen(outcome, (result) =>
+    result !== undefined && matches(result)
+      ? true
+      : relate(pairs, index + 1, undecided || result === undefined, subsumes, context, matches),
+  );
+}
 
 /**
- * `subsumes(code)`: whether the input code subsumes the given one. Needs a terminology hook
- * (T0021).
+ * `conformsTo(structure)`: whether the single input item conforms to the profile with the
+ * canonical URL `structure`, as the `conformsTo` hook answers for the item's JSON. Empty without
+ * a hook, for empty or several input items, for an empty `structure`, and where the hook cannot
+ * tell, as the R5 and R6 texts ask for a profile that cannot be resolved; the hook throws to raise
+ * the error of the R4 text and the suites instead.
  *
  * @see https://hl7.org/fhir/R5/fhirpath.html#functions
+ * @throws {@link FhirPathEvaluationError} `eval/singleton-expected` or `eval/type-mismatch` when
+ *   `structure` is not a single String.
  */
-export const subsumesFunction: FunctionDefinition = defineHostFunction('subsumes', [
-  { kind: 'value', name: 'code' },
-]);
+export const conformsToFunction: FunctionDefinition = defineFunction({
+  name: 'conformsTo',
+  params: [{ kind: 'value', name: 'structure' }],
+  returns: BOOLEAN,
+  async: true,
+  impl: (call, input, args) => {
+    const profile = singleton(valueArg(args, 0), 'String', asString);
+    const conformsTo = call.ctx.hooks.conformsTo;
+    const [item] = input;
+    if (profile === undefined || profile === '' || conformsTo === undefined) {
+      return EMPTY;
+    }
+    if (item === undefined || input.length !== 1) {
+      return EMPTY;
+    }
+    return andThen(conformsTo(jsonOf(item), profile, hookContext(call.ctx)), fromBoolean);
+  },
+});
 
 /**
- * `subsumedBy(code)`: whether the given code subsumes the input code. Needs a terminology hook
- * (T0021).
+ * `htmlChecks()`: whether the single input item, narrative `xhtml` or a string read as the
+ * content of a `div`, follows FHIR's rules for narrative XHTML, as the `htmlChecks` hook answers.
+ * Empty without a hook, for empty or several input items, for an item that is not a string, and
+ * where the hook cannot tell. The hook gets the text and whether it is the `xhtml` element itself
+ * or a string ([spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#htmlchecks-on-strings)).
  *
  * @see https://hl7.org/fhir/R5/fhirpath.html#functions
  */
-export const subsumedByFunction: FunctionDefinition = defineHostFunction('subsumedBy', [
-  { kind: 'value', name: 'code' },
-]);
-
-/**
- * `conformsTo(structure)`: whether the input conforms to a profile. Needs a `conformsTo` hook
- * (T0021).
- *
- * @see https://hl7.org/fhir/R5/fhirpath.html#functions
- */
-export const conformsToFunction: FunctionDefinition = defineHostFunction('conformsTo', [
-  { kind: 'value', name: 'structure' },
-]);
-
-/**
- * `htmlChecks()`: whether narrative XHTML follows FHIR's HTML rules. Needs an `htmlChecks` hook
- * (T0021).
- *
- * @see https://hl7.org/fhir/R5/fhirpath.html#functions
- */
-export const htmlChecksFunction: FunctionDefinition = defineHostFunction('htmlChecks', []);
+export const htmlChecksFunction: FunctionDefinition = defineFunction({
+  name: 'htmlChecks',
+  params: [],
+  returns: BOOLEAN,
+  async: true,
+  impl: (call, input) => {
+    const htmlChecks = call.ctx.hooks.htmlChecks;
+    const [item] = input;
+    if (htmlChecks === undefined || item === undefined || input.length !== 1) {
+      return EMPTY;
+    }
+    const html = htmlOf(item);
+    if (html === undefined) {
+      return EMPTY;
+    }
+    return andThen(
+      htmlChecks(html.text, { ...hookContext(call.ctx), kind: html.kind }),
+      fromBoolean,
+    );
+  },
+});
 
 /** The FHIR functions of the default registry. */
 export const FHIR_FUNCTIONS: readonly FunctionDefinition[] = Object.freeze([

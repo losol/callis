@@ -24,6 +24,7 @@ import {
   startsWithCharacters,
 } from './characters.ts';
 import {
+  type CallContext,
   defineValueFunction,
   type FunctionDefinition,
   type ParamSpec,
@@ -55,6 +56,21 @@ function defineStringFunction(
   returns: TypeHint,
   compute: (text: string, ...args: readonly string[]) => Collection,
 ): FunctionDefinition {
+  return defineStringCall(name, paramNames, returns, (_call, text, ...args) =>
+    compute(text, ...args),
+  );
+}
+
+/**
+ * Like {@link defineStringFunction}, with the call context first, for the functions that use the
+ * evaluation's `regex` hook.
+ */
+function defineStringCall(
+  name: string,
+  paramNames: readonly string[],
+  returns: TypeHint,
+  compute: (call: CallContext, text: string, ...args: readonly string[]) => Collection,
+): FunctionDefinition {
   const params: readonly ParamSpec[] = paramNames.map((paramName) => ({
     kind: 'value',
     name: paramName,
@@ -62,7 +78,7 @@ function defineStringFunction(
   return defineValueFunction(
     name,
     params,
-    (input, args) => {
+    (input, args, call) => {
       const text = stringOf(input);
       const strings: string[] = [];
       let empty = text === undefined;
@@ -74,7 +90,7 @@ function defineStringFunction(
           strings.push(value);
         }
       }
-      return empty || text === undefined ? EMPTY : compute(text, ...strings);
+      return empty || text === undefined ? EMPTY : compute(call, text, ...strings);
     },
     { returns },
   );
@@ -203,11 +219,12 @@ export const replaceFunction: FunctionDefinition = defineStringFunction(
  * `^` and `$` to match the whole input.
  * @see https://hl7.org/fhirpath/N1/#matchesregex-string-boolean
  */
-export const matchesFunction: FunctionDefinition = defineStringFunction(
+export const matchesFunction: FunctionDefinition = defineStringCall(
   'matches',
   ['regex'],
   BOOLEAN,
-  (text, regex) => fromBoolean(compileRegex(regex, BASE_FLAGS).test(text)),
+  (call, text, regex) =>
+    fromBoolean(compileRegex(regex, BASE_FLAGS, call.ctx.hooks.regex).test(text)),
 );
 
 /**
@@ -216,17 +233,17 @@ export const matchesFunction: FunctionDefinition = defineStringFunction(
  * empty regex changes nothing, unlike an empty pattern of `replace()`.
  * @see https://hl7.org/fhirpath/N1/#replacematchesregex-string-substitution-string-string
  */
-export const replaceMatchesFunction: FunctionDefinition = defineStringFunction(
+export const replaceMatchesFunction: FunctionDefinition = defineStringCall(
   'replaceMatches',
   ['regex', 'substitution'],
   STRING,
-  (text, regex, substitution) => {
+  (call, text, regex, substitution) => {
     if (regex === '') {
       return [text];
     }
     let result = '';
     let last = 0;
-    for (const match of text.matchAll(compileRegex(regex, `g${BASE_FLAGS}`))) {
+    for (const match of compileRegex(regex, BASE_FLAGS, call.ctx.hooks.regex).matchAll(text)) {
       const index = match.index ?? 0;
       result += text.slice(last, index) + expandSubstitution(substitution, match, text);
       last = index + match[0].length;

@@ -1,24 +1,28 @@
 /**
- * `resolve()` for references that point into the data being evaluated
+ * `resolve()`: references that point into the data being evaluated
  * ([R5 §2.1.9.1.5](https://hl7.org/fhir/R5/fhirpath.html#functions),
- * [spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#local-references-in-resolve)):
+ * [spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#local-references-in-resolve)),
  * contained resources (`#id`) and the entries of the `Bundle` around the reference, matched on
  * `fullUrl` with relative references made absolute
- * ([FHIR Bundle references](https://hl7.org/fhir/R5/bundle.html#references)).
- * A host hook for other references comes with [T0021](https://github.com/losol/callis/blob/main/docs/tasks/T0021-hooks-async.md#host-hooks).
+ * ([FHIR Bundle references](https://hl7.org/fhir/R5/bundle.html#references)); and for the other
+ * references the host's `resolve` hook
+ * ([T0021: host hooks](https://github.com/losol/callis/blob/main/docs/tasks/T0021-hooks-async.md#host-hooks)).
  *
- * A resolved resource is the node that navigation gives for it, typed the same way and with the
- * same parent chain, so `'#p1'.resolve()` and `contained.where(id = 'p1')` give the same node.
+ * A resource found in the data is the node that navigation gives for it, typed the same way and
+ * with the same parent chain, so `'#p1'.resolve()` and `contained.where(id = 'p1')` give the same
+ * node. A resource the hook returns is typed by the model like the input, as a root node.
  */
-import { defineValueFunction, type FunctionDefinition } from '../functions/define.ts';
+import { defineFunction, type FunctionDefinition } from '../functions/define.ts';
 import { JsonNumber } from '../model/lossless-json.ts';
 import { ModelNode } from '../model/model-node.ts';
 import type { ModelProvider } from '../model/model-provider.ts';
-import { type Collection, EMPTY, type Item } from '../runtime/collection.ts';
+import { appendAll, type Collection, EMPTY, type Item } from '../runtime/collection.ts';
 import type { EvalContext } from '../runtime/context.ts';
-import { navigateMember, resourceTypeOf } from '../runtime/navigation.ts';
+import { andThen, type MaybePromise, mapConcurrent } from '../runtime/maybe-promise.ts';
+import { navigateMember, resourceTypeOf, toInputCollection } from '../runtime/navigation.ts';
 import { toSystemValue } from '../runtime/node-value.ts';
 import { lookUpVariable } from '../runtime/variables.ts';
+import { resolveContext } from './hooks.ts';
 import { containerOf, enclosingResource } from './variables.ts';
 
 type JsonObject = Readonly<Record<string, unknown>>;
@@ -26,7 +30,7 @@ type JsonObject = Readonly<Record<string, unknown>>;
 /**
  * `resolve()`: for each input item that is a reference, the resource it points to, in input
  * order. An item that does not resolve adds nothing; empty input gives empty, and nothing raises
- * an error.
+ * an error on its own.
  *
  * - A String, or a FHIR primitive such as `uri`, `url` or `canonical`, is the reference itself.
  * - A `Reference` (without a model, any object with a string `reference`) gives its `reference`.
@@ -44,24 +48,55 @@ type JsonObject = Readonly<Record<string, unknown>>;
  *   removed and must match `meta.versionId`. Where the entry has no RESTful base, as with a
  *   `urn:uuid:` `fullUrl`, the spec leaves `Type/id` undefined, and Callis matches the resource
  *   type and id instead. The first matching entry wins.
+ * - A reference that is not in the data goes to the host's `resolve` hook, with the JSON of the
+ *   resource the item is part of in its context; a `#id` reference never does, because a
+ *   contained resource is in the data or nowhere. Without a hook such a reference does not
+ *   resolve. The hook calls for the items of one collection are independent, so in async mode
+ *   they run at the same time, at most `concurrency` of them at once, and the results keep the
+ *   input order. What the hook returns is converted like the input and typed by the model, as a
+ *   root node; undefined and `null` resolve nothing.
  *
  * @see https://hl7.org/fhir/R5/fhirpath.html#functions
+ * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` when the hook returns something
+ *   that is not JSON data, and whatever the hook throws.
  */
-export const resolveFunction: FunctionDefinition = defineValueFunction(
-  'resolve',
-  0,
-  (input, _args, call) => {
-    const items: Item[] = [];
-    for (const item of input) {
-      const reference = referenceOf(item, call.ctx.model);
-      const target = reference === undefined ? undefined : resolveLocal(reference, item, call.ctx);
-      if (target !== undefined) {
-        items.push(target);
-      }
-    }
-    return items.length === 0 ? EMPTY : items;
+export const resolveFunction: FunctionDefinition = defineFunction({
+  name: 'resolve',
+  params: [],
+  async: true,
+  impl: (call, input) => {
+    const ctx = call.ctx;
+    return andThen(
+      mapConcurrent(input, (item) => resolveItem(item, ctx), ctx.concurrency),
+      (resolved) => {
+        const items: Item[] = [];
+        for (const found of resolved) {
+          appendAll(items, found);
+        }
+        return items.length === 0 ? EMPTY : items;
+      },
+    );
   },
-);
+});
+
+/** What one input item resolves to: in the data first, then through the hook. */
+function resolveItem(item: Item, ctx: EvalContext): MaybePromise<Collection> {
+  const reference = referenceOf(item, ctx.model);
+  if (reference === undefined) {
+    return EMPTY;
+  }
+  const local = resolveLocal(reference, item, ctx);
+  if (local !== undefined) {
+    return [local];
+  }
+  const resolve = ctx.hooks.resolve;
+  if (resolve === undefined || reference.startsWith('#')) {
+    return EMPTY;
+  }
+  return andThen(resolve(reference, resolveContext(ctx, item)), (result) =>
+    toInputCollection(result, '', ctx.model),
+  );
+}
 
 /** The reference text an item stands for, if it is a reference at all. */
 function referenceOf(item: Item, model: ModelProvider | undefined): string | undefined {

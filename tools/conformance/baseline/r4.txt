@@ -84,6 +84,9 @@ testConcatenate1
 testConcatenate2
 testConcatenate3
 testConcatenate4
+testConformsTo1
+testConformsTo2
+testConformsTo3
 testContainedId
 testContainsCollection1
 testContainsCollection2
