@@ -140,6 +140,35 @@ describe('public synchronous model-less API', () => {
     expect(() => compile('1').evaluate(null, options as never)).toThrow(FhirPathEvaluationError);
   });
 
+  // https://hl7.org/fhir/R5/fhirpath.html#variables, https://hl7.org/fhir/R5/fhirpath.html#functions
+  it('evaluates the FHIR variables and functions, with resource and rootResource options', () => {
+    const organization = { resourceType: 'Organization', id: 'o1', name: 'Acme' };
+    const patient = {
+      resourceType: 'Patient',
+      id: 'p1',
+      contained: [organization],
+      managingOrganization: { reference: '#o1' },
+    };
+    expect(evaluate(patient, '%resource.id | %rootResource.id')).toEqual(['p1']);
+    expect(evaluate(patient, '%sct | %loinc | %`vs-administrative-gender`')).toEqual([
+      'http://snomed.info/sct',
+      'http://loinc.org',
+      'http://hl7.org/fhir/ValueSet/administrative-gender',
+    ]);
+    expect(evaluate(patient, 'managingOrganization.resolve().name')).toEqual(['Acme']);
+    expect(evaluate(patient, 'id.hasValue() and contained.hasValue().not()')).toEqual([true]);
+    const compiled = compile('%resource.id | %rootResource.id');
+    expect(compiled.evaluate(organization, { rootResource: patient })).toEqual(['o1', 'p1']);
+    expect(compiled.evaluate(organization, { resource: patient })).toEqual(['p1']);
+    expect(compiled.evaluate(organization, { resource: null, rootResource: [] })).toEqual([]);
+    expect(evaluate(organization, '%resource.id', { resource: patient })).toEqual(['p1']);
+    // The objects come back by reference, like the input.
+    expect(evaluate(patient, "'#o1'.resolve()")[0]).toBe(organization);
+    expect(() => evaluate(patient, '1', { resource: () => patient })).toThrow(
+      expect.objectContaining({ code: 'eval/invalid-argument' }),
+    );
+  });
+
   it('validates expression and supported option values', () => {
     expect(() => compile({} as never)).toThrow(FhirPathEvaluationError);
     expect(() => evaluate(null, {} as never)).toThrow(FhirPathEvaluationError);
@@ -169,7 +198,7 @@ describe('public synchronous model-less API', () => {
     expectTypeOf(evaluate(null, '1')).toEqualTypeOf<unknown[]>();
     expectTypeOf<keyof CompileOptions>().toEqualTypeOf<'units'>();
     expectTypeOf<keyof EvaluateOptions>().toEqualTypeOf<
-      'variables' | 'timezoneOffset' | 'decimalOutput'
+      'variables' | 'resource' | 'rootResource' | 'timezoneOffset' | 'decimalOutput'
     >();
     expectTypeOf<keyof CompiledExpression>().toEqualTypeOf<'expression' | 'evaluate'>();
     expectTypeOf<PlainQuantity['value']>().toEqualTypeOf<number | string>();

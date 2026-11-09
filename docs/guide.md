@@ -23,7 +23,9 @@ These return `['Ada', 'Mina']` and `['Ada']`. Every evaluation returns a fresh a
 | Option | Where | Meaning |
 | --- | --- | --- |
 | `units?: UnitSystem` | compile / one-off evaluate | Pure synchronous unit provider; defaults to `minimalUnitSystem`. The existing `@callis/ucum` provider implements this contract for UCUM support. |
-| `variables?: Readonly<Record<string, unknown>>` | each evaluation | Own properties keyed by names without `%`. Null and undefined values are defined empty variables; an absent variable raises `eval/undefined-variable`. |
+| `variables?: Readonly<Record<string, unknown>>` | each evaluation | Own properties keyed by names without `%`. Null and undefined values are defined empty variables; an absent variable raises `eval/undefined-variable`. `context` and `ucum` cannot be redefined; a variable named like a FHIR variable (`resource`, `sct`, …) hides it. |
+| `resource?: unknown` | each evaluation | The value of `%resource`, converted like a variable; `null` and `[]` make it empty. By default `%resource` is the input. |
+| `rootResource?: unknown` | each evaluation | The value of `%rootResource`, converted like a variable. By default it is `%resource`. `resolve()` looks up contained references (`#id`) in it. |
 | `timezoneOffset?: number \| 'local'` | each evaluation | Whole minutes east of UTC within ±840; defaults to UTC. `'local'` reads the host's current offset and is host/time dependent. |
 | `decimalOutput?: 'number' \| 'string'` | each evaluation | Decimal and Quantity magnitude rendering; defaults to potentially lossy JavaScript numbers. |
 
@@ -76,7 +78,7 @@ This gives `['1.50']`; without `decimalOutput: 'string'`, `[1.5]`. A result that
 
 ## Current support and deferred API
 
-Model-less paths, literals, indexing, Boolean logic, unary polarity and type operations are available. The built-in functions are `not`, `is`, `as`, `where`, `exists`, `count`, `first`, `single`, `children`, `descendants`, `trace`, `now`, `today`, `timeOfDay`, `iif`, `toX()` and `convertsToX()` for Boolean, Integer, Decimal, Date, DateTime, Time, String and Quantity, and the string functions below. `ofType()` is not implemented yet ([T0042](tasks/T0042-fn-projection-completion.md)). Arithmetic, comparisons, equality/equivalence, membership, union and string concatenation operators from T0010 are implemented. Other standard and FHIR functions are still incremental work; an unavailable function such as `select()` raises `semantic/unknown-function`, rather than pretending to evaluate it.
+Model-less paths, literals, indexing, Boolean logic, unary polarity and type operations are available. The built-in functions are `not`, `is`, `as`, `where`, `exists`, `count`, `first`, `single`, `children`, `descendants`, `trace`, `now`, `today`, `timeOfDay`, `iif`, `toX()` and `convertsToX()` for Boolean, Integer, Decimal, Date, DateTime, Time, String and Quantity, the string functions and the FHIR functions below. `ofType()` is not implemented yet ([T0042](tasks/T0042-fn-projection-completion.md)). Arithmetic, comparisons, equality/equivalence, membership, union and string concatenation operators from T0010 are implemented. Other standard functions are still incremental work; an unavailable function such as `select()` raises `semantic/unknown-function`, rather than pretending to evaluate it.
 
 Filtering is now available through `where(criteria)`, using the existing synchronous API:
 
@@ -116,6 +118,19 @@ export const inHours: unknown[] = evaluate(null, "'4 days'.toQuantity('h').toStr
 These give `['named']`, `['1.50']` and `["96 'h'"]`. `iif()` evaluates only the branch it selects, with the input as `$this`. A conversion takes one item: empty input gives empty, more than one item raises `eval/singleton-expected`, and a value that does not convert gives empty from `toX()` and false from `convertsToX()`. `toString()` keeps the precision of a Decimal (`1.0` gives `'1.0'`) and writes dates and times without `@`.
 
 String functions work on one String: `indexOf`, `substring`, `startsWith`, `endsWith`, `contains`, `upper`, `lower`, `replace`, `matches`, `replaceMatches`, `length` and `toChars`. An empty input or argument gives an empty result; more than one item raises `eval/singleton-expected` and a value that is not a String `eval/type-mismatch`. Characters are Unicode scalar values, as in FHIRPath 3.0.0, so `'a🔥b'.length()` is `3` and `toChars()` never splits a surrogate pair. `matches()` and `replaceMatches()` use JavaScript regular expressions with the `u` flag in single-line mode: `.` also matches a line break, `^` and `$` match only at the ends of the string, and a pattern that is not valid raises `eval/invalid-argument`. A `replaceMatches()` substitution refers to groups as `${name}` or `${1}`, as in the specification's example, or in JavaScript's forms `$1` and `$<name>`. `matchesFull()`, regular expression flags and the other string functions are deferred.
+
+The FHIR additions ([T0020](tasks/T0020-fhir-functions.md)) are available as well: `extension(url)`, `hasValue()`, `getValue()` and `resolve()`, and the variables `%resource`, `%rootResource`, `%sct`, `%loinc`, `` %`vs-[name]` `` and `` %`ext-[name]` ``. `resolve()` finds what is in the data: a contained resource for `#id`, and an entry of the Bundle around the reference by `fullUrl` or `Type/id`; anything else gives nothing.
+
+```ts
+export const managedBy: unknown[] = evaluate(withContained, 'managingOrganization.resolve().name');
+export const containerReference: unknown[] = evaluate(
+  organization,
+  '%rootResource.managingOrganization.reference',
+  { rootResource: withContained },
+);
+```
+
+These give `['Acme']` and `['#o1']`. `%resource` and `%rootResource` are the input unless the `resource` and `rootResource` options say otherwise, as in the second example, which evaluates a contained resource on its own. `hasValue()` is true for a single item with a primitive value and false otherwise. Without a model, `extension()` finds the extensions of resources and complex values, but not those of a primitive, which sit in its `_name` object; the model option of the expanded API (T0038) reads those. `memberOf()`, `subsumes()`, `subsumedBy()`, `conformsTo()` and `htmlChecks()` compile, but return empty until hooks arrive ([T0021](tasks/T0021-hooks-async.md)). The interpretations behind these are in the [spec notes](spec-notes.md#fhir-functions).
 
 The public surface has no parser, AST input/property, static analyzer, typed output mode, async evaluation, hooks, model option, custom function registry, strict/lenient options or cache. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages. The engine evaluates with a model internally since [T0018](tasks/T0018-model-aware-evaluation.md): choice elements, FHIR primitives with their `_name` extensions, FHIR values as System values and the root identifier as a type with inheritance, which the conformance runner measures with the R4 and R5 providers; the engine's tests also run it against the R6 provider. The public `model` and `lenient` options arrive with the expanded API (T0038); a model provider export does not imply them yet.
 

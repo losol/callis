@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  containerReference,
   exactDecimal,
   expressionError,
   filteredGiven,
@@ -11,6 +12,7 @@ import {
   hasAda,
   inHours,
   lossless,
+  managedBy,
   named,
   numberOfNames,
   onlyName,
@@ -41,6 +43,8 @@ describe('public guide examples', () => {
     );
     expect(variable).toEqual(['hello']);
     expect(lossless).toEqual(['1.50']);
+    expect(managedBy).toEqual(['Acme']);
+    expect(containerReference).toEqual(['#o1']);
     expect(expressionError()).toContain('syntax/unexpected-token');
   });
 

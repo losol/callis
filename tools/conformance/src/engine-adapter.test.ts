@@ -134,6 +134,13 @@ describe('engineAdapter.evaluate', () => {
     ]);
   });
 
+  // tools/conformance/README.md: %resource and %rootResource stay the whole input.
+  it('keeps the whole input as %resource and %rootResource under a context', async () => {
+    expect(await evaluate('%resource = %rootResource', { context: 'name[1]' })).toEqual([true]);
+    expect(await evaluate('%resource.name.count()', { context: 'name[1]' })).toEqual([2]);
+    expect(await evaluate('%context.given.count()', { context: 'name[1]' })).toEqual([1]);
+  });
+
   it('fails as a runner problem when the context does not select one node', async () => {
     expect(await classify('given', { context: 'name' })).toMatchObject({ kind: 'other' });
     expect(await classify('given', { context: 'missing' })).toMatchObject({ kind: 'other' });
@@ -189,14 +196,15 @@ describe('engineAdapter.classifyError', () => {
     'name.where(given.empty())',
     "'a'.matchesFull('a')",
     'name.given.aggregate($total)',
-    '%resource',
-    '%`vs-administrative-gender`',
+    "conformsTo('http://hl7.org/fhir/StructureDefinition/Patient')",
+    'name.given.memberOf(%`vs-administrative-gender`)',
     '%terminologies',
+    '%server',
   ])('reports %s, which uses a feature of a later task, as not implemented', async (expression) => {
     expect(await classify(expression)).toMatchObject({ kind: 'not-implemented' });
   });
 
-  it.each(['(%resource)', '%`\\u0072esource`', '(%`rootResource`).id'])(
+  it.each(['(%terminologies)', '%`\\u0074erminologies`', '(%`factory`).id'])(
     'recognizes the planned variable in %s however it is written',
     async (expression) => {
       expect(await classify(expression)).toMatchObject({ kind: 'not-implemented' });

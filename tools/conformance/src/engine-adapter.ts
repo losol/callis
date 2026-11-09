@@ -57,8 +57,7 @@ const PLANNED_FUNCTIONS: Readonly<Record<string, string>> = {
   ...tasks('T0015', 'matches replaceMatches length toChars'),
   ...tasks('T0016', 'abs ceiling exp floor ln log power round sqrt truncate'),
   ...tasks('T0017', 'children descendants trace now timeOfDay today'),
-  ...tasks('T0020', 'extension hasValue getValue resolve memberOf subsumes subsumedBy'),
-  ...tasks('T0020', 'conformsTo htmlChecks'),
+  ...tasks('T0020', 'extension hasValue getValue resolve'),
   ...tasks('T0026', 'aggregate sum min max avg defineVariable'),
   ...tasks('T0027', 'sort coalesce repeatAll pathname'),
   ...tasks('T0028', 'toLong convertsToLong'),
@@ -71,12 +70,22 @@ const PLANNED_FUNCTIONS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * Functions that are registered but only answer through a host hook, which the runner does not
+ * pass yet. Without a hook they return empty, so a test that calls one is "not implemented"
+ * rather than a wrong result ([spec notes](../../../docs/spec-notes.md#features-that-later-tasks-add)).
+ * TODO(T0021): pass fake hooks to the evaluation and remove this list.
+ */
+const HOOK_FUNCTIONS: Readonly<Record<string, string>> = tasks(
+  'T0021',
+  'memberOf subsumes subsumedBy conformsTo htmlChecks',
+);
+
+/**
  * Environment variables that later tasks define, as name patterns, with the task. An
  * `eval/undefined-variable` error for one of them is "not implemented"; once the task defines the
  * variable, the error no longer happens.
  */
 const PLANNED_VARIABLES: readonly { readonly pattern: RegExp; readonly task: string }[] = [
-  { pattern: /^(?:resource|rootResource|sct|loinc|vs-.*|ext-.*)$/, task: 'T0020' },
   { pattern: /^(?:terminologies|server|factory)$/, task: 'T0032' },
 ];
 
@@ -104,17 +113,22 @@ function compileOptionsFor(options: EvaluationOptions): CompileOptions {
 
 /**
  * Throws {@link NotImplementedError} when the expression calls a function of the spec that the
- * engine does not have yet. A syntax error is left to `compile()`.
+ * engine does not have yet, or one that needs a host hook the runner does not pass. A syntax
+ * error is left to `compile()`.
  */
 function checkImplemented(expression: string): void {
   for (const node of nodesOf(expression)) {
+    if (node.kind !== 'FunctionCall') {
+      continue;
+    }
     // Own properties only: `constructor()` is an unknown function, not a planned one.
-    if (
-      node.kind === 'FunctionCall' &&
-      Object.hasOwn(PLANNED_FUNCTIONS, node.name) &&
-      REGISTRY.get(node.name) === undefined
-    ) {
+    if (Object.hasOwn(PLANNED_FUNCTIONS, node.name) && REGISTRY.get(node.name) === undefined) {
       throw new NotImplementedError(`${node.name}() comes with ${PLANNED_FUNCTIONS[node.name]}`);
+    }
+    if (Object.hasOwn(HOOK_FUNCTIONS, node.name)) {
+      throw new NotImplementedError(
+        `${node.name}() needs a host hook, which the runner passes from ${HOOK_FUNCTIONS[node.name]}`,
+      );
     }
   }
 }
@@ -155,7 +169,8 @@ export const engineAdapter: EvaluatorAdapter = {
       if (selected.length !== 1) {
         throw new Error(`the context ${options.context} selected ${selected.length} items, not 1`);
       }
-      // TODO(T0020): keep %resource and %rootResource as the whole input.
+      // The selected node keeps its parent chain, so %resource and %rootResource are still the
+      // resources of the whole input (docs/tasks/T0020-fhir-functions.md).
       focus = selected[0];
     }
     return compile(expression, compileOptions).evaluateAsync(focus, { output: 'typed' });

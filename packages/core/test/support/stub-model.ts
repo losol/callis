@@ -104,8 +104,10 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
       base: 'Element',
       elements: [
         element('system', ['uri']),
+        element('version', ['string']),
         element('code', ['code']),
         element('display', ['string']),
+        element('userSelected', ['boolean']),
       ],
     },
   ],
@@ -145,6 +147,22 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
     },
   ],
   ['Age', { kind: 'complex', base: 'Quantity', systemType: 'Quantity' }],
+  [
+    'Reference',
+    {
+      kind: 'complex',
+      base: 'Element',
+      elements: [element('reference', ['string']), element('display', ['string'])],
+    },
+  ],
+  [
+    'Meta',
+    {
+      kind: 'complex',
+      base: 'Element',
+      elements: [element('versionId', ['id'])],
+    },
+  ],
   ['Duration', { kind: 'complex', base: 'Quantity', systemType: 'Quantity' }],
   [
     'HumanName',
@@ -162,7 +180,14 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
       ],
     },
   ],
-  ['Resource', { kind: 'resource', isAbstract: true, elements: [element('id', ['id'])] }],
+  [
+    'Resource',
+    {
+      kind: 'resource',
+      isAbstract: true,
+      elements: [element('id', ['id']), element('meta', ['Meta'])],
+    },
+  ],
   [
     'DomainResource',
     {
@@ -189,7 +214,16 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
         element('deceased', ['boolean', 'dateTime'], { isChoice: true }),
         element('multipleBirth', ['boolean', 'integer'], { isChoice: true }),
         element('contact', ['Patient.contact'], { isArray: true }),
+        element('managingOrganization', ['Reference']),
       ],
+    },
+  ],
+  [
+    'Organization',
+    {
+      kind: 'resource',
+      base: 'DomainResource',
+      elements: [element('name', ['string'])],
     },
   ],
   [
@@ -219,6 +253,7 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
           ['Quantity', 'string', 'boolean', 'dateTime', 'Period', 'integer', 'CodeableConcept'],
           { isChoice: true },
         ),
+        element('subject', ['Reference']),
       ],
     },
   ],

@@ -24,6 +24,8 @@ function context(model: EvalContext['model'] = undefined): EvalContext {
     context: [],
     variables: Object.create(null),
     model,
+    environment: () => undefined,
+    modelEquivalence: undefined,
     lenientChoiceSuffix: false,
     units: minimalUnitSystem,
     timezoneOffset: 0,

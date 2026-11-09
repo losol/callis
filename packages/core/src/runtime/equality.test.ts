@@ -405,7 +405,7 @@ describe('equality and equivalence', () => {
         );
       });
 
-      it('compares by code when either has one, ignoring the unit text', () => {
+      it('compares by code when both have one, otherwise by unit text', () => {
         expectEquality(
           quantity({ value: 1, code: 'x', system: 'http://a' }),
           quantity({ value: 1, code: 'x', unit: 'other', system: 'http://b' }),
@@ -427,6 +427,14 @@ describe('equality and equivalence', () => {
           false,
           typed,
         );
+        // Only one has a code, so the unit texts decide, as in the HL7 Java engine's ordering.
+        expectEquality(
+          quantity({ value: 1, code: 'x', unit: 'tablets', system: 'http://a' }),
+          quantity({ value: 1, unit: 'tablets' }),
+          true,
+          true,
+          typed,
+        );
       });
 
       it('treats missing values like the Java engine', () => {
@@ -446,11 +454,57 @@ describe('equality and equivalence', () => {
         );
       });
 
-      it('does not apply to a quantity that converts to a System.Quantity', () => {
+      it('converts two UCUM quantities, and compares one with a quantity without a code by unit text', () => {
         const ucum = { value: 1, system: 'http://unitsofmeasure.org', code: 'mg' };
         expectEquality(quantity(ucum), quantity({ ...ucum, unit: 'milligram' }), true, true, typed);
-        // A UCUM quantity against one without a code: different types (T0020 refines this).
-        expectEquality(quantity(ucum), quantity({ value: 1, unit: 'mg' }), false, false, typed);
+        // Both convert, so the units relate through the unit system, whatever the unit text says.
+        expectEquality(
+          quantity({ ...ucum, value: 60, code: 'min', unit: 'minutes' }),
+          quantity({ ...ucum, code: 'h', unit: 'hour' }),
+          true,
+          true,
+          typed,
+        );
+        // #150, parameters-quantity-unit-text: one has no code, so the unit texts decide.
+        const coded = { ...ucum, unit: 'mg' };
+        expectEquality(quantity(coded), quantity({ value: 1, unit: 'mg' }), true, true, typed);
+        expectEquality(quantity(coded), quantity({ value: 2, unit: 'mg' }), false, false, typed);
+        expectEquality(quantity(ucum), quantity({ value: 1, unit: 'mg' }), undefined, false, typed);
+        // No unit conversion without a code on both sides.
+        expectEquality(
+          quantity({ ...coded, value: 1000, code: 'ug', unit: 'ug' }),
+          quantity({ value: 1, unit: 'mg' }),
+          undefined,
+          false,
+          typed,
+        );
+      });
+
+      it('applies to specializations such as Age, whatever the model type', () => {
+        const age = (json: object): Item => {
+          const [observation] = toInputCollection(
+            { resourceType: 'Observation', extension: [{ url: 'x', valueAge: json }] },
+            'o',
+            stubModel,
+          );
+          const [value] = navigateMember(
+            navigateMember(observation === undefined ? [] : [observation], 'extension', {
+              model: stubModel,
+              lenientChoiceSuffix: false,
+            }),
+            'value',
+            { model: stubModel, lenientChoiceSuffix: false },
+          );
+          if (value === undefined) throw new Error('no value');
+          return value;
+        };
+        expectEquality(
+          age({ value: 3, unit: 'years' }),
+          quantity({ value: 3, unit: 'years' }),
+          true,
+          true,
+          typed,
+        );
       });
     });
 

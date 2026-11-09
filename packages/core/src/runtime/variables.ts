@@ -1,7 +1,8 @@
 /**
- * Environment variables: `%context`, `%ucum` and the variables the host supplies
- * ([N1 §9](https://hl7.org/fhirpath/N1/#environment-variables)). The FHIR variables (`%resource`,
- * `%rootResource`, `%sct`, `%loinc`, `` %`vs-*` ``, `` %`ext-*` ``) are T0020.
+ * Environment variables: `%context`, `%ucum`, the variables of the evaluation's environment and the
+ * variables the host supplies ([N1 §9](https://hl7.org/fhirpath/N1/#environment-variables)). The
+ * environment defines the FHIR variables (`%resource`, `%rootResource`, `%sct`, `%loinc`,
+ * `` %`vs-*` ``, `` %`ext-*` ``); `fhir/variables.ts` implements them.
  */
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
 import type { ModelProvider } from '../model/model-provider.ts';
@@ -52,7 +53,9 @@ export function createVariables(
 
 /**
  * The value of the variable `%name` in an evaluation, or undefined when it is not defined.
- * `%context` and `%ucum` are built in and cannot be redefined by the host.
+ * `%context` and `%ucum` are built in and cannot be redefined by the host. The host's variables
+ * come next, so a host can still define a name that the environment (`ctx.environment`, such as
+ * `%resource`) also defines, as it could before the environment had it.
  */
 export function lookUpVariable(ctx: EvalContext, name: string): Collection | undefined {
   if (name === 'context') {
@@ -61,5 +64,5 @@ export function lookUpVariable(ctx: EvalContext, name: string): Collection | und
   if (name === 'ucum') {
     return UCUM;
   }
-  return Object.hasOwn(ctx.variables, name) ? ctx.variables[name] : undefined;
+  return Object.hasOwn(ctx.variables, name) ? ctx.variables[name] : ctx.environment(name);
 }

@@ -12,7 +12,14 @@ import type { ModelProvider } from '../model/model-provider.ts';
 import type { NowSnapshot } from '../values/datetime/now.ts';
 import type { UnitSystem } from '../values/quantity/unit-system.ts';
 import type { Collection, Item } from './collection.ts';
+import type { ModelEquivalence } from './equality.ts';
 import type { MaybePromise } from './maybe-promise.ts';
+
+/**
+ * Looks up a variable that the environment of an evaluation defines, by name without the `%`.
+ * Returns undefined for a name it does not define.
+ */
+export type EnvironmentLookup = (name: string) => Collection | undefined;
 
 /**
  * Where `trace()` sends its output: the name, the traced items and the span of the call
@@ -40,6 +47,21 @@ export interface EvalContext {
    * `constructor` is only found when the host defined it.
    */
   readonly variables: Readonly<Record<string, Collection>>;
+  /**
+   * The variables the environment defines besides `%context` and `%ucum`: the FHIR variables
+   * `%resource`, `%rootResource`, `%sct`, `%loinc`, `` %`vs-[name]` `` and `` %`ext-[name]` ``
+   * ([R5 §2.1.9.1.4](https://hl7.org/fhir/R5/fhirpath.html#variables),
+   * [§2.1.9.1.7](https://hl7.org/fhir/R5/fhirpath.html#vars)). A host variable of the same name
+   * takes precedence.
+   */
+  readonly environment: EnvironmentLookup;
+  /**
+   * FHIR's rules for `~` on complex values: `id` elements are ignored, a `Coding` compares by
+   * `system` and `code`, and a `CodeableConcept` by its codings
+   * ([R5 §2.1.9.1.6](https://hl7.org/fhir/R5/fhirpath.html#changes)). The equivalence kernels read
+   * it from here; undefined leaves the default rule of all child properties.
+   */
+  readonly modelEquivalence: ModelEquivalence | undefined;
   /** The model, or undefined for model-less evaluation of plain JSON. */
   readonly model: ModelProvider | undefined;
   /**
