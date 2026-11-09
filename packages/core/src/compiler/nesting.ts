@@ -1,12 +1,11 @@
 /**
  * The depth limit of compiled expressions.
  *
- * The parser bounds nested sub-expressions, but it builds chains in a loop: `a.b.c…`,
- * `x.f().g()…` and left-associative operators such as `true and true and …` can be thousands of
- * levels deep without reaching its limit. The compiler and the closures it builds recurse once per
- * level, so a tree that deep would exhaust the JavaScript stack with a `RangeError`. The compiler
- * therefore checks the depth first, without recursion, and raises the parser's stable error
- * instead ([architecture: security and robustness](https://github.com/losol/callis/blob/main/docs/architecture.md#security-and-robustness)).
+ * The compiler and the closures it builds recurse once per level of the tree, so a tree thousands
+ * of levels deep would exhaust the JavaScript stack with a `RangeError`. The parser never builds a
+ * tree deeper than its nesting limit, chains such as `a.b.c…` and `true and true and …` included,
+ * but the compiler also takes trees built by hand. It therefore checks the depth first, without
+ * recursion, and raises the parser's stable error instead ([architecture: security and robustness](https://github.com/losol/callis/blob/main/docs/architecture.md#security-and-robustness)).
  */
 import { assertNever } from '../errors/assert-never.ts';
 import { FhirPathSyntaxError } from '../errors/fhirpath-error.ts';

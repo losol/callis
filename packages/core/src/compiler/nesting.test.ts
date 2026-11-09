@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { compile } from '../api/compile.ts';
 import { FhirPathSyntaxError } from '../errors/fhirpath-error.ts';
+import type { ExpressionNode } from '../parser/ast.ts';
 import { parse } from '../parser/parser.ts';
 import { checkNesting, childNodes, MAX_COMPILE_DEPTH } from './nesting.ts';
 
@@ -32,7 +33,8 @@ describe('childNodes', () => {
   });
 });
 
-// The parser builds chains in a loop, so they can be deeper than its nesting limit.
+// The parser keeps chains within its nesting limit too; the compiler checks again for trees that
+// were built by hand.
 describe('the compile depth limit', () => {
   const chains: [string, (length: number) => string][] = [
     ['member chain', (length) => `a${'.a'.repeat(length)}`],
@@ -58,7 +60,15 @@ describe('the compile depth limit', () => {
 
   it('reports the node that is too deep', () => {
     const expression = `a${'.a'.repeat(MAX_COMPILE_DEPTH)}`;
-    const error = caught(() => checkNesting(parse(expression), expression));
+    // The parser stops one step short of this tree, so the last step is added by hand.
+    const tree: ExpressionNode = {
+      kind: 'Member',
+      target: parse(expression.slice(0, -2)),
+      name: 'a',
+      delimited: false,
+      span: { start: 0, end: expression.length },
+    };
+    const error = caught(() => checkNesting(tree, expression));
     expect(error).toMatchObject({ code: 'syntax/nesting-limit', expression });
     // The innermost member chain node of depth 1001 is the root identifier `a`.
     expect((error as FhirPathSyntaxError).span).toMatchObject({ start: 0, end: 1 });
