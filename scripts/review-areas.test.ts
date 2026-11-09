@@ -81,7 +81,8 @@ describe('the areas of the repository', () => {
     ['docs/roadmap.md', 'spec'],
     ['AGENTS.md', 'spec'],
     ['CONTRIBUTING.md', 'spec'],
-    ['tools/conformance/baseline.json', 'tooling'],
+    ['tools/conformance/baseline/r4.txt', 'tooling'],
+    ['tools/conformance/src/baseline-files.ts', 'tooling'],
     ['scripts/sync-roadmap.ts', 'tooling'],
     ['.github/workflows/ci.yml', 'tooling'],
     ['pnpm-lock.yaml', 'tooling'],
@@ -327,25 +328,30 @@ describe('risk', () => {
   });
 
   describe('the conformance baseline', () => {
-    const path = 'tools/conformance/baseline.json';
+    // One file per suite, one test ID per line (tools/conformance/src/baseline.ts).
+    const path = 'tools/conformance/baseline/r4.txt';
+    const lowered = `${path}: lowers the conformance baseline`;
 
-    it('accepts new passing tests, also when the last entry gets a comma', () => {
-      const patch = [
-        '@@ -10,3 +10,5 @@',
-        '     "testA",',
-        '-    "testB"',
-        '+    "testB",',
-        '+    "testC"',
-        '   ],',
-      ].join('\n');
+    it('accepts new passing tests', () => {
+      const patch = ['@@ -10,3 +10,5 @@', ' testA', '+testB', '+testC', ' testD'].join('\n');
       expect(removedBaselineEntries(patch)).toEqual([]);
       expect(reasons([modified(path, patch)])).toEqual([]);
     });
 
+    it('accepts a new baseline file', () => {
+      const added = {
+        ...modified('tools/conformance/baseline/r6.txt', undefined, {
+          additions: 40,
+          deletions: 0,
+        }),
+        status: 'added' as const,
+      };
+      expect(reasons([added])).toEqual([]);
+    });
+
     it('flags a removed entry, a patch it cannot inspect and a deleted baseline', () => {
-      const patch = '@@ -10,3 +10,2 @@\n     "testA",\n-    "testB",\n     "testC"';
-      expect(removedBaselineEntries(patch)).toEqual(['"testB"']);
-      const lowered = `${path}: lowers the conformance baseline`;
+      const patch = '@@ -10,3 +10,2 @@\n testA\n-testB\n testC';
+      expect(removedBaselineEntries(patch)).toEqual(['testB']);
       expect(reasons([modified(path, patch)])).toEqual([lowered]);
       expect(reasons([modified(path, undefined, { additions: 9, deletions: 1 })])).toEqual([
         lowered,
@@ -353,69 +359,45 @@ describe('risk', () => {
       expect(reasons([{ ...modified(path), status: 'removed' }])).toEqual([lowered]);
     });
 
-    // A baseline entry is a suite and a test ID (tools/conformance/src/baseline.ts).
-    it.each([
-      [
-        'an ID that leaves r4 and joins r5 in another hunk',
-        [
-          '@@ -10,3 +10,2 @@',
-          '     "testA",',
-          '-    "testX",',
-          '     "testB",',
-          '@@ -500,3 +499,4 @@',
-          '     "testC",',
-          '+    "testX",',
-          '     "testD",',
-        ],
-      ],
-      [
-        'an ID that leaves the end of r4 and joins the start of r5 in one hunk',
-        [
-          '@@ -488,6 +488,6 @@',
-          '-    "testW",',
-          '-    "testX"',
-          '+    "testW"',
-          '   ],',
-          '   "r5": [',
-          '+    "testX",',
-          '     "testY",',
-        ],
-      ],
-      [
-        'an ID removed from r4 while the end of r5 re-adds it with a comma',
-        [
-          '@@ -10,3 +10,2 @@',
-          '     "testA",',
-          '-    "testX",',
-          '     "testB",',
-          '@@ -900,3 +899,4 @@',
-          '     "testW",',
-          '-    "testX"',
-          '+    "testX",',
-          '+    "testZ"',
-          '   ]',
-        ],
-      ],
-    ])('flags %s', (_name, lines) => {
-      const patch = lines.join('\n');
-      expect(removedBaselineEntries(patch)).toEqual(['"testX"']);
-      expect(reasons([modified(path, patch)])).toEqual([
-        `${path}: lowers the conformance baseline`,
-      ]);
-    });
-
-    it('accepts a new suite after the last one, whose closing bracket gets a comma', () => {
+    it('accepts a file that is sorted again, as long as every entry stays', () => {
       const patch = [
-        '@@ -900,3 +900,6 @@',
-        '     "testX"',
-        '-  ]',
-        '+  ],',
-        '+  "r6": [',
-        '+    "testA"',
-        '+  ]',
-        ' }',
+        '@@ -10,4 +10,4 @@',
+        ' testA',
+        '-testD',
+        ' testB',
+        '+testD',
+        ' testC',
+        '@@ -90,3 +90,3 @@',
+        '-testX',
+        ' testY',
+        '+testX',
       ].join('\n');
       expect(removedBaselineEntries(patch)).toEqual([]);
+    });
+
+    it('ignores a missing newline at the end of the file and a Windows line ending', () => {
+      const patch =
+        '@@ -1,2 +1,3 @@\n testA\n-testB\n\\ No newline at end of file\n+testB\r\n+testC';
+      expect(removedBaselineEntries(patch)).toEqual([]);
+    });
+
+    // A baseline entry is a suite and a test ID, and each file is one suite.
+    it('flags an ID that leaves r4 and joins r5', () => {
+      const leaves = { ...modified(path, '@@ -10,3 +10,2 @@\n testA\n-testX\n testB') };
+      const joins = modified(
+        'tools/conformance/baseline/r5.txt',
+        '@@ -500,3 +500,4 @@\n testC\n+testX\n testD',
+      );
+      expect(reasons([leaves, joins])).toEqual([lowered]);
+    });
+
+    it('flags a removed entry in every suite file', () => {
+      const patch = '@@ -1,2 +1 @@\n-testA\n testB';
+      const r5 = 'tools/conformance/baseline/r5.txt';
+      expect(reasons([modified(path, patch), modified(r5, patch)])).toEqual([
+        lowered,
+        `${r5}: lowers the conformance baseline`,
+      ]);
     });
   });
 

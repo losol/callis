@@ -16,7 +16,7 @@ FHIRPath is the path-based query language of HL7 FHIR. An expression such as `Pa
 
 ## Status
 
-Callis is at 0.x: published, partly implemented, and not yet 1.0. The public API evaluates synchronously, without a model: paths, literals, indexing, operators and a first set of functions such as `where`, `exists` and `count`. Most of the standard function library is still to come, and calling a function that is not available raises an error instead of guessing. The [guide](docs/guide.md#current-support-and-deferred-api) lists what is supported, and the [conformance reports](docs/conformance/r5.md) list every HL7 test that passes and fails.
+Callis is at 0.x: published, partly implemented, and not yet 1.0. The public API evaluates synchronously, without a model: paths, literals, indexing, operators and a first set of functions such as `where`, `exists` and `count`. Most of the standard function library is still to come, and calling a function that is not available raises an error instead of guessing. The [guide](docs/guide.md#current-support-and-deferred-api) lists what is supported, and the [conformance reports](https://callis.losol.no/conformance/r5) list every HL7 test that passes and fails.
 
 This page and the guide follow the main branch, which can be ahead of the latest release. The [releases](https://github.com/losol/callis/releases) list what each one contains. The scope and criteria for 1.0 are not decided yet.
 
@@ -24,8 +24,8 @@ This page and the guide follow the main branch, which can be ahead of the latest
 
 | FHIR | Support | Evidence |
 | --- | --- | --- |
-| R4 (4.0.1) | Supported | HL7 test suite, [report](docs/conformance/r4.md) |
-| R5 (5.0.0) | Supported | HL7 test suite, [report](docs/conformance/r5.md) |
+| R4 (4.0.1) | Supported | HL7 test suite, [report](https://callis.losol.no/conformance/r4) |
+| R5 (5.0.0) | Supported | HL7 test suite, [report](https://callis.losol.no/conformance/r5) |
 | R6 | Best effort | Built from the draft `6.0.0-snapshot1`, not final R6. There is no official R6 FHIRPath suite, so there is no R6 conformance result. |
 
 Each version has a model package, listed [below](#packages). The engine already uses them internally, for example for choice elements such as `value[x]`. Passing one to the public API is not available yet; see the [roadmap](docs/roadmap.md#fhir-versions).

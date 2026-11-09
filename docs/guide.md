@@ -1,6 +1,6 @@
 # Using the minimal public API
 
-Callis provides synchronous, model-less evaluation of JSON. The initial API is intentionally small; it is not full phase-1 FHIRPath conformance. See the [conformance reports](conformance/r5.md) for measured support and the [roadmap](roadmap.md) for remaining work. No release is implied by the examples below.
+Callis provides synchronous, model-less evaluation of JSON. The initial API is intentionally small; it is not full phase-1 FHIRPath conformance. See the [conformance reports](https://callis.losol.no/conformance/r5) for measured support and the [roadmap](roadmap.md) for remaining work. No release is implied by the examples below.
 
 ## Evaluate or compile
 
@@ -138,7 +138,7 @@ This describes the 0.1.0 subset at engine revision [9b78e6e](https://github.com/
 
 The [playground](https://callis.losol.no/playground/) runs editable JSON and expressions locally in the browser, with exact evaluator Decimal string rendering and synthetic presets. It does not automatically transmit input JSON. Its results use the same public API; JSON.parse precision limits still apply.
 
-The committed [R4](conformance/r4.md) and [R5](conformance/r5.md) reports use the **internal API adapter**, including facilities not exposed by this public facade. Their pass counts are not public model-less API conformance. See the [0.1 inventory](releases/0.1.0.md#conformance) for per-phase counts, exceptions and source pins. Full phase 1 is a later milestone. Later 0.x additions update this matrix; T0038 completes the API later, while 1.0 scope remains an owner decision.
+The generated [R4](https://callis.losol.no/conformance/r4) and [R5](https://callis.losol.no/conformance/r5) reports use the **internal API adapter**, including facilities not exposed by this public facade. Their pass counts are not public model-less API conformance. See the [0.1 inventory](releases/0.1.0.md#conformance) for per-phase counts, exceptions and source pins. Full phase 1 is a later milestone. Later 0.x additions update this matrix; T0038 completes the API later, while 1.0 scope remains an owner decision.
 
 The handwritten API guide and TSDoc are the reference decision for this small release. A generated reference is deferred to T0038. README and guide TypeScript snippets share `examples/public-api.ts`, executed by the documentation tests; the site serves this guide from the same source.
 

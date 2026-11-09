@@ -3,8 +3,10 @@
 export interface SuiteTotals {
   total: number;
   passed: number;
-  failed: number;
-  skipped: number;
+  /** Absent for a commit that only has its baseline: the baseline lists the passing tests. */
+  failed?: number;
+  /** Absent for a commit that only has its baseline. */
+  skipped?: number;
 }
 
 export interface ConformanceSuite extends SuiteTotals {
@@ -13,7 +15,10 @@ export interface ConformanceSuite extends SuiteTotals {
 }
 
 export interface Conformance {
-  /** The adapter the runner used, for example `stub (no engine yet)`. */
+  /**
+   * The adapter the runner used, for example `stub (no engine yet)`. For a commit without a
+   * committed report, the adapter of the build's own run.
+   */
   adapter: string;
   suites: Record<string, ConformanceSuite>;
 }

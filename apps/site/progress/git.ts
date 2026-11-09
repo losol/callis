@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { basename } from 'node:path';
+import { type ConformanceTests, conformanceFromBaseline } from './conformance.ts';
 import { buildPlan } from './plan.ts';
 import { parseTaskLines, splitSubject } from './trailers.ts';
 import type {
@@ -82,8 +83,11 @@ export function parseAdapterName(markdown: string): string | null {
   return /evaluated with the \*\*(.+?)\*\* adapter/.exec(markdown)?.[1] ?? null;
 }
 
-/** The conformance reports of a commit, from `docs/conformance/<suite>.md`. */
-function readConformance(root: string, sha: string): Conformance | null {
+/**
+ * The conformance reports of a commit, from `docs/conformance/<suite>.md`. Only the commits before
+ * the reports became generated have them.
+ */
+function readReports(root: string, sha: string): Conformance | null {
   const files = git(root, ['ls-tree', '--name-only', sha, 'docs/conformance/'], true)
     .split('\n')
     .filter((file) => /^docs\/conformance\/[^/]+\.md$/.test(file));
@@ -100,7 +104,39 @@ function readConformance(root: string, sha: string): Conformance | null {
   return Object.keys(suites).length === 0 ? null : { adapter, suites };
 }
 
-function readCommit(root: string, sha: string, date: string, rawSubject: string): CommitPoint {
+/** The baseline files of a commit, `tools/conformance/baseline/<suite>.txt`, by suite. */
+function readBaselines(root: string, sha: string): Record<string, string> {
+  const files = git(root, ['ls-tree', '--name-only', sha, 'tools/conformance/baseline/'], true)
+    .split('\n')
+    .filter((file) => /^tools\/conformance\/baseline\/[^/]+\.txt$/.test(file));
+  return Object.fromEntries(
+    files.map((file) => [basename(file, '.txt'), git(root, ['show', `${sha}:${file}`], true)]),
+  );
+}
+
+/**
+ * The conformance of a commit: its committed reports when it has them, else what its baseline says
+ * about the suites of this checkout (`conformance.ts`). Null before the runner, or without `tests`.
+ */
+function readConformance(
+  root: string,
+  sha: string,
+  tests: ConformanceTests | undefined,
+): Conformance | null {
+  const reports = readReports(root, sha);
+  if (reports !== null || tests === undefined) {
+    return reports;
+  }
+  return conformanceFromBaseline(readBaselines(root, sha), tests);
+}
+
+function readCommit(
+  root: string,
+  sha: string,
+  date: string,
+  rawSubject: string,
+  suites: ConformanceTests | undefined,
+): CommitPoint {
   const { subject, pr } = splitSubject(rawSubject);
   const tests = sumGrepCounts(
     git(root, ['grep', '-cE', '-e', TEST_CALL, sha, '--', '*.test.ts'], true),
@@ -115,7 +151,7 @@ function readCommit(root: string, sha: string, date: string, rawSubject: string)
     subject,
     pr,
     tasks: parseTaskLines(git(root, ['show', '-s', '--format=%B', sha])),
-    conformance: readConformance(root, sha),
+    conformance: readConformance(root, sha, suites),
     testCases: tests.count,
     testFiles: tests.files,
     sourceLines: source.count,
@@ -126,9 +162,10 @@ function readCommit(root: string, sha: string, date: string, rawSubject: string)
  * Reads the progress of the project from the first-parent history of `ref`.
  *
  * It reads git objects only (`git show`, `git grep`): it never checks out,
- * builds or runs an old commit.
+ * builds or runs an old commit. `tests` are the conformance suites of the checkout, for the commits
+ * that have a baseline and no committed report.
  */
-export function collectProgress(root: string, ref: string): ProgressData {
+export function collectProgress(root: string, ref: string, tests?: ConformanceTests): ProgressData {
   if (git(root, ['rev-parse', '--is-shallow-repository']).trim() === 'true') {
     throw new Error(
       'The progress page needs the whole git history, and this is a shallow clone. ' +
@@ -141,7 +178,7 @@ export function collectProgress(root: string, ref: string): ProgressData {
     .filter((row) => row !== '')
     .map((row) => {
       const [sha = '', date = '', subject = ''] = row.split('\t');
-      return readCommit(root, sha, date, subject);
+      return readCommit(root, sha, date, subject, tests);
     });
 
   const roadmap = git(root, ['show', `${ref}:docs/roadmap.md`]);

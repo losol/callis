@@ -166,13 +166,22 @@ describe('renderJobSummary', () => {
     const markdown = renderJobSummary(
       [summarize(run)],
       { regressions: [{ suite: 'r5', id: 'testX' }], newPasses: [], vanished: [], excluded: [] },
-      ['docs/conformance/r5.md'],
       context,
     );
     expect(markdown).toContain('| R5 | Phase 1 | 3 | 1 | 1 | 1 |');
     expect(markdown).toContain('❌ 1 test(s) in the baseline no longer pass: r5/testX.');
-    // Owner decision on #65: stale reports only warn.
-    expect(markdown).toContain('⚠️ `docs/conformance/r5.md` is out of date.');
+  });
+
+  // The reports are generated, so the only file a PR commits is the baseline.
+  it('tells a PR to commit the baseline, and mentions no report to commit', () => {
+    const markdown = renderJobSummary(
+      [summarize(run)],
+      { regressions: [], newPasses: [{ suite: 'r5', id: 'testA' }], vanished: [], excluded: [] },
+      context,
+    );
+    expect(markdown).toContain('❌ 1 test(s) pass but are not in the baseline yet: r5/testA.');
+    expect(markdown).toContain('commit `tools/conformance/baseline/`');
+    expect(markdown).not.toContain('docs/conformance');
   });
 });
 
@@ -184,12 +193,12 @@ describe('ratchetMessages', () => {
       vanished: [],
       excluded: [{ suite: 'r4' as const, id: 'testB' }],
     };
-    expect(ratchetMessages(ratchet, [], 'report')).toEqual([
+    expect(ratchetMessages(ratchet, 'report')).toEqual([
       '✅ No regressions: every test in the baseline still passes.',
-      'ℹ️ 1 baseline test(s) are now skipped as exceptions or unsupported: r4/testB. Run `pnpm conformance --update-baseline` and commit the result.',
-      'ℹ️ 1 test(s) pass but are not in the baseline yet: r5/testA. Run `pnpm conformance --update-baseline` and commit the result.',
+      'ℹ️ 1 baseline test(s) are now skipped as exceptions or unsupported: r4/testB. Run `pnpm conformance --update-baseline` and commit `tools/conformance/baseline/`.',
+      'ℹ️ 1 test(s) pass but are not in the baseline yet: r5/testA. Run `pnpm conformance --update-baseline` and commit `tools/conformance/baseline/`.',
     ]);
-    const check = ratchetMessages(ratchet, [], 'check').slice(1);
+    const check = ratchetMessages(ratchet, 'check').slice(1);
     expect(check).toHaveLength(2);
     expect(check.every((message) => message.startsWith('❌ '))).toBe(true);
   });
