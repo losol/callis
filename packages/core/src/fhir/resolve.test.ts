@@ -129,6 +129,112 @@ describe.each(MODELS)('resolve() %s', (_label, options) => {
       await evaluateAsync(bundle, 'Bundle.entry.resource.subject.resolve().id', options),
     ).toEqual(['p1', 'o1', 'p1', 'p3']);
   });
+
+  // An input with several resources: each keeps its own contained resources and Bundle.
+  it('resolves the references of each input resource in that resource', () => {
+    const owner = (id: string, organizations: Record<string, string>, reference: string) => ({
+      resourceType: 'Patient',
+      id,
+      contained: Object.entries(organizations).map(([orgId, name]) => ({
+        resourceType: 'Organization',
+        id: orgId,
+        name,
+      })),
+      managingOrganization: { reference },
+    });
+    const patients = [
+      owner('p1', { o1: 'First', o2: 'Only in the first' }, '#o1'),
+      owner('p2', { o1: 'Second' }, '#o1'),
+      // #o2 is only in the first Patient, so it does not resolve here.
+      owner('p3', { o1: 'Third' }, '#o2'),
+    ];
+    expect(run(patients, 'managingOrganization.resolve().name', options)).toEqual([
+      'First',
+      'Second',
+    ]);
+    // A String literal belongs to no resource: the first of %rootResource that has the id.
+    expect(run(patients, "'#o2'.resolve().name", options)).toEqual(['Only in the first']);
+    expect(run(patients, "'#o1'.resolve().name", options)).toEqual(['First']);
+  });
+
+  // https://hl7.org/fhir/R5/bundle.html#references: a relative reference takes the RESTful base
+  // of the fullUrl of the entry it is in.
+  it('resolves a relative reference against the base of the entry it is in', () => {
+    const server = (base: string, type: string, id: string, extra: object = {}) => ({
+      fullUrl: `${base}${type}/${id}`,
+      resource: { resourceType: type, id, ...extra },
+    });
+    const A = 'https://a.example/fhir/';
+    const B = 'https://b.example/fhir/';
+    const twoServers = {
+      resourceType: 'Bundle',
+      entry: [
+        server(B, 'Patient', 'p', { name: [{ family: 'B' }] }),
+        server(A, 'Patient', 'p', { name: [{ family: 'A' }], meta: { versionId: '3' } }),
+        server(B, 'Patient', 'q'),
+        server(A, 'Observation', 'o1', { subject: { reference: 'Patient/p' } }),
+        // The only Patient/q is on server B, so a reference from server A does not resolve.
+        server(A, 'Observation', 'o2', { subject: { reference: 'Patient/q' } }),
+        server(B, 'Observation', 'o3', { subject: { reference: 'Patient/p' } }),
+        server(A, 'Observation', 'o4', { subject: { reference: 'Patient/p/_history/3' } }),
+        server(A, 'Observation', 'o5', { subject: { reference: 'Patient/p/_history/2' } }),
+        server(A, 'Patient', 'c', {
+          contained: [
+            { resourceType: 'Observation', id: 'x', subject: { reference: 'Patient/p' } },
+          ],
+        }),
+        { fullUrl: 'urn:uuid:7', resource: observation('o6', 'Patient/p') },
+      ],
+    };
+    const families = (expression: string) => run(twoServers, expression, options);
+    expect(
+      families("Bundle.entry.resource.where(id = 'o1').subject.resolve().name.family"),
+    ).toEqual(['A']);
+    expect(families("Bundle.entry.resource.where(id = 'o2').subject.resolve()")).toEqual([]);
+    expect(
+      families("Bundle.entry.resource.where(id = 'o3').subject.resolve().name.family"),
+    ).toEqual(['B']);
+    expect(
+      families("Bundle.entry.resource.where(id = 'o4').subject.resolve().name.family"),
+    ).toEqual(['A']);
+    expect(families("Bundle.entry.resource.where(id = 'o5').subject.resolve()")).toEqual([]);
+    // A contained resource takes the base of the entry of its container.
+    expect(families('Bundle.entry.resource.contained.subject.resolve().name.family')).toEqual([
+      'A',
+    ]);
+    // Without a RESTful base the spec leaves Type/id undefined; Callis matches type and id.
+    expect(
+      families("Bundle.entry.resource.where(id = 'o6').subject.resolve().name.family"),
+    ).toEqual(['B']);
+    expect(families("'https://a.example/fhir/Patient/p'.resolve().name.family")).toEqual(['A']);
+  });
+
+  it('looks up the references of each input Bundle in that Bundle', () => {
+    const entry = (fullUrl: string, resource: object) => ({ fullUrl, resource });
+    const bundles = [
+      {
+        resourceType: 'Bundle',
+        entry: [
+          entry('urn:uuid:a', { resourceType: 'Patient', id: 'only-in-first' }),
+          entry('urn:uuid:b', observation('x1', 'Patient/only-in-first')),
+        ],
+      },
+      {
+        resourceType: 'Bundle',
+        entry: [
+          entry('urn:uuid:c', { resourceType: 'Patient', id: 'p9' }),
+          entry('urn:uuid:d', observation('x2', 'Patient/only-in-first')),
+          entry('urn:uuid:e', observation('x3', 'urn:uuid:c')),
+        ],
+      },
+    ];
+    expect(run(bundles, 'Bundle.entry.resource.subject.resolve().id', options)).toEqual([
+      'only-in-first',
+      'p9',
+    ]);
+    // A String literal: each Bundle of %rootResource in turn.
+    expect(run(bundles, "'urn:uuid:c'.resolve().id", options)).toEqual(['p9']);
+  });
 });
 
 describe('resolve() and the host options', () => {

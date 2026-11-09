@@ -6,9 +6,8 @@
  * A FHIR Quantity with a UCUM `system` and `code` and a `value` converts to a `System.Quantity`,
  * and two of those compare like any quantities, with unit conversion. Any other FHIR Quantity, or
  * a specialization such as `Age`, stays a complex value. Two FHIR Quantities of which at least one
- * stays complex compare by their elements, as the HL7 Java engine orders them: their units match
- * when both have a `code` and the codes are the same, or when not both have one and their `unit`
- * texts are the same (two quantities without a unit match). Then their values compare as Decimals.
+ * stays complex compare by their elements ({@link unitsMatch}), and then their values compare as
+ * Decimals.
  */
 import { JsonNumber } from '../model/lossless-json.ts';
 import { ModelNode } from '../model/model-node.ts';
@@ -44,16 +43,34 @@ export function fhirQuantityPair(left: Item, right: Item): FhirQuantityPair | un
   if (b === undefined || (converts(left) && converts(right))) {
     return undefined;
   }
+  if (!unitsMatch(a, b)) {
+    return { unitsMatch: false };
+  }
+  return { unitsMatch: true, left: decimalOf(a), right: decimalOf(b) };
+}
+
+/**
+ * Whether two FHIR Quantities have the same unit, by the elements that name it:
+ *
+ * - When both have a `code`, the codes must be the same; the `unit` texts do not matter.
+ * - When only one has a `code`, both must have a `unit` text, and the texts must be the same, as
+ *   for the suite's `mg/dL` quantities with and without a UCUM code. A coded quantity without unit
+ *   text does not match one without a code, which names no unit at all or none that is known.
+ * - When neither has a `code`, the `unit` texts must be the same, and two quantities without a
+ *   unit match.
+ */
+function unitsMatch(a: JsonObject, b: JsonObject): boolean {
   const codeA = ownString(a, 'code');
   const codeB = ownString(b, 'code');
-  const unitsMatch =
-    codeA !== undefined && codeB !== undefined
-      ? codeA === codeB
-      : ownString(a, 'unit') === ownString(b, 'unit');
-  if (!unitsMatch) {
-    return { unitsMatch };
+  if (codeA !== undefined && codeB !== undefined) {
+    return codeA === codeB;
   }
-  return { unitsMatch, left: decimalOf(a), right: decimalOf(b) };
+  const unitA = ownString(a, 'unit');
+  const unitB = ownString(b, 'unit');
+  if (codeA !== undefined || codeB !== undefined) {
+    return unitA !== undefined && unitA === unitB;
+  }
+  return unitA === unitB;
 }
 
 /**

@@ -175,6 +175,17 @@ describe('compare', () => {
 
     it('is empty when the units do not match or a value is missing', () => {
       expectOrder(quantity({ value: 1, unit: 'tablets' }), quantity({ value: 2 }), undefined);
+      // Only one has a code, so both need the same unit text; 5 mg without one is not 4 of nothing.
+      expectOrder(
+        quantity({ value: 5, system: UCUM, code: 'mg' }),
+        quantity({ value: 4 }),
+        undefined,
+      );
+      expectOrder(
+        quantity({ value: 5, system: 'http://a', code: 'tab', unit: 'tablets' }),
+        quantity({ value: 4 }),
+        undefined,
+      );
       expectOrder(
         quantity({ value: 1, unit: 'tablets' }),
         quantity({ value: 2, unit: 'Tablets' }),

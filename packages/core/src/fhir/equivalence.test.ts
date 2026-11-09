@@ -95,6 +95,31 @@ describe('FHIR equivalence of a CodeableConcept', () => {
     expect(codes({ coding: [{ system: LOINC, code: '2' }] }, { text: 'x' })).toEqual([false]);
   });
 
+  it('gives the same result for one shared JSON object as for two copies', () => {
+    const textOnly = { text: 'same' };
+    const coded = { coding: [{ system: LOINC, code: '2' }] };
+    for (const code of [textOnly, coded]) {
+      const expected = code === coded;
+      const shared = { resourceType: 'Observation', code };
+      expect(run(shared, 'code ~ code')).toEqual([expected]);
+      expect(run(shared, 'code !~ code')).toEqual([!expected]);
+      expect(run(shared, '$this ~ $this')).toEqual([expected]);
+      expect(codes(code, code)).toEqual([expected]);
+      expect(codes(code, structuredClone(code))).toEqual([expected]);
+      // Nested in one shared object: the Observation holds a text-only code.
+      const twice = { resourceType: 'Patient', contained: [shared, shared] };
+      expect(run(twice, 'contained[0] ~ contained[1]')).toEqual([expected]);
+      expect(
+        run(
+          { resourceType: 'Patient', contained: [shared, structuredClone(shared)] },
+          'contained[0] ~ contained[1]',
+        ),
+      ).toEqual([expected]);
+    }
+    // Without a model the identity shortcut still applies.
+    expect(run({ resourceType: 'Observation', code: textOnly }, 'code ~ code', {})).toEqual([true]);
+  });
+
   it('keeps every element for =', () => {
     expect(
       codes(

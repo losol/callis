@@ -35,10 +35,12 @@ import {
  * Model-specific equivalence of two complex values, such as FHIR's rules for `Coding` and
  * `CodeableConcept` ([R5 §2.1.9.1.6](https://hl7.org/fhir/R5/fhirpath.html#changes), T0020).
  *
- * It is called for every pair of input nodes holding different complex values that `~` compares,
- * including those nested inside other complex values; two nodes holding the same JSON object are
- * equivalent without a call. Return `true` or `false` to decide, or undefined to fall back to the
- * default: all child properties equivalent, recursively. `=` never calls it.
+ * It is called for every pair of input nodes holding complex values of the same model type that
+ * `~` compares, including those nested inside other complex values, and also when both hold the
+ * same JSON object: a model's rule can make a value not equivalent to itself, as a
+ * `CodeableConcept` without codings is. Return `true` or `false` to decide, or undefined to fall
+ * back to the default: the same JSON object is equivalent, and otherwise all child properties are,
+ * recursively. `=` never calls it.
  */
 export type ModelEquivalence = (
   left: ModelNode,
@@ -455,14 +457,15 @@ function complexEquivalent(a: object, b: object, ctx: EquivalenceContext): boole
   if (left === undefined || right === undefined) {
     return a === b;
   }
-  if (left === right) {
-    return true;
-  }
+  // Before the identity shortcut: the model's rule decides even for one shared JSON object.
   if (ctx.modelEquivalence !== undefined && a instanceof ModelNode && b instanceof ModelNode) {
     const decided = ctx.modelEquivalence(a, b, ctx);
     if (decided !== undefined) {
       return decided;
     }
+  }
+  if (left === right) {
+    return true;
   }
   const typedLeft = typedChildren(a, ctx);
   const typedRight = typedChildren(b, ctx);

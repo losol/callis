@@ -31,7 +31,7 @@ export interface EvaluateOptions {
   /**
    * The value of `%rootResource`, converted like a variable; `null` and `[]` make it empty. By
    * default it is `%resource`: the option's value when given, otherwise the input. `resolve()`
-   * looks up contained references (`#id`) in it.
+   * looks up the contained references (`#id`) of a contained resource evaluated on its own in it.
    * @see https://hl7.org/fhir/R5/fhirpath.html#variables
    */
   readonly rootResource?: unknown;

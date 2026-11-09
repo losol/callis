@@ -480,6 +480,34 @@ describe('equality and equivalence', () => {
         );
       });
 
+      it('needs the unit text on both sides when only one has a code', () => {
+        // 5 mg with a code but no unit text, against 5 with no unit at all: not the same unit.
+        const noUnit = quantity({ value: 5 });
+        expectEquality(
+          quantity({ value: 5, system: 'http://unitsofmeasure.org', code: 'mg' }),
+          noUnit,
+          undefined,
+          false,
+          typed,
+        );
+        expectEquality(
+          quantity({ value: 5, system: 'http://a', code: 'tab' }),
+          noUnit,
+          undefined,
+          false,
+          typed,
+        );
+        expectEquality(
+          quantity({ value: 5, system: 'http://a', code: 'tab', unit: 'tablets' }),
+          noUnit,
+          undefined,
+          false,
+          typed,
+        );
+        // Neither has a code nor a unit: the same (missing) unit.
+        expectEquality(noUnit, quantity({ value: 5 }), true, true, typed);
+      });
+
       it('applies to specializations such as Age, whatever the model type', () => {
         const age = (json: object): Item => {
           const [observation] = toInputCollection(
@@ -587,7 +615,7 @@ describe('equality and equivalence', () => {
       expectEquality(node({ a: 'x' }), node({ a: 'y' }), false, false, fhir);
     });
 
-    it('is called with both nodes and the context, and not for the same object', () => {
+    it('is called with both nodes and the context, and never for =', () => {
       const hook = vi.fn<ModelEquivalence>(() => true);
       const context: EquivalenceContext = { ...ctx, modelEquivalence: hook };
       const a = node({ a: 1 });
@@ -595,9 +623,21 @@ describe('equality and equivalence', () => {
       expect(itemEquivalent(a, b, context)).toBe(true);
       expect(hook).toHaveBeenCalledWith(a, b, context);
       hook.mockClear();
-      expect(itemEquivalent(a, node(a.value), context)).toBe(true);
       expect(itemEquals(a, b, context)).toBe(false);
       expect(hook).not.toHaveBeenCalled();
+    });
+
+    // A model's rule can make a value not equivalent to itself (a CodeableConcept without codings,
+    // R5 §2.1.9.1.6), so it decides before the shortcut for one shared JSON object.
+    it('decides for two nodes holding the same JSON object too', () => {
+      const a = node({ a: 1 });
+      const same = node(a.value);
+      const never = vi.fn<ModelEquivalence>(() => false);
+      expect(itemEquivalent(a, same, { ...ctx, modelEquivalence: never })).toBe(false);
+      expect(never).toHaveBeenCalledWith(a, same, expect.anything());
+      // Undefined falls back to the default, where the same object is equivalent.
+      expect(itemEquivalent(a, same, { ...ctx, modelEquivalence: () => undefined })).toBe(true);
+      expect(itemEquivalent(a, same, ctx)).toBe(true);
     });
   });
 
