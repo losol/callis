@@ -1,4 +1,8 @@
-/** Executable quick start, shared by the README and guide; imported by public-docs.test.ts. */
+/**
+ * Executable quick start, shared by the README and guide; imported by public-docs.test.ts. Each
+ * documented snippet imports only the names it uses; this file has one import line with all of
+ * them, because Biome merges imports from one module.
+ */
 import { compile, evaluate, FhirPathError, parseJson } from '@callis/core';
 
 export const patient: Readonly<{

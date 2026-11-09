@@ -15,7 +15,7 @@ A [FHIRPath](https://hl7.org/fhirpath/N1/) engine for TypeScript.
 ## Quick start
 
 ```ts
-import { compile, evaluate, FhirPathError, parseJson } from '@callis/core';
+import { compile, evaluate } from '@callis/core';
 
 export const patient: Readonly<{ resourceType: string; name: readonly { given: readonly string[] }[] }> = {
   resourceType: 'Patient', name: [{ given: ['Ada', 'Mina'] }],
@@ -90,12 +90,14 @@ The FHIR additions work on plain JSON too: `extension(url)`, `hasValue()`, `getV
 `JSON.parse` turns `1.50` into `1.5`, and FHIRPath can see the difference. `parseJson(text)` keeps every number as written, as a `JsonNumber`, and evaluation treats it as the Integer or Decimal it denotes:
 
 ```ts
+import { parseJson } from '@callis/core';
+
 export const lossless: unknown[] = evaluate(parseJson('{"value": 1.50}'), 'value', {
   decimalOutput: 'string',
 });
 ```
 
-This gives `['1.50']`; without `decimalOutput: 'string'` the result is the number `1.5`. Invalid text raises a `FhirPathEvaluationError` with the code `eval/invalid-json`. Objects in results keep their `JsonNumber` values, which `JSON.stringify` writes as numbers again.
+This gives `['1.50']`; without `decimalOutput: 'string'` the result is the number `1.5`. Invalid text raises a `FhirPathEvaluationError` with the code `eval/invalid-json`. Objects in results keep their `JsonNumber` values, which `JSON.stringify` writes as numbers again. `parseJson` is not in releases up to 0.2.0.
 
 ## First 0.1 subset
 
