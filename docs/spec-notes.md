@@ -257,6 +257,35 @@ Implemented in `packages/core/src/runtime/` (`equality.ts`, `comparison.ts`, `op
 - **Decision:** the child properties are what model-less navigation sees: own properties only, arrays flattened, and `null`, an empty array and a missing property all mean "no value". The order of the properties does not matter. Each child collection is compared with `=` (repeating items in order) or `~` (in any order), so child strings compare exactly or case-insensitively and child numbers by value. Two input strings are never read as dates.
 - **With a model:** two typed nodes of the same model type compare by their elements instead of their JSON keys, so a choice element compares by its one value, a FHIR `date` by the date rules, and `_name` extensions and keys that are not elements are ignored. Typed nodes of different model types are not equal and not equivalent, as N1 requires operands of the same type: a `Patient` and a `Practitioner` with the same `id` differ, so `|` keeps both. A node the model does not know keeps the JSON rules, also against a typed node. FHIR Quantities without a UCUM code have [their own rule](#fhir-quantities-without-a-ucum-code), and `~` on FHIR types follows [FHIR equivalence](#fhir-equivalence). (T0018)
 
+## Subsetting and combining
+
+Implemented in `packages/core/src/functions/subsetting.ts` and `combining.ts` ([T0013](tasks/T0013-fn-subsetting-combining.md)).
+
+### `skip()` and `take()` with an empty count
+
+- **Spec:** [N1 §5.3.6](https://hl7.org/fhirpath/N1/#skipnum-integer-collection) gives the input back for a `num` of zero or less, and [§5.3.7](https://hl7.org/fhirpath/N1/#takenum-integer-collection) gives empty for a `num` of zero or less. Neither says what an empty `num` does, or what a `num` that is not an Integer does.
+- **Tests:** `testSkip7`, `testSkip8`, `testTake8` and `testTake9` ("`skip()` with an empty count returns empty"); `testSkip5` and `testSkip6` for the counts of zero or less.
+- **Decision:** an empty `num` gives empty, for `skip()` as well as for `take()`, before the rule for counts of zero or less is considered, so `(0 | 1 | 2).skip({})` is empty and not the input. `num` goes through [singleton evaluation](#singleton-evaluation-uses-implicit-conversions-only) whether or not the input is empty, as the arguments of the [string functions](#substring-and-the-checks-on-string-functions) do: more than one item raises `eval/singleton-expected`, and a single item that is not an Integer (`'1'`, `1.5`, `1.0`, `true`) raises `eval/type-mismatch`, because nothing converts to Integer implicitly. So an error never depends on the data.
+- **Code:** `skipFunction` and `takeFunction` in `packages/core/src/functions/subsetting.ts`.
+
+### `intersect()` and `exclude()` with undetermined equality
+
+- **Spec:** [N1 §5.3.8](https://hl7.org/fhirpath/N1/#intersectother-collection-collection) and [§5.3.9](https://hl7.org/fhirpath/N1/#excludeother-collection-collection) take "the elements that are in both collections" and "that are not in the other collection". [N1 §6.1.1](https://hl7.org/fhirpath/N1/#equals) lets `=` be empty, for example for date/times of different precision, and [`union()`](https://hl7.org/fhirpath/N1/#unionother-collection) says it uses `=` "to determine equality". None of them says what an empty comparison means for membership.
+- **Tests:** `testIntersect1`–`4` and `testExclude1`–`4`; none compares values whose equality is undetermined.
+- **Decision:** an item is in the other collection only when `=` is `true` for one of its items. An undetermined comparison does not establish equality, as in the `|` operator ([T0010](tasks/T0010-operators.md)): `@2020-01.intersect(@2020)` is empty, `@2020-01.exclude(@2020)` keeps `@2020-01`, and `@2020-01.union(@2020)` has both items. `intersect()` and `exclude()` compare with the same kernel as `|`, `in` and `contains`, so they inherit the [model-less date convenience](#model-less-date-convenience) and the rule that typed nodes of different model types are never equal.
+- **Code:** `includesEqual()` in `packages/core/src/functions/subsetting.ts`.
+
+### The order and the items of `intersect()`, `union()` and `combine()`
+
+- **Spec:** [N1 §5.3.8](https://hl7.org/fhirpath/N1/#intersectother-collection-collection) says the order of `intersect()` is "not guaranteed to be preserved", and [§5.4.1](https://hl7.org/fhirpath/N1/#unionother-collection) and [§5.4.2](https://hl7.org/fhirpath/N1/#combineother-collection-collection) say there is "no expectation of order" in the result of `union()` and `combine()`. `intersect()` and `union()` eliminate duplicates, so the spec does not say which of two equal items remains. It calls `a.union(b)` "synonymous with `a | b`".
+- **Tests:** `testIntersect4`, `testUnion2`, `testUnion8` and `testUnion13` (counts only); `testCombine2` and `testCombine3` expect the given names before the family names, the order `combine()` keeps. The `preserveOrder` argument of `combine()` is STU ([T0027](tasks/T0027-stu-collections.md)).
+- **Decision:** the results have an order that never varies:
+  - `intersect()` lists each item once, in the order of the input; the item is the input's, not the equal one of the argument.
+  - `union()` is the `|` operator: the items of the input, then the new items of the argument, each at its first position. Of equal items the first remains, so a node of the input keeps its model type and its model-less date provenance.
+  - `combine()` lists the input, then the argument, keeping every duplicate. The signature takes the one argument `other` until T0027 adds the optional `preserveOrder`.
+  - `exclude()` keeps the order and the duplicates of the input, as the spec requires.
+- **Code:** `intersectFunction` in `packages/core/src/functions/subsetting.ts`; `unionFunction` and `combineFunction` in `packages/core/src/functions/combining.ts`.
+
 ## Strings
 
 ### String equivalence
