@@ -13,19 +13,52 @@ concurrency:
   group: release
   cancel-in-progress: false
 
-permissions:
-  contents: write # version branch, release tags and GitHub releases
-  pull-requests: write # open the version PR
-  id-token: write # OIDC for npm trusted publishing
+# Each job declares the permissions it needs; nothing else gets any.
+permissions: {}
 
 jobs:
+  # Nothing releases 1.0.0 before 1.0 (CONTRIBUTING.md, "Changesets"): no pending changeset gives a
+  # package below 1.0.0 a `major` bump, and no public package is at 1.0.0 or above without an
+  # earlier release at 1.0.0 or above. CI runs the same check, but a PR can be merged while CI is
+  # red, so the release job waits for this one: a failure stops the run before the version PR is
+  # opened or updated, and before anything is published. That also holds on every later push, as
+  # long as main has a version of 1.0.0 or above. It runs with read access only and outside the
+  # `npm` environment, so it never holds a write token or an OIDC token.
+  check:
+    name: Check versions
+    if: github.repository == 'losol/callis' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The check compares the versions with the release tags, which come with the history.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile --filter "!@callis/site"
+      - name: Changesets and versions
+        run: pnpm check:changesets
+
   release:
     name: Version or publish
+    needs: check
     # Only for main of this repository, also when started by hand, and never in a fork. Nothing is
     # published until the owner merges the version PR (RELEASING.md).
     if: github.repository == 'losol/callis' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: write # version branch, release tags and GitHub releases
+      pull-requests: write # open the version PR
+      id-token: write # OIDC for npm trusted publishing
     # npm trusted publishing, so there is no NPM_TOKEN anywhere. The trusted publisher on npm names
     # this repository, release.yml and this environment, and the environment only allows main.
     #
