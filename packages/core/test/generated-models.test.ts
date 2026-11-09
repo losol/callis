@@ -402,6 +402,61 @@ describe.each(PROVIDERS)(
       });
     });
 
+    // https://hl7.org/fhirpath/N1/#subsetting and https://hl7.org/fhirpath/N1/#combining: the
+    // functions select the typed nodes themselves, and compare them by their System values.
+    describe('subsetting and combining typed nodes', () => {
+      it('selects typed nodes without converting them', () => {
+        for (const call of ['last()', 'skip(1)', 'tail()', 'take(5).last()']) {
+          const result = typed(patient, `Patient.name.${call}`);
+          expect(result).toHaveLength(1);
+          expect(typeName(result[0])).toBe('HumanName');
+          expect(result[0]).toBeInstanceOf(ModelNode);
+        }
+        expect(run(patient, 'Patient.name.last().use')).toEqual(['maiden']);
+        expect(run(patient, 'Patient.name.skip(1).given')).toEqual(['Jim']);
+        expect(run(patient, 'Patient.name.take(1).given.first()')).toEqual(['Peter']);
+      });
+
+      it('compares a typed primitive with a System value', () => {
+        expect(run(patient, 'Patient.birthDate.intersect(@1974-12-25).count()')).toEqual([1]);
+        expect(run(patient, 'Patient.birthDate.exclude(@1974-12-25).count()')).toEqual([0]);
+        expect(run(patient, 'Patient.birthDate.exclude(@1974-12-26).count()')).toEqual([1]);
+        expect(run(patient, 'Patient.birthDate.union(@1974-12-25).count()')).toEqual([1]);
+        // A different precision is undetermined, so neither equal nor excluded.
+        expect(run(patient, 'Patient.birthDate.intersect(@1974-12).count()')).toEqual([0]);
+        expect(run(patient, 'Patient.birthDate.exclude(@1974-12).count()')).toEqual([1]);
+        const [node] = typed(patient, 'Patient.birthDate.intersect(@1974-12-25)');
+        expect(typeName(node)).toBe('date');
+        expect(node).toBeInstanceOf(ModelNode);
+      });
+
+      it('compares typed complex values of one type by their elements', () => {
+        const copy = { resourceType: 'Patient', name: [{ use: 'maiden', given: ['Jim'] }] };
+        const input = { a: patient, b: copy };
+        expect(run(input, 'a.name.last().intersect(b.name).given')).toEqual(['Jim']);
+        expect(run(input, 'a.name.exclude(b.name).count()')).toEqual([1]);
+        expect(run(input, 'a.name.union(b.name).count()')).toEqual([2]);
+      });
+
+      it('never takes elements of different types as equal, even with one JSON object', () => {
+        const shared = { text: 'x' };
+        const input = { resourceType: 'Patient', name: [shared], address: [shared] };
+        expect(run(input, 'Patient.name.intersect(Patient.address).count()')).toEqual([0]);
+        expect(run(input, 'Patient.name.exclude(Patient.address).count()')).toEqual([1]);
+        expect(run(input, 'Patient.name.union(Patient.address).count()')).toEqual([2]);
+        expect(run(input, 'Patient.name.combine(Patient.address).count()')).toEqual([2]);
+        expect(run(input, 'Patient.name.intersect(Patient.name).count()')).toEqual([1]);
+      });
+
+      it('keeps every typed node of combine() and the first of union()', () => {
+        const combined = typed(patient, 'Patient.name.combine(Patient.name)');
+        expect(combined).toHaveLength(4);
+        expect(combined.map(typeName)).toEqual(Array(4).fill('HumanName'));
+        const merged = typed(patient, 'Patient.name.union(Patient.name)');
+        expect(merged).toEqual(typed(patient, 'Patient.name'));
+      });
+    });
+
     // https://hl7.org/fhirpath/N1/#tree-navigation, docs/spec-notes.md#order-of-descendants
     describe('children() and descendants()', () => {
       const names = (input: unknown, expression: string): string[] =>

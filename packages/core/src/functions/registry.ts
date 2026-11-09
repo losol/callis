@@ -4,6 +4,7 @@
  */
 import { type FhirPathErrorOptions, FhirPathSemanticError } from '../errors/fhirpath-error.ts';
 import { FHIR_FUNCTIONS } from '../fhir/functions.ts';
+import { COMBINING_FUNCTIONS } from './combining.ts';
 import { CONVERSION_FUNCTIONS } from './conversion.ts';
 import { arityOf, defineFunction, type FunctionDefinition } from './define.ts';
 import { EXISTENCE_FUNCTIONS } from './existence.ts';
@@ -56,6 +57,7 @@ export interface RegistryOptions {
 
 /** The standard library. Later tasks add their functions here (T0011–T0017). */
 const STANDARD_FUNCTIONS: readonly FunctionDefinition[] = Object.freeze([
+  ...COMBINING_FUNCTIONS,
   ...CONVERSION_FUNCTIONS,
   ...EXISTENCE_FUNCTIONS,
   ...FILTERING_FUNCTIONS,

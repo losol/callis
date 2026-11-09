@@ -78,7 +78,7 @@ This gives `['1.50']`; without `decimalOutput: 'string'`, `[1.5]`. A result that
 
 ## Current support and deferred API
 
-Model-less paths, literals, indexing, Boolean logic, unary polarity and type operations are available. The built-in functions are `not`, `is`, `as`, `where`, `exists`, `count`, `first`, `single`, `children`, `descendants`, `trace`, `now`, `today`, `timeOfDay`, `iif`, `toX()` and `convertsToX()` for Boolean, Integer, Decimal, Date, DateTime, Time, String and Quantity, the string functions and the FHIR functions below. `ofType()` is not implemented yet ([T0042](tasks/T0042-fn-projection-completion.md)). Arithmetic, comparisons, equality/equivalence, membership, union and string concatenation operators from T0010 are implemented. Other standard functions are still incremental work; an unavailable function such as `select()` raises `semantic/unknown-function`, rather than pretending to evaluate it.
+Model-less paths, literals, indexing, Boolean logic, unary polarity and type operations are available. The built-in functions are `not`, `is`, `as`, `where`, `exists`, `count`, `first`, `single`, `last`, `tail`, `skip`, `take`, `intersect`, `exclude`, `union`, `combine`, `children`, `descendants`, `trace`, `now`, `today`, `timeOfDay`, `iif`, `toX()` and `convertsToX()` for Boolean, Integer, Decimal, Date, DateTime, Time, String and Quantity, the string functions and the FHIR functions below. `ofType()` is not implemented yet ([T0042](tasks/T0042-fn-projection-completion.md)). Arithmetic, comparisons, equality/equivalence, membership, union and string concatenation operators from T0010 are implemented. Other standard functions are still incremental work; an unavailable function such as `select()` raises `semantic/unknown-function`, rather than pretending to evaluate it.
 
 Filtering is now available through `where(criteria)`, using the existing synchronous API:
 
@@ -103,7 +103,23 @@ export const selectedGiven: unknown[] = evaluate(patient, 'name.given.first()');
 export const onlyName: unknown[] = compile('name.single()').evaluate(patient);
 ```
 
-These zero-argument functions use the existing synchronous model-less API. The remaining subsetting and combining functions, including `last()`, remain deferred.
+`last()` returns the last item and `tail()` all items but the first. `skip(num)` leaves out the first `num` items and `take(num)` keeps them, both in input order: a `num` of zero or less gives the input from `skip()` and empty from `take()`, and an empty `num` gives empty from both. `num` is a single Integer; more than one item raises `eval/singleton-expected` and any other type `eval/type-mismatch`.
+
+```ts
+export const lastGiven: unknown[] = evaluate(patient, 'name.given.last()');
+export const laterGiven: unknown[] = evaluate(patient, 'name.given.skip(1)');
+export const firstTwoGiven: unknown[] = evaluate(patient, 'name.given.take(2)');
+```
+
+`intersect(other)`, `exclude(other)`, `union(other)` and `combine(other)` compare items with `=`. `intersect()` lists each shared item once, `exclude()` keeps the other items and their duplicates, `union()` is the `|` operator and merges without duplicates, and `combine()` appends `other` and keeps duplicates. Items whose equality is undetermined, such as dates of different precision, are not equal. Every function returns the input items themselves, with their object identity and provenance, in a fixed order: the input first, then the new items of `other`.
+
+```ts
+export const withoutAda: unknown[] = evaluate(patient, "name.given.exclude('Ada')");
+export const withGrace: unknown[] = compile("name.given.union('Grace')").evaluate(patient);
+export const adaTwice: unknown[] = evaluate(patient, "name.given.take(1).combine('Ada')");
+```
+
+These functions use the existing synchronous model-less API.
 
 `children()` returns the properties of each input object in document order, with arrays flattened, but not `resourceType` or keys that start with `_`; `descendants()` returns everything below the input, depth first in document order. `now()`, `today()` and `timeOfDay()` give the same value every time within one evaluation, in UTC unless `timezoneOffset` says otherwise. `trace(name[, projection])` returns its input unchanged; the public API has no hooks yet, so nothing receives its output.
 

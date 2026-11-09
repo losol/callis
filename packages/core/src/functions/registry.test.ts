@@ -20,6 +20,7 @@ describe('createRegistry', () => {
     expect(createRegistry().names()).toEqual(
       expect.arrayContaining([
         ...['as', 'is', 'not', 'where', 'exists', 'count', 'first', 'single'],
+        ...['last', 'tail', 'skip', 'take', 'intersect', 'exclude', 'union', 'combine'],
         ...['children', 'descendants', 'trace', 'now', 'today', 'timeOfDay'],
       ]),
     );

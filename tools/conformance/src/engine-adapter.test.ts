@@ -229,7 +229,7 @@ describe('engineAdapter.classifyError', () => {
   });
 
   it('reports the context expression as not implemented when it uses such a feature', async () => {
-    expect(await classify('given', { context: 'name.last()' })).toMatchObject({
+    expect(await classify('given', { context: 'name.given.aggregate($total)' })).toMatchObject({
       kind: 'not-implemented',
     });
   });

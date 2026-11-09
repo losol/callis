@@ -69,6 +69,8 @@ testCollectionBoolean4
 testCollectionBoolean5
 testCollectionBoolean6
 testCollectionNotEqualEmpty
+testCombine2
+testCombine3
 testComment1
 testComment2
 testComment3
@@ -149,6 +151,8 @@ testDivide7
 testDivideEmpty1
 testDivideEmpty2
 testDivideEmpty3
+testDollarOrderAllowed
+testDollarOrderAllowedA
 testDollarThis1
 testDollarThis2
 testEndsWith1
@@ -177,6 +181,8 @@ testEquality21
 testEquality22
 testEquality24
 testEquality25
+testEquality26
+testEquality27
 testEquality28
 testEquality29
 testEquality3
@@ -209,6 +215,8 @@ testEquivalent17
 testEquivalent18
 testEquivalent19
 testEquivalent2
+testEquivalent20
+testEquivalent21
 testEquivalent22
 testEquivalent23
 testEquivalent24
@@ -228,6 +236,10 @@ testEquivalent8
 testEquivalent9
 testEscapedIdentifier
 testEscapedIdentifierUnicode
+testExclude1
+testExclude2
+testExclude3
+testExclude4
 testExists1
 testExists2
 testExists3
@@ -257,6 +269,7 @@ testFHIRPathIsFunction8
 testFHIRPathIsFunction9
 testFalseLiteralConvertsToBoolean
 testFirstLast1
+testFirstLast2
 testFloor1
 testFloor2
 testFloor3
@@ -371,6 +384,8 @@ testIntegerLiteralToDecimal
 testIntegerLiteralToInteger
 testIntegerLiteralToQuantity
 testIntegerLiteralToString
+testIntersect1
+testIntersect4
 testLength1
 testLength2
 testLength3
@@ -564,6 +579,8 @@ testNEquality16
 testNEquality18
 testNEquality19
 testNEquality2
+testNEquality20
+testNEquality21
 testNEquality22
 testNEquality23
 testNEquality24
@@ -603,6 +620,8 @@ testNotEquivalent17
 testNotEquivalent18
 testNotEquivalent19
 testNotEquivalent2
+testNotEquivalent20
+testNotEquivalent21
 testNotEquivalent22
 testNotEquivalent23
 testNotEquivalent24
@@ -713,6 +732,12 @@ testSimpleNone
 testSimpleWithContext
 testSingle1
 testSingle2
+testSkip1
+testSkip2
+testSkip3
+testSkip4
+testSkip5
+testSkip6
 testSqrt1
 testSqrt2
 testStartsWith1
@@ -788,6 +813,15 @@ testSubstring2
 testSubstring3
 testSubstring7
 testSubstring8
+testTail1
+testTail2
+testTake1
+testTake2
+testTake3
+testTake4
+testTake5
+testTake6
+testTake7
 testToChars1
 testToDecimal1
 testToDecimal2
@@ -830,6 +864,12 @@ testUnion12
 testUnion13
 testUnion2
 testUnion3
+testUnion4
+testUnion5
+testUnion6
+testUnion7
+testUnion8
+testValueLength
 testVariables1
 testVariables2
 testVariables3

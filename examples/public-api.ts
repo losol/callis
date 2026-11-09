@@ -19,6 +19,12 @@ export const filteredNameCount: unknown[] = evaluate(
 );
 export const selectedGiven: unknown[] = evaluate(patient, 'name.given.first()');
 export const onlyName: unknown[] = compile('name.single()').evaluate(patient);
+export const lastGiven: unknown[] = evaluate(patient, 'name.given.last()');
+export const laterGiven: unknown[] = evaluate(patient, 'name.given.skip(1)');
+export const firstTwoGiven: unknown[] = evaluate(patient, 'name.given.take(2)');
+export const withoutAda: unknown[] = evaluate(patient, "name.given.exclude('Ada')");
+export const withGrace: unknown[] = compile("name.given.union('Grace')").evaluate(patient);
+export const adaTwice: unknown[] = evaluate(patient, "name.given.take(1).combine('Ada')");
 export const named: unknown[] = evaluate(patient, "iif(name.exists(), 'named', 'unnamed')");
 export const parsedDecimal: unknown[] = evaluate(null, "'1.50'.toDecimal()", {
   decimalOutput: 'string',

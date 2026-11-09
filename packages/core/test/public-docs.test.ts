@@ -2,15 +2,19 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  adaTwice,
   containerReference,
   exactDecimal,
   expressionError,
   filteredGiven,
   filteredNameCount,
   firstGiven,
+  firstTwoGiven,
   given,
   hasAda,
   inHours,
+  lastGiven,
+  laterGiven,
   lossless,
   managedBy,
   named,
@@ -21,6 +25,8 @@ import {
   quantityJson,
   selectedGiven,
   variable,
+  withGrace,
+  withoutAda,
 } from '../../../examples/public-api.ts';
 
 describe('public guide examples', () => {
@@ -34,6 +40,12 @@ describe('public guide examples', () => {
     expect(selectedGiven).toEqual(['Ada']);
     expect(onlyName).toEqual(patient.name);
     expect(onlyName[0]).toBe(patient.name[0]);
+    expect(lastGiven).toEqual(['Mina']);
+    expect(laterGiven).toEqual(['Mina']);
+    expect(firstTwoGiven).toEqual(['Ada', 'Mina']);
+    expect(withoutAda).toEqual(['Mina']);
+    expect(withGrace).toEqual(['Ada', 'Mina', 'Grace']);
+    expect(adaTwice).toEqual(['Ada', 'Ada']);
     expect(named).toEqual(['named']);
     expect(parsedDecimal).toEqual(['1.50']);
     expect(inHours).toEqual(["96 'h'"]);
