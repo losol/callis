@@ -177,7 +177,7 @@ The first 0.1 release does not wait for full phase 1. The original engine/API/pl
 
 **Later 0.x releases:** function groups, model-aware evaluation, FHIR functions, hooks/async and static analysis land incrementally with updated support, limitations, examples and per-phase conformance. The engine side of model-aware evaluation is merged (T0018, with lossless JSON input); its public `model` and `lenient` options arrive with T0038. T0038 preserves the original T0025 completion work, including typed output, public parsing (after #107), analysis, async APIs, cache and moving full conformance onto the public API. The existing phase-1 specification target is unchanged; a phase is a scope grouping, not a release number.
 
-Every release documents exactly what is supported and what remains unimplemented, with committed R4/R5 conformance reports and exceptions. For R6 it states the engine-tested coverage and the known gaps instead of a pass count ([FHIR versions](#fhir-versions)). Package inclusion is explicit in the release inventory (T0037 preparation, extended by T0039/T0040 for R6), since the existing workflow may version several packages together. Publishing remains an owner action under [RELEASING.md](../RELEASING.md). No version number beyond the first 0.1 is promised for a particular feature.
+Every release documents exactly what is supported and what remains unimplemented, with the R4/R5 conformance reports and exceptions. For R6 it states the engine-tested coverage and the known gaps instead of a pass count ([FHIR versions](#fhir-versions)). Package inclusion is explicit in the release inventory (T0037 preparation, extended by T0039/T0040 for R6), since the existing workflow may version several packages together. Publishing remains an owner action under [RELEASING.md](../RELEASING.md). No version number beyond the first 0.1 is promised for a particular feature.
 
 **1.0 is open:** scope, support commitments, conformance gates, API freeze and release criteria require a later owner decision. Neither the first 0.1 nor completing phase 1 or phase 2 automatically constitutes 1.0.
 
@@ -197,8 +197,8 @@ Callis supports FHIR R4, R5 and R6 (owner direction, 2026-11-08). R6 is best eff
 
 | Version | Provider | Source | Conformance evidence |
 | --- | --- | --- | --- |
-| R4 | `r4` from `@callis/fhir-r4` | FHIR 4.0.1 | HL7 suite `tests-fhir-r4.xml`, [report](conformance/r4.md) |
-| R5 | `r5` from `@callis/fhir-r5` | FHIR 5.0.0 | HL7 suite `tests-fhir-r5.xml`, [report](conformance/r5.md) |
+| R4 | `r4` from `@callis/fhir-r4` | FHIR 4.0.1 | HL7 suite `tests-fhir-r4.xml`, [report](https://callis.losol.no/conformance/r4) |
+| R5 | `r5` from `@callis/fhir-r5` | FHIR 5.0.0 | HL7 suite `tests-fhir-r5.xml`, [report](https://callis.losol.no/conformance/r5) |
 | R6 | `r6` from `@callis/fhir-r6` | the September 2026 draft `6.0.0-snapshot1`, [pinned by T0039](tasks/T0039-fhir-r6-model.md#pinned-source-and-maturity) | No suite. Engine tests run model-aware cases against the real provider (`packages/core/test/generated-models.test.ts`). |
 
 The engine is provider-agnostic: version differences come from the provider's data, not from version-specific cases in the engine ([T0018](tasks/T0018-model-aware-evaluation.md)). Every task whose behaviour depends on the FHIR model (navigation, FHIR functions and variables, analysis, public model options, packaging, examples, benchmarks):

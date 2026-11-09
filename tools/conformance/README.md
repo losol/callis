@@ -2,7 +2,7 @@
 
 Runs the official [HL7 FHIRPath test suite](https://github.com/FHIR/fhir-test-cases/tree/master/r5/fhirpath) against Callis and reports the results ([T0022](../../docs/tasks/T0022-conformance-runner.md), [ADR-0011](../../docs/adr/0011-conformance-suite.md)). This package is private and never published.
 
-The reports are in [`docs/conformance/`](../../docs/conformance/): [R4](../../docs/conformance/r4.md) and [R5](../../docs/conformance/r5.md). CI also uploads a JSON summary and every test result as the `conformance-results` artifact. There is no official R6 FHIRPath suite, so there is no R6 report; the engine's tests against the R6 provider are not conformance results ([FHIR versions](../../docs/roadmap.md#fhir-versions)).
+The reports are published on the documentation site: [R4](https://callis.losol.no/conformance/r4) and [R5](https://callis.losol.no/conformance/r5). They are generated, never committed: `pnpm conformance` and the site build write them to `docs/conformance/`, which git ignores, so parallel PRs have no report to conflict on. CI writes them too and uploads them with a JSON summary and every test result as the `conformance-results` artifact of each run. There is no official R6 FHIRPath suite, so there is no R6 report; the engine's tests against the R6 provider are not conformance results ([FHIR versions](../../docs/roadmap.md#fhir-versions)).
 
 ## Commands
 
@@ -10,15 +10,18 @@ Run them from the repository root.
 
 | Command | What it does |
 | --- | --- |
-| `pnpm conformance` | Run both suites, write the reports, and compare with the baseline. Fails if a test in the baseline no longer passes. |
-| `pnpm conformance --update-baseline` | The same, and record the passing tests in `baseline.json`. Refuses if a baseline test regressed. |
-| `pnpm conformance --check` | What CI runs. Writes no reports; fails on a regression or on a baseline that is out of date, and warns about reports that are out of date. `--results <file>` writes every test result as JSON, and `--summary <file>` the counts per suite, phase and group. |
+| `pnpm conformance` | Run both suites, write the reports to `docs/conformance/`, and compare with the baseline. Fails if a test in the baseline no longer passes. |
+| `pnpm conformance --update-baseline` | The same, and record the passing tests in `baseline/`. Refuses if a baseline test regressed. |
+| `pnpm conformance --check` | What CI runs. Fails on a regression or on a baseline that is out of date. |
+| `pnpm conformance --reports-only` | Write the reports and nothing else: no baseline is read, and the exit code ignores test results. The site build runs it. |
 | `pnpm test:conformance` | The suite as Vitest tests, one per suite test, with diffs for wrong results. Filter with `-t`, for example `pnpm test:conformance -t testLiterals`. Not part of `pnpm test`. |
 | `pnpm --filter @callis/conformance update-fixtures --ref <commit>` | Vendor the suite at another upstream commit. Do it in its own PR, and convert the XML inputs again. |
 | `pnpm --filter @callis/conformance convert-fixtures` | Convert the suite's XML inputs to JSON ([converted inputs](#converted-xml-inputs)). No network needed. |
 | `pnpm --filter @callis/conformance update-official-examples` | Vendor the official JSON examples that the converted inputs are compared with. |
 
-**When evaluation behaviour changes:** run `pnpm conformance --update-baseline` and commit `baseline.json` and `docs/conformance/`. The PR's validation comment shows the change in passing tests per phase ([CONTRIBUTING](../../CONTRIBUTING.md#description-and-validation-comment)).
+Every mode of `pnpm conformance` writes the Markdown reports, to `docs/conformance/` or to the directory of `--reports <dir>`. `--results <file>` also writes every test result as JSON, and `--summary <file>` the counts per suite, phase and group.
+
+**When evaluation behaviour changes:** run `pnpm conformance --update-baseline` and commit `baseline/`. Do not commit reports: there is nothing in `docs/conformance/` to commit. The PR's validation comment shows the change in passing tests per phase ([CONTRIBUTING](../../CONTRIBUTING.md#description-and-validation-comment)).
 
 ## Layout
 
@@ -27,7 +30,7 @@ Run them from the repository root.
 | `fixtures/r4/`, `fixtures/r5/` | The vendored suite files and the input files they use, unchanged ([SOURCE.md](fixtures/SOURCE.md)), and the JSON converted from each XML input (`name.json` next to `name.xml`). |
 | `fixtures/source.json` | The pinned commit and the SHA-256 of every vendored file. A unit test checks them. |
 | `official-examples/` | Official FHIR JSON examples the converted inputs are compared with ([SOURCE.md](official-examples/SOURCE.md)). |
-| `baseline.json` | The tests that pass, per suite file. Generated. |
+| `baseline/` | The tests that pass: `r4.txt` and `r5.txt`, one test ID per line, sorted ([below](#baseline-and-ci)). Written by `--update-baseline`. |
 | `src/adapter.ts` | The evaluator adapter interface. |
 | `src/engine-adapter.ts` | The adapter the commands use: the engine's internal API (T0008), with the UCUM unit system. |
 | `src/core-source.ts` | Resolves `@callis/core` to core's source for `pnpm conformance`, so `@callis/ucum` shares the engine's copy of core. |
@@ -35,7 +38,7 @@ Run them from the repository root.
 | `src/classify.ts` | Phase 1, STU or unsupported. |
 | `src/compare.ts` | Typed comparison of results with expected outputs. |
 | `src/run-suite.ts` | Runs and judges tests. |
-| `src/report.ts`, `src/summary.ts`, `src/baseline.ts`, `src/cli.ts` | Reports, counts, the ratchet and the command line. |
+| `src/report.ts`, `src/summary.ts`, `src/baseline.ts`, `src/baseline-files.ts`, `src/cli.ts` | Reports, counts, the ratchet, the baseline files and the command line. |
 | `src/xml-reader.ts`, `src/fhir-xml.ts`, `src/json-text.ts` | The XML reader, the FHIR XML → JSON converter and the JSON writer that keeps numbers as written. |
 | `src/fixture-conversion.ts`, `src/official-examples.ts` | Which inputs are converted, and the comparison with the official examples. |
 | `suite/` | The Vitest project behind `pnpm test:conformance`. |
@@ -101,9 +104,15 @@ A test that runs passes when:
 
 ## Baseline and CI
 
-`baseline.json` lists every passing test. A baseline test that stops passing is a regression, which always fails. A baseline test can leave the baseline in only two ways: it is no longer in the suite (after a fixture update), or it is skipped on purpose because it became an exception or unsupported. `pnpm conformance --update-baseline` drops those tests and records new passes, and refuses to run when there is a regression.
+**The baseline** is the ratchet, and it is committed and reviewed. `baseline/r4.txt` and `baseline/r5.txt` list every passing test of a suite, one test ID per line, sorted. A baseline test that stops passing is a regression, which always fails. A baseline test can leave the baseline in only two ways: it is no longer in the suite (after a fixture update), or it is skipped on purpose because it became an exception or unsupported. `pnpm conformance --update-baseline` drops those tests and records new passes, and refuses to run when there is a regression. Do not edit the files by hand.
 
-CI runs `pnpm conformance --check`. It fails on a regression or on a baseline that is out of date (tests to drop or new passes to record): the PR that changes a test's outcome records it. Out-of-date reports are only a warning, so parallel PRs do not have to queue up behind each other's reports; the next `pnpm conformance` run refreshes them. The check adds a job summary, and the JSON summary and every test result are uploaded as an artifact. Locally, `pnpm conformance` fails only on a regression and lists the rest as hints. The decision is `ratchetFails()` in [`src/baseline.ts`](src/baseline.ts). The job is blocking: it fails the required `CI result` check.
+- **Only additions go without review.** A PR that removes a line from a baseline file is labelled `risk:high` by `scripts/review-areas.ts` ([CONTRIBUTING](../../CONTRIBUTING.md#riskhigh)). Sorting a file again, which removes and adds the same lines, is not a removal. A test ID that moves from one suite to the other counts as removed from the first.
+- **Parallel PRs do not conflict.** `.gitattributes` merges the files with `merge=union`: when two PRs record different new passes, git keeps the lines of both, even next to each other. The runner reads the file as a set, so the order, a repeated line and a blank line do not matter, and the next `--update-baseline` sorts the file again. Merge `main` and run `pnpm conformance --check`: it tells you if anything is missing. A removal next to a change from the other side can come back from the merge; CI then says that the test is no longer in the suite or is skipped on purpose, and `--update-baseline` drops it again.
+- **Not in the baseline file:** the reports. They are generated from the vendored suites and the engine (below), so they never conflict and never go out of date.
+
+**CI** runs `pnpm conformance --check`. It fails on a regression or on a baseline that is out of date (tests to drop or new passes to record): the PR that changes a test's outcome records it. The check adds a job summary, and uploads the reports, the JSON summary and every test result as the `conformance-results` artifact of the run, so a reviewer can read the numbers of a PR. Locally, `pnpm conformance` fails only on a regression and lists the rest as hints. The decision is `ratchetFails()` in [`src/baseline.ts`](src/baseline.ts). The job is blocking: it fails the required `CI result` check.
+
+**The site** publishes the reports of `main`. Its build ([`apps/site/scripts/collect.ts`](../../apps/site/scripts/collect.ts)) runs `pnpm conformance --reports-only` before it collects `docs/`, so `/conformance/r4` and `/conformance/r5` show the engine of the commit that is built, and `pnpm site:dev` and `pnpm site:build` work in a fresh clone. The progress page reads the numbers of each commit from the baseline at that commit: its entries are the passing tests, and the run of the build says which of them are Phase 1 ([`apps/site/progress/conformance.ts`](../../apps/site/progress/conformance.ts)). Commits from before the reports stopped being committed still have theirs, and the page reads those as they are.
 
 ## Converted XML inputs
 

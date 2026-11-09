@@ -12,8 +12,7 @@
       "!**/coverage",
       "!**/*.md",
       "!tools/conformance/fixtures",
-      "!tools/conformance/official-examples",
-      "!tools/conformance/baseline.json"
+      "!tools/conformance/official-examples"
     ]
   },
   "formatter": {

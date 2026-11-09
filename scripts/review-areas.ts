@@ -349,7 +349,7 @@ const WORKFLOW_FILES = ['.github/workflows/**'];
 const REVIEW_RULE_FILES = ['scripts/review-areas.ts', 'scripts/review-labels.ts'];
 const DEPENDENCY_FILES = ['**/package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'];
 const ENTRY_POINTS = ['packages/*/src/index.ts'];
-const BASELINE_FILE = 'tools/conformance/baseline.json';
+const BASELINE_FILES = ['tools/conformance/baseline/*.txt'];
 const EXCEPTIONS_FILE = 'tools/conformance/src/exceptions.ts';
 const TEST_CODE = ['**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts', '**/test/**/*.ts'];
 const TEST_DATA = ['tools/conformance/fixtures/**', 'tools/conformance/suite/**'];
@@ -381,48 +381,18 @@ function countTestCases(lines: readonly string[]): number {
   return lines.reduce((count, line) => count + (line.match(TEST_CASE)?.length ?? 0), 0);
 }
 
-/** A line that opens a suite's list (`"r4": [`) or closes one (`]`) in `baseline.json`. */
-const SUITE_BOUNDARY = /^\s*(?:\]|"[^"]*"\s*:\s*\[)/;
-
 /**
- * Baseline entries that a patch removes and does not add back to the same suite. Moving the last
- * entry's comma removes and re-adds a line, so entries are compared without their comma.
- *
- * A baseline entry is a suite and a test ID, as `checkRatchet()` compares them. A patch only
- * shows which suite a line is in through the suite boundaries around it, so an entry counts as
- * kept only when it comes back in the same hunk and between the same boundaries. The old and the
- * new side count their boundaries separately, so a suite list that gains a comma still lines up.
- * Anything else, such as an ID that leaves `r4` and joins `r5`, counts as removed.
+ * Baseline entries that a patch removes and does not add back. A baseline file holds one suite,
+ * one test ID per line, so a baseline entry is a suite (the file) and the ID (the line), as
+ * `checkRatchet()` compares them. Sorting the file again removes and adds the same lines, so an
+ * entry that comes back anywhere in the file counts as kept. An ID that leaves `r4.txt` and joins
+ * `r5.txt` is removed from `r4.txt`, because each file is judged on its own.
  */
 export function removedBaselineEntries(patch: string): string[] {
-  const entry = (line: string) => line.trim().replace(/,$/, '');
-  const removed: { readonly at: string; readonly entry: string }[] = [];
-  const kept = new Set<string>();
-  let hunk = 0;
-  let oldSuite = 0;
-  let newSuite = 0;
-  for (const line of patch.split('\n')) {
-    if (line.startsWith('@@')) {
-      hunk++;
-      oldSuite = 0;
-      newSuite = 0;
-      continue;
-    }
-    const kind = line.charAt(0);
-    const text = line.slice(1);
-    if (SUITE_BOUNDARY.test(text)) {
-      oldSuite += kind === '+' ? 0 : 1;
-      newSuite += kind === '-' ? 0 : 1;
-    }
-    if (kind === '+') {
-      kept.add(`${hunk}:${newSuite}:${entry(text)}`);
-    } else if (kind === '-') {
-      removed.push({ at: `${hunk}:${oldSuite}`, entry: entry(text) });
-    }
-  }
-  return removed
-    .filter((line) => line.entry !== '' && !kept.has(`${line.at}:${line.entry}`))
-    .map((line) => line.entry);
+  const entry = (line: string) => line.replace(/\r$/, '');
+  const { added, removed } = patchLines(patch);
+  const kept = new Set(added.map(entry));
+  return removed.map(entry).filter((line) => line !== '' && !kept.has(line));
 }
 
 /** Why a change to test code removes or weakens tests, if it does. */
@@ -516,7 +486,7 @@ function fileRisks(file: ChangedFile, publicModules: ReadonlySet<string>): Risk[
   } else if (paths.some((path) => publicModules.has(path))) {
     add('public API: a module that a package entry point re-exports');
   }
-  if (paths.includes(BASELINE_FILE)) {
+  if (touches(BASELINE_FILES)) {
     const removed = file.patch === undefined ? [] : removedBaselineEntries(file.patch);
     if (
       file.status === 'removed' ||
