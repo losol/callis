@@ -8,11 +8,11 @@ How Callis reads the FHIRPath specification where the text is ambiguous, silent,
 
 - **Spec:** [N1 §4.1.4](https://hl7.org/fhirpath/N1/#decimal) asks for at least 28 digits with 8 decimal places; [N1 §6.6.2](https://hl7.org/fhirpath/N1/#division) does not say how many digits a quotient keeps or how it is rounded.
 - **Tests:** `testDivide1`–`testDivide7`, `testComment6` (`2 / 2` is the decimal `1`), `testEquivalent11`, `testNEquality22`.
-- **Decision:** the quotient is rounded half away from zero to 28 significant digits, or to 8 digits after the decimal point if that keeps more, and trailing zeros are then removed. So `1 / 3` is `0.3333333333333333333333333333`, `4 / 2` is `2` and `1 / 2` is `0.5`. Half away from zero matches `round()` ([3.0.0](https://hl7.org/fhirpath/STU3/#fn-round)). Negative integer powers use the same division ([T0004](tasks/T0004-decimal.md)).
+- **Decision:** the quotient is rounded half away from zero to 28 significant digits, or to 8 digits after the decimal point if that keeps more, and trailing zeros are then removed. So `1 / 3` is `0.3333333333333333333333333333`, `4 / 2` is `2` and `1 / 2` is `0.5`. Half away from zero matches `round()` ([3.0.0](https://hl7.org/fhirpath/STU3/#roundprecision--integer--decimal--quantity)). Negative integer powers use the same division ([T0004](tasks/T0004-decimal.md)).
 
 ### `round()` never adds digits
 
-- **Spec:** [N1 `round`](https://hl7.org/fhirpath/N1/#roundprecision-integer-decimal) and [3.0.0 `round`](https://hl7.org/fhirpath/STU3/#fn-round) say the precision is "the decimal place at which the rounding will occur", but not what happens when the input has fewer decimal places.
+- **Spec:** [N1 `round`](https://hl7.org/fhirpath/N1/#roundprecision-integer-decimal) and [3.0.0 `round`](https://hl7.org/fhirpath/STU3/#roundprecision--integer--decimal--quantity) say the precision is "the decimal place at which the rounding will occur", but not what happens when the input has fewer decimal places.
 - **Tests:** `testRound1`, `testRound2` (not affected either way).
 - **Decision:** `round(n)` rounds half away from zero to `n` decimal places, and a value that already has at most `n` decimal places is returned unchanged: `1.5.round(3)` is `1.5`, not `1.500`. Padding would claim precision the value does not have, and it would let `x.round(2147483647)` allocate a huge number.
 
@@ -405,7 +405,7 @@ Implemented in `packages/core/src/values/datetime/` ([T0005](tasks/T0005-date-ti
 
 ### Fractions in date/time arithmetic
 
-- **Spec:** [3.0.0 Date/Time Arithmetic](https://hl7.org/fhirpath/STU3/) applies the fraction of a quantity "only … for second or millisecond precisions". For partial values it converts the quantity to the value's precision, "truncating any decimal fraction".
+- **Spec:** [3.0.0 Date/Time Arithmetic](https://hl7.org/fhirpath/STU3/#datetime-arithmetic) applies the fraction of a quantity "only … for second or millisecond precisions". For partial values it converts the quantity to the value's precision, "truncating any decimal fraction".
 - **Tests:** `testPlusDate2` and `testPlusDate4` (`7.7 days` adds 7 days), `testPlusDate19` (`0.1 's'` adds 100 ms).
 - **Decision:**
   - The precision in the first rule is the quantity's unit. Above seconds the fraction is dropped before anything else, so `@T10:00 + 1.5 hours` is `@T11:00`, not `@T11:30`.
@@ -413,6 +413,11 @@ Implemented in `packages/core/src/values/datetime/` ([T0005](tasks/T0005-date-ti
   - The result is then converted to the value's precision and truncated toward zero. A value with second precision ignores a fraction of a second (`@T10:00:00 + 0.5 seconds` is `@T10:00:00`), and `@2014 - 23 months` is `@2013`.
   - Weeks follow the first rule too: the fraction is dropped before the weeks become days, so `1.5 weeks` adds 7 days, not 10. Reading "multiply by 7, then calculate in days" as 10.5 days, truncated to 10, is also defensible; Callis treats weeks like every other unit above seconds.
 - **R4 suite:** the R4 copy of the suite (`tests-fhir-r4.xml`) still expects `testPlusDate19` to ignore the fraction (`@1973-12-25T00:00:00.000+10:00 + 0.1 's'` unchanged). Callis follows the R5 copy, which is the source of truth and matches 3.0.0, so the R4 `testPlusDate19` is a conformance exception (`tools/conformance/src/exceptions.ts`, #51). The R5 test runs as usual.
+- **Warning:** 3.0.0 also says "Implementers SHOULD produce a warning when decimal fractions are ignored". Callis does not produce one yet, because no channel carries a warning to the host (#52):
+  - `isFractionIgnored(amount, unit, precision)` in `values/datetime/arithmetic.ts` tells when the rules above drop part of the amount. It only computes, so the arithmetic kernels stay pure, and both callers below can share it.
+  - A static warning for a literal quantity, such as `@2020-01-01 + 7.9 days`, belongs to the diagnostics of `analyze()` ([T0024](tasks/T0024-static-analysis.md)), as a `Diagnostic` with severity `warning`. Without a precision, `isFractionIgnored()` checks only the quantity, which is all that analysis knows when the value is not a literal.
+  - A runtime warning for a computed quantity needs a host hook in `EvaluationHooks` ([T0021](tasks/T0021-hooks-async.md#host-hooks)), which has only `trace` today. The hook and its code are public API for the owner to decide, so this note adds neither. The check belongs where the operator is evaluated (`runtime/arithmetic.ts`), which has the value and the quantity.
+  - A warning never changes the result: the fraction is ignored as described above.
 
 ### String forms accepted by toDateTime() and toTime()
 

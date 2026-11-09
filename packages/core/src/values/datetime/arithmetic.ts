@@ -4,9 +4,12 @@
  * The functions take the quantity as an amount and a unit, so this module does not depend on the
  * Quantity class (T0006). A `Decimal` (T0004) is a {@link DecimalAmount}.
  *
+ * {@link isFractionIgnored} tells a caller when the arithmetic ignores part of the amount, for the
+ * warning FHIRPath 3.0.0 asks for. This module only computes and reports nothing.
+ *
  * @see https://hl7.org/fhirpath/N1/#datetime-arithmetic
- * @see https://hl7.org/fhirpath/STU3/ (Date/Time Arithmetic, which refines the rules for UCUM units
- * and partial values)
+ * @see https://hl7.org/fhirpath/STU3/#datetime-arithmetic (3.0.0, which refines the rules for UCUM
+ * units and partial values)
  */
 import { FhirPathEvaluationError } from '../../errors/fhirpath-error.ts';
 import {
@@ -23,6 +26,7 @@ import {
 import { DateValue } from './date.ts';
 import type { DateTimeFields } from './datetime.ts';
 import { DateTimeValue } from './datetime.ts';
+import type { Precision } from './precision.ts';
 import type { TemporalValue } from './temporal-value.ts';
 import { TimeValue } from './time.ts';
 
@@ -81,6 +85,7 @@ const MAX_MILLISECONDS = 366n * MAX_YEARS * MILLISECONDS.day;
  *   Seconds keep their fraction down to milliseconds (`0.1 's'` adds 100 ms).
  * - A partial value first converts the quantity to its own precision and drops the remainder,
  *   with 12 months, 30 days or 365 days to the next step: `@2014 + 23 months` is `@2015`.
+ * - {@link isFractionIgnored} tells whether either of the two rules above drops anything.
  * - Time wraps around midnight: `@T23:30 + 1 hour` is `@T00:30`.
  *
  * @throws FhirPathEvaluationError `eval/invalid-calendar-unit` if the unit is not a time unit, is
@@ -136,6 +141,44 @@ export function subtractCalendar(
   unit: string,
 ): TemporalValue {
   return addSigned(value, amount, unit, true);
+}
+
+/**
+ * Whether {@link addCalendar} and {@link subtractCalendar} ignore part of the amount for a value of
+ * the given precision. FHIRPath 3.0.0 says "Implementers SHOULD produce a warning when decimal
+ * fractions are ignored in date/time arithmetic operations". Part of the amount is ignored when:
+ *
+ * - it has a fraction of a unit above seconds, or of a millisecond, whatever the value:
+ *   `7.7 days` adds 7 days, `1.5 weeks` adds 7 days and `1.5 'ms'` adds 1 ms
+ * - what remains is finer than the value's precision: `@2014 + 23 months` is `@2015`, and
+ *   `@T10:00:00 + 0.5 seconds` is `@T10:00:00`
+ *
+ * The precision defaults to `millisecond`, where only the first rule applies, so a caller that
+ * knows the quantity but not the value can still ask. The function does not check that the unit
+ * applies to the value (hours on a Date); the arithmetic raises that error.
+ *
+ * @throws FhirPathEvaluationError `eval/invalid-calendar-unit` and `eval/invalid-argument` for the
+ * units and amounts that {@link addCalendar} rejects.
+ * @see https://hl7.org/fhirpath/STU3/#datetime-arithmetic
+ */
+export function isFractionIgnored(
+  amount: CalendarAmount,
+  unit: string,
+  precision: Precision = 'millisecond',
+): boolean {
+  const calendarUnit = toCalendarUnit(unit);
+  const exact = toDecimalAmount(amount);
+  // Seconds keep their fraction down to milliseconds; the other units keep none.
+  if (!isWholeMultiple(exact, calendarUnit === 'second' ? MILLISECONDS.second : 1n)) {
+    return true;
+  }
+  if (calendarUnit === 'year' || calendarUnit === 'month') {
+    // Only a year-only value converts months, and it takes whole years.
+    return (
+      calendarUnit === 'month' && precision === 'year' && truncatedMultiple(exact, 1n) % 12n !== 0n
+    );
+  }
+  return fixedMilliseconds(exact, calendarUnit) % precisionMilliseconds(precision) !== 0n;
 }
 
 /** Adds the amount, or subtracts it when `negate` is set. The unit is checked first. */
@@ -367,6 +410,33 @@ function keep(original: number | undefined, value: number): number | undefined {
 
 function modulo(value: number, divisor: number): number {
   return ((value % divisor) + divisor) % divisor;
+}
+
+/** One step of a value's precision in milliseconds, as a partial value converts a quantity. */
+function precisionMilliseconds(precision: Precision): bigint {
+  switch (precision) {
+    case 'year':
+      return YEAR_IN_MILLISECONDS;
+    case 'month':
+      return MONTH_IN_MILLISECONDS;
+    default:
+      return MILLISECONDS[precision];
+  }
+}
+
+/** Whether `amount × factor` is a whole number. */
+function isWholeMultiple(amount: DecimalAmount, factor: bigint): boolean {
+  if (amount.scale <= 0) {
+    return true;
+  }
+  const product = amount.coefficient * factor;
+  if (product === 0n) {
+    return true;
+  }
+  // As in truncatedMultiple: with at least as many fractional digits as the product has digits,
+  // 0 < |amount × factor| < 1. Checking first avoids building 10^scale for a huge scale.
+  const digits = (product < 0n ? -product : product).toString().length;
+  return amount.scale < digits && product % 10n ** BigInt(amount.scale) === 0n;
 }
 
 /** `amount × factor`, truncated toward zero. */

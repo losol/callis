@@ -370,8 +370,8 @@ describe('negate and abs', () => {
 });
 
 describe('round', () => {
-  // https://hl7.org/fhirpath/N1/#roundprecision-integer-decimal and
-  // https://hl7.org/fhirpath/STU3/#fn-round (half away from zero for negative numbers)
+  // https://hl7.org/fhirpath/N1/#roundprecision-integer-decimal and, for half away from zero with
+  // negative numbers, https://hl7.org/fhirpath/STU3/#roundprecision--integer--decimal--quantity
   it.each([
     ['1', 0, '1'], // N1 example, testRound1
     ['3.14159', 3, '3.142'], // N1 example, testRound2

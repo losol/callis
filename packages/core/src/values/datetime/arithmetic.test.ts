@@ -2,7 +2,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { FhirPathEvaluationError } from '../../errors/fhirpath-error.ts';
 import type { DecimalAmount } from './arithmetic.ts';
-import { addCalendar, subtractCalendar } from './arithmetic.ts';
+import { addCalendar, isFractionIgnored, subtractCalendar } from './arithmetic.ts';
 import { compareTemporal } from './compare.ts';
 import { DateValue } from './date.ts';
 import { DateTimeValue } from './datetime.ts';
@@ -24,11 +24,15 @@ function decimal(text: string): DecimalAmount {
   return { coefficient: BigInt(whole + fraction), scale: fraction.length };
 }
 
-/**
- * Evaluates `<literal> (+|-) <amount> <unit>`, where the unit is a calendar keyword or a quoted
- * UCUM unit, and returns the result as a literal.
- */
-function calculate(expression: string): string {
+/** The parts of `<literal> (+|-) <amount> <unit>`, where the unit may be quoted. */
+interface Operation {
+  readonly value: TemporalValue;
+  readonly subtract: boolean;
+  readonly amount: DecimalAmount;
+  readonly unit: string;
+}
+
+function parseOperation(expression: string): Operation {
   const match = /^(\S+) ([+-]) (-?\d+(?:\.\d+)?) '?([a-z]+)'?$/.exec(expression);
   if (
     match?.[1] === undefined ||
@@ -38,12 +42,23 @@ function calculate(expression: string): string {
   ) {
     throw new Error(`Malformed test expression: ${expression}`);
   }
-  const value = literal(match[1]);
-  const amount = decimal(match[3]);
-  const result =
-    match[2] === '+'
-      ? addCalendar(value, amount, match[4])
-      : subtractCalendar(value, amount, match[4]);
+  return {
+    value: literal(match[1]),
+    subtract: match[2] === '-',
+    amount: decimal(match[3]),
+    unit: match[4],
+  };
+}
+
+/**
+ * Evaluates `<literal> (+|-) <amount> <unit>`, where the unit is a calendar keyword or a quoted
+ * UCUM unit, and returns the result as a literal.
+ */
+function calculate(expression: string): string {
+  const { value, subtract, amount, unit } = parseOperation(expression);
+  const result = subtract
+    ? subtractCalendar(value, amount, unit)
+    : addCalendar(value, amount, unit);
   return result.toLiteral();
 }
 
@@ -325,6 +340,129 @@ describe('date/time arithmetic', () => {
     const value = literal('@2014-01-31T10:00Z');
     addCalendar(value, 1, 'month');
     expect(value.toLiteral()).toBe('@2014-01-31T10:00Z');
+  });
+});
+
+// 3.0.0: "Implementers SHOULD produce a warning when decimal fractions are ignored in date/time
+// arithmetic operations". https://hl7.org/fhirpath/STU3/#datetime-arithmetic and
+// docs/spec-notes.md#fractions-in-datetime-arithmetic
+describe('isFractionIgnored', () => {
+  /** Whether `<literal> (+|-) <amount> <unit>` ignores part of the amount. */
+  function ignores(expression: string): boolean {
+    const { value, amount, unit } = parseOperation(expression);
+    return isFractionIgnored(amount, unit, value.precision);
+  }
+
+  it.each([
+    ['@1973-12-25 + 7.7 days', true], // testPlusDate2
+    ['@1973-12-25T00:00:00.000+10:00 + 7.7 days', true], // testPlusDate4
+    ["@1973-12-25T00:00:00.000+10:00 + 0.1 's'", false], // testPlusDate19
+    // A fraction of a unit above seconds, or of a millisecond, whatever the precision.
+    ['@2015-02-04T10:00:00.000 + 1.5 hours', true],
+    ['@2015-02-04T10:00:00.000 + 1.5 milliseconds', true],
+    ['@2015-02-04T10:00:00.000 + 1.9999 seconds', true],
+    ['@2015-02-04T10:00:00.000 + 0.001 seconds', false],
+    ['@2015-02-04T10:00:00.000 + 0.0001 seconds', true],
+    ['@T10:00 + 1.5 hours', true],
+    ['@T10:00:00.000 + 0.5 seconds', false],
+    ['@2015-02-04 + 1.5 weeks', true],
+    ['@2015 + 1.5 years', true],
+    ['@2015-01-01 + 0.5 years', true],
+    ['@2015-01 + 18.5 months', true],
+    ['@2015-02-04 - 7.7 days', true],
+    ['@2015-02-04 + -7.7 days', true],
+    ['@2015-02-04 + 7.0 days', false], // a fraction of zero is not ignored
+    ['@2015-02-04 + 0 days', false],
+    // What remains is finer than the precision of the value.
+    ['@2014 + 23 months', true],
+    ['@2014 - 23 months', true],
+    ['@2014 + 6.0 months', true],
+    ['@2014 + 24 months', false],
+    ['@2014 + 12.0 months', false],
+    ['@2014 + 1 year', false],
+    ['@2014-01 + 23 months', false], // a value with months takes them as they are
+    ['@2014-01-31 + 1 month', false], // moving to the last day of the month drops no fraction
+    ['@2015T + 8760 hours', false], // 365 days
+    ['@2015T + 8759 hours', true],
+    ['@2015T + 400 days', true],
+    ['@2015-02T + 30 days', false],
+    ['@2015-02T + 45 days', true],
+    ['@2015-02-04 + 2 weeks', false],
+    ["@2015-02-04 + 1 'wk'", false],
+    ['@2015-02-04T + 25 hours', true],
+    ['@2015-02-04T10 + 90 minutes', true],
+    ['@2015-02-04T10 + 120 minutes', false],
+    ['@2015-02-04T10:00 + 90 seconds', true],
+    ['@2015-02-04T10:00 + 60 seconds', false],
+    ['@2015-02-04T10:00:00 + 1500 milliseconds', true],
+    ['@2015-02-04T10:00:00 + 0.5 seconds', true],
+    ['@T10 + 59 minutes', true],
+    ['@T10:00:00 + 0.5 seconds', true],
+    ['@T10:00:00 + 2 seconds', false],
+  ])('%s: %s', (expression, expected) => {
+    expect(ignores(expression)).toBe(expected);
+  });
+
+  // Without a precision only the fraction of the quantity counts, as for a value with milliseconds.
+  it.each([
+    [7.7, 'days', true],
+    [0.5, 'seconds', false],
+    [0.0005, 's', true],
+    [1.5, 'ms', true],
+    [23, 'months', false],
+    [90, 'minutes', false],
+    [-1.5, 'weeks', true],
+  ])('%s %s without a precision: %s', (amount, unit, expected) => {
+    expect(isFractionIgnored(amount, unit)).toBe(expected);
+  });
+
+  it('handles any scale without building huge powers of ten', () => {
+    expect(isFractionIgnored({ coefficient: 1n, scale: 1_000_000_000 }, 'days')).toBe(true);
+    expect(isFractionIgnored({ coefficient: 0n, scale: 1_000_000_000 }, 'days')).toBe(false);
+    expect(isFractionIgnored({ coefficient: 10n ** 30n, scale: 30 }, 'days')).toBe(false);
+    expect(isFractionIgnored({ coefficient: 7n, scale: -2 }, 'days', 'day')).toBe(false);
+  });
+
+  it.each([
+    [1, 'mo', 'eval/invalid-calendar-unit'],
+    [1, 'a', 'eval/invalid-calendar-unit'],
+    [1, 'kg', 'eval/invalid-calendar-unit'],
+    [Number.NaN, 'days', 'eval/invalid-argument'],
+    [Number.POSITIVE_INFINITY, 'days', 'eval/invalid-argument'],
+  ])('%s %s raises %s, like the arithmetic', (amount, unit, code) => {
+    expect(() => isFractionIgnored(amount, unit)).toThrow(
+      expect.objectContaining({ code }) as Error,
+    );
+  });
+
+  // When nothing is ignored, the shift is exact, so two steps of the amount are one of twice it.
+  it('is false only for a shift that is exact (property-based)', () => {
+    const startOfYear = (year: number): number => new Date(0).setUTCFullYear(year, 0, 1);
+    const text = fc
+      .integer({ min: startOfYear(100), max: startOfYear(9900) - 1 })
+      .map((milliseconds) => new Date(milliseconds).toISOString().slice(0, -1));
+    // The ISO text cut to year, month, day, hour, minute, second or millisecond precision.
+    const value = fc
+      .tuple(text, fc.constantFrom(4, 7, 10, 13, 16, 19, 23))
+      .map(([iso, length]) =>
+        literal(length <= 10 ? `@${iso.slice(0, length)}T` : `@${iso.slice(0, length)}`),
+      );
+    const amount = fc
+      .tuple(fc.integer({ min: -1000, max: 1000 }), fc.integer({ min: 0, max: 3 }))
+      .map(([coefficient, scale]): DecimalAmount => ({ coefficient: BigInt(coefficient), scale }));
+    const unit = fc.constantFrom('weeks', 'days', 'hours', 'minutes', 'seconds', 'milliseconds');
+    fc.assert(
+      fc.property(value, amount, unit, (start, step, name) => {
+        if (isFractionIgnored(step, name, start.precision)) {
+          return;
+        }
+        const twice = { coefficient: 2n * step.coefficient, scale: step.scale };
+        expect(addCalendar(addCalendar(start, step, name), step, name).toLiteral()).toBe(
+          addCalendar(start, twice, name).toLiteral(),
+        );
+      }),
+      { numRuns: 300 },
+    );
   });
 });
 

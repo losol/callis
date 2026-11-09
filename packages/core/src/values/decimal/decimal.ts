@@ -338,7 +338,7 @@ export class Decimal {
    * @throws FhirPathEvaluationError `eval/invalid-argument` if `precision` is not a non-negative
    *   integer.
    * @see https://hl7.org/fhirpath/N1/#roundprecision-integer-decimal
-   * @see https://hl7.org/fhirpath/STU3/#fn-round
+   * @see https://hl7.org/fhirpath/STU3/#roundprecision--integer--decimal--quantity
    */
   round(precision = 0): Decimal {
     if (!Number.isSafeInteger(precision) || precision < 0) {
