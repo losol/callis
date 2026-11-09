@@ -14,7 +14,8 @@
  *   ([3.0.0 §6.6](https://hl7.org/fhirpath/STU3/#math-1))
  *
  * The result types follow FHIRPath 3.0.0 where it clarifies N1 (`docs/spec-notes.md`, "Math
- * functions").
+ * functions"), and so does the Quantity input of `ceiling()`, `floor()`, `round()` and
+ * `truncate()`, which N1 allows only for `abs()`.
  */
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
 import { type Collection, EMPTY, fromOptional, type Item } from '../runtime/collection.ts';
@@ -70,11 +71,13 @@ function defineDecimalFunction(
 }
 
 /**
- * Defines a function from a number to an Integer: an Integer input is returned as it is, and a
- * Decimal input gives the whole number that `kernel` picks, which is empty when it is outside the
- * Integer range.
+ * Defines a function from a number or a Quantity to a whole number: an Integer input is returned as
+ * it is, and a Decimal input gives the whole number that `kernel` picks as an Integer, which is
+ * empty when it is outside the Integer range. A Quantity keeps its unit and gets that whole number
+ * as its Decimal value, without the Integer range
+ * ([spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#ceiling-floor-round-and-truncate-of-a-quantity)).
  */
-function defineIntegerFunction(
+function defineWholeNumberFunction(
   name: string,
   kernel: (value: Decimal) => Decimal,
 ): FunctionDefinition {
@@ -82,13 +85,17 @@ function defineIntegerFunction(
     name,
     0,
     (input) => {
-      const value = numericInput(input);
+      const value = singleton(input, 'Decimal', asNumericOrQuantity);
       if (value === undefined) {
         return EMPTY;
       }
+      if (value instanceof Quantity) {
+        return [new Quantity(kernel(value.value), value.unit)];
+      }
       return typeof value === 'number' ? [value] : fromOptional(kernel(value).toInteger());
     },
-    { returns: { type: 'Integer', singleton: true } },
+    // An Integer or a Quantity, so the type is not fixed.
+    { returns: { singleton: true } },
   );
 }
 
@@ -115,10 +122,12 @@ export const absFunction: FunctionDefinition = defineValueFunction(
 );
 
 /**
- * `ceiling()`: the first Integer greater than or equal to the input.
+ * `ceiling()`: the first Integer greater than or equal to the input. A Quantity keeps its unit:
+ * `(5.5 'mg').ceiling()` is `6 'mg'`.
  * @see https://hl7.org/fhirpath/N1/#ceiling-integer
+ * @see https://hl7.org/fhirpath/STU3/#ceiling--integer--quantity
  */
-export const ceilingFunction: FunctionDefinition = defineIntegerFunction('ceiling', (value) =>
+export const ceilingFunction: FunctionDefinition = defineWholeNumberFunction('ceiling', (value) =>
   value.ceiling(),
 );
 
@@ -129,10 +138,12 @@ export const ceilingFunction: FunctionDefinition = defineIntegerFunction('ceilin
 export const expFunction: FunctionDefinition = defineDecimalFunction('exp', exp);
 
 /**
- * `floor()`: the first Integer less than or equal to the input.
+ * `floor()`: the first Integer less than or equal to the input. A Quantity keeps its unit:
+ * `(-5.5 'mg').floor()` is `-6 'mg'`.
  * @see https://hl7.org/fhirpath/N1/#floor-integer
+ * @see https://hl7.org/fhirpath/STU3/#floor--integer--quantity
  */
-export const floorFunction: FunctionDefinition = defineIntegerFunction('floor', (value) =>
+export const floorFunction: FunctionDefinition = defineWholeNumberFunction('floor', (value) =>
   value.floor(),
 );
 
@@ -193,8 +204,9 @@ export const powerFunction: FunctionDefinition = defineValueFunction(
 
 /**
  * `round([precision])`: rounds half away from zero to `precision` digits after the decimal point,
- * 0 by default. The result is a Decimal, also for an Integer input. A precision below zero raises
- * `eval/invalid-argument`, also when the input is empty; an empty precision gives an empty result.
+ * 0 by default. The result is a Decimal, also for an Integer input, and a Quantity keeps its unit:
+ * `(5.55 'mg').round(1)` is `5.6 'mg'`. A precision below zero raises `eval/invalid-argument`, also
+ * when the input is empty; an empty precision gives an empty result.
  * @see https://hl7.org/fhirpath/N1/#roundprecision-integer-decimal
  * @see https://hl7.org/fhirpath/STU3/#roundprecision--integer--decimal--quantity
  */
@@ -202,7 +214,7 @@ export const roundFunction: FunctionDefinition = defineValueFunction(
   'round',
   [{ kind: 'value', name: 'precision', optional: true }],
   (input, args) => {
-    const value = numericInput(input);
+    const value = singleton(input, 'Decimal', asNumericOrQuantity);
     const precisionArg = args[0];
     const precision =
       precisionArg === undefined ? 0 : singleton(precisionArg, 'Integer', asInteger);
@@ -212,9 +224,13 @@ export const roundFunction: FunctionDefinition = defineValueFunction(
     if (value === undefined || precision === undefined) {
       return EMPTY;
     }
+    if (value instanceof Quantity) {
+      return [new Quantity(value.value.round(precision), value.unit)];
+    }
     return [toDecimal(value).round(precision)];
   },
-  { returns: { type: 'Decimal', singleton: true } },
+  // A Decimal or a Quantity, so the type is not fixed.
+  { returns: { singleton: true } },
 );
 
 /**
@@ -224,10 +240,12 @@ export const roundFunction: FunctionDefinition = defineValueFunction(
 export const sqrtFunction: FunctionDefinition = defineDecimalFunction('sqrt', sqrt);
 
 /**
- * `truncate()`: the integer part of the input, towards zero.
+ * `truncate()`: the integer part of the input, towards zero. A Quantity keeps its unit:
+ * `(-5.5 'mg').truncate()` is `-5 'mg'`.
  * @see https://hl7.org/fhirpath/N1/#truncate-integer
+ * @see https://hl7.org/fhirpath/STU3/#truncate--integer--quantity
  */
-export const truncateFunction: FunctionDefinition = defineIntegerFunction('truncate', (value) =>
+export const truncateFunction: FunctionDefinition = defineWholeNumberFunction('truncate', (value) =>
   value.truncate(),
 );
 
