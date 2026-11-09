@@ -56,7 +56,7 @@ describe('FHIR R6 September 2026 draft snapshot', () => {
     expect(r6.getRootType({ resourceType: 'DeviceAlert' })).toBe(type);
     if (type === undefined || resource === undefined) throw new Error('Missing R6 resource');
     expect(r6.isSubtypeOf(type, resource)).toBe(true);
-    expect(r6.getElement(type, 'id')).toMatchObject({ typeNames: ['string'], isArray: false });
+    expect(r6.getElement(type, 'id')).toMatchObject({ typeNames: ['id'], isArray: false });
     expect(r6.getElement(type, 'signal')).toMatchObject({
       typeNames: ['DeviceAlert.signal'],
       isArray: true,

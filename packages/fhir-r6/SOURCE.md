@@ -12,6 +12,8 @@
 
 The manifest contains stale metadata: `url` points to `http://hl7.org/fhir/6.0.0-ballot5` and `homepage` is a local filesystem URL. The [publication list](https://hl7.org/fhir/package-list.json) also carries a snapshot date different from the archive/registry September build date. These are upstream inconsistencies; identity is established by the exact archive bytes, manifest version/FHIR version and versioned published download, not those stale fields. The older `packages.fhir.org` R6 endpoint returned 404 during the 2026-11-06 source audit. Generation uses the explicit versioned HL7 URL above and fails on checksum or identity/license mismatch; it never falls back to floating builds or R5.
 
+The archive gives the `id` of 116 resources (`Patient.id`, …) the type `string`, although they inherit `Resource.id`, an `id`. The model takes the type of an inherited element from the element that defines it ([spec notes](../../docs/spec-notes.md#the-id-of-a-resource-is-an-id-the-id-of-any-other-element-a-string)).
+
 The selected base snapshots yield 124 resource roots, 51 complex datatype roots, 21 primitive roots and 487 backbones (683 types total). `inventory.json` lists every selected root and generated backbone by kind in sorted order. Constraint profiles and logical models are excluded. Regeneration checks the inventory as well as the data and shared provider copy.
 
 This is a derived navigation model, not the FHIR specification or a FHIR validation model. Terminology tables, bindings, invariants and richer metadata are excluded. FHIR® and HL7® are trademarks of Health Level Seven International; no endorsement is implied. The provider implementation is MIT licensed; the source-data notice is shipped with the package.

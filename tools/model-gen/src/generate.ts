@@ -7,6 +7,7 @@ interface TypeReference {
 interface SnapshotElement {
   readonly id: string;
   readonly path: string;
+  readonly base?: { readonly path: string };
   readonly max?: string;
   readonly contentReference?: string;
   readonly type?: readonly TypeReference[];
@@ -21,6 +22,24 @@ export interface StructureDefinition {
   readonly derivation?: string;
   readonly baseDefinition?: string;
   readonly snapshot?: { readonly element: readonly SnapshotElement[] };
+  readonly differential?: { readonly element: readonly { readonly id: string }[] };
+}
+
+/**
+ * A known error in the `structuredefinition-fhir-type` value of one element of a pinned source,
+ * corrected where the element is defined. Elements that inherit it follow the corrected value.
+ */
+export interface FhirTypeCorrection {
+  /** The defining element, for example `Resource.id`. */
+  readonly path: string;
+  /** The value the pinned source carries. Generation fails when it differs, so an upgrade is reviewed. */
+  readonly from: string;
+  /** The FHIR type the source's own published definition gives the element. */
+  readonly to: string;
+}
+
+export interface GenerateOptions {
+  readonly corrections?: readonly FhirTypeCorrection[];
 }
 
 const SYSTEM_PREFIX = 'http://hl7.org/fhirpath/System.';
@@ -64,8 +83,8 @@ function systemMapping(name: string, kind: TypeRow[1], value?: SnapshotElement):
   }
 }
 
-function modelName(type: TypeReference): string {
-  if (!type.code.startsWith(SYSTEM_PREFIX)) return type.code;
+/** The model type a System-typed reference names: its FHIR-type extension, else the canonical one. */
+function declaredName(type: TypeReference): string {
   const extension = type.extension?.find((entry) => entry.url === FHIR_TYPE)?.valueUrl;
   const name = extension ?? SYSTEM_MODEL.get(type.code.slice(SYSTEM_PREFIX.length));
   if (name === undefined) throw new Error(`No model type for ${type.code}`);
@@ -85,9 +104,59 @@ export function coreDefinitions(
 }
 
 /** Converts official snapshots into deterministic, validated runtime rows. */
-export function generateModel(definitions: readonly StructureDefinition[]): readonly TypeRow[] {
+export function generateModel(
+  definitions: readonly StructureDefinition[],
+  options: GenerateOptions = {},
+): readonly TypeRow[] {
   const selected = coreDefinitions(definitions);
   const rows = new Map<string, TypeRow>();
+  const roots = new Map(selected.map((definition) => [definition.type, definition]));
+  const corrections = new Map((options.corrections ?? []).map((entry) => [entry.path, entry]));
+  const applied = new Set<string>();
+
+  /** The element a snapshot element was inherited from: `base.path` names its one defining element. */
+  function definingElement(path: string): SnapshotElement {
+    const owner = roots.get(path.slice(0, path.indexOf('.')));
+    const element = owner?.snapshot?.element.find((candidate) => candidate.path === path);
+    if (element === undefined) throw new Error(`Unresolved base element: ${path}`);
+    return element;
+  }
+
+  /**
+   * The FHIR type of a System-typed element, from `structuredefinition-fhir-type` on the element
+   * that defines it. A snapshot copy of an inherited element has no say: the publisher fills
+   * these extensions inconsistently, so `Patient.id` and `Resource.id` can disagree within one
+   * source, and a snapshot element that the differential does not touch is its base, unchanged.
+   * https://hl7.org/fhir/R5/elementdefinition-definitions.html#ElementDefinition.base
+   * https://hl7.org/fhir/R5/structuredefinition.html#snapshot
+   */
+  function modelName(
+    definition: StructureDefinition,
+    element: SnapshotElement,
+    type: TypeReference,
+  ): string {
+    if (!type.code.startsWith(SYSTEM_PREFIX)) return type.code;
+    const basePath = element.base?.path;
+    const redefined = definition.differential?.element.some((entry) => entry.id === element.id);
+    const origin =
+      basePath !== undefined && basePath !== element.path && !redefined
+        ? definingElement(basePath)
+        : element;
+    const declared = origin === element ? type : origin.type?.find((t) => t.code === type.code);
+    if (declared === undefined) {
+      throw new Error(`Base element differs in type: ${element.id}: ${origin.path}`);
+    }
+    const name = declaredName(declared);
+    const correction = corrections.get(origin.path);
+    if (correction === undefined) return name;
+    if (name !== correction.from) {
+      throw new Error(
+        `Stale correction: ${origin.path} is ${name}, the correction expects ${correction.from}`,
+      );
+    }
+    applied.add(origin.path);
+    return correction.to;
+  }
   const primitiveNames = new Set(
     selected
       .filter((definition) => definition.kind === 'primitive-type')
@@ -124,7 +193,7 @@ export function generateModel(definitions: readonly StructureDefinition[]): read
       if (element.type === undefined || element.type.length === 0) {
         throw new Error(`No types for ${element.id}`);
       }
-      return [...new Set(element.type.map(modelName))];
+      return [...new Set(element.type.map((type) => modelName(definition, element, type)))];
     }
     const kind =
       definition.kind === 'primitive-type'
@@ -170,6 +239,9 @@ export function generateModel(definitions: readonly StructureDefinition[]): read
         children,
       ]);
     }
+  }
+  for (const path of corrections.keys()) {
+    if (!applied.has(path)) throw new Error(`Unused correction: ${path}`);
   }
   // Snapshot children already include inherited fields and any narrowed cardinalities/types.
   // Validate them rather than re-merging bases and losing snapshot constraints.
