@@ -457,6 +457,49 @@ describe.each(PROVIDERS)(
       });
     });
 
+    // https://hl7.org/fhirpath/N1/#existence: the functions read typed nodes by their System
+    // values and return the nodes themselves (docs/spec-notes.md#distinct-and-isdistinct).
+    describe('existence functions on typed nodes', () => {
+      it('reads FHIR booleans, and leaves out a boolean that holds only extensions', () => {
+        expect(run(patient, 'Patient.active.combine(Patient.deceased).allTrue()')).toEqual([false]);
+        expect(run(patient, 'Patient.active.combine(Patient.deceased).anyTrue()')).toEqual([true]);
+        const extended = { resourceType: 'Patient', _active: { extension: [syllables] } };
+        expect(run(extended, 'Patient.active.exists()')).toEqual([true]);
+        expect(run(extended, 'Patient.active.allFalse()')).toEqual([true]);
+        expect(run(extended, 'Patient.active.anyTrue()')).toEqual([false]);
+        expect(codeOf(() => run(patient, 'Patient.gender.allTrue()'))).toBe('eval/type-mismatch');
+      });
+
+      it('keeps the last of a code and a String with the same value (testDistinct31)', () => {
+        const [string] = typed(patient, "Patient.gender.combine('male').distinct()");
+        expect(string).toBe('male');
+        const [code] = typed(patient, "'male'.combine(Patient.gender).distinct()");
+        expect(typeName(code)).toBe('code');
+        expect(run(patient, "Patient.gender.combine('male').isDistinct()")).toEqual([false]);
+      });
+
+      it('compares typed elements by type and value', () => {
+        const names = typed(patient, 'Patient.name.combine(Patient.name).distinct()');
+        expect(names.map(typeName)).toEqual(['HumanName', 'HumanName']);
+        expect(run(patient, 'Patient.name.isDistinct()')).toEqual([true]);
+        expect(run(patient, 'Patient.name.first().subsetOf(Patient.name)')).toEqual([true]);
+        expect(run(patient, 'Patient.name.supersetOf(Patient.name.last())')).toEqual([true]);
+        const shared = { text: 'x' };
+        const input = { resourceType: 'Patient', name: [shared], address: [shared] };
+        expect(run(input, 'Patient.name.combine(Patient.address).isDistinct()')).toEqual([true]);
+        expect(run(input, 'Patient.name.subsetOf(Patient.address)')).toEqual([false]);
+      });
+
+      it('compares a typed date with a date literal', () => {
+        expect(run(patient, 'Patient.birthDate.subsetOf(@1974-12-25)')).toEqual([true]);
+        expect(run(patient, 'Patient.birthDate.subsetOf(@1974-12)')).toEqual([false]);
+        expect(run(patient, 'Patient.birthDate.combine(@1974-12-25).isDistinct()')).toEqual([
+          false,
+        ]);
+        expect(run(patient, 'Patient.birthDate.combine(@1974-12).distinct()')).toEqual([]);
+      });
+    });
+
     // https://hl7.org/fhirpath/N1/#tree-navigation, docs/spec-notes.md#order-of-descendants
     describe('children() and descendants()', () => {
       const names = (input: unknown, expression: string): string[] =>

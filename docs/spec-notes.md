@@ -272,6 +272,34 @@ Implemented in `packages/core/src/runtime/` (`equality.ts`, `comparison.ts`, `op
 - **Decision:** the child properties are what model-less navigation sees: own properties only, arrays flattened, and `null`, an empty array and a missing property all mean "no value". The order of the properties does not matter. Each child collection is compared with `=` (repeating items in order) or `~` (in any order), so child strings compare exactly or case-insensitively and child numbers by value. Two input strings are never read as dates.
 - **With a model:** two typed nodes of the same model type compare by their elements instead of their JSON keys, so a choice element compares by its one value, a FHIR `date` by the date rules, and `_name` extensions and keys that are not elements are ignored. Typed nodes of different model types are not equal and not equivalent, as N1 requires operands of the same type: a `Patient` and a `Practitioner` with the same `id` differ, so `|` keeps both. A node the model does not know keeps the JSON rules, also against a typed node. FHIR Quantities without a UCUM code have [their own rule](#fhir-quantities-without-a-ucum-code), and `~` on FHIR types follows [FHIR equivalence](#fhir-equivalence). (T0018)
 
+## Existence
+
+Implemented in `packages/core/src/functions/existence.ts` ([T0011](tasks/T0011-fn-existence.md), [T0041](tasks/T0041-fn-existence-completion.md)). How `exists()` evaluates its criteria is under [Operators](#existence-criteria-stop-after-the-first-match).
+
+### `all()` stops at the first item that does not match
+
+- **Spec:** [N1 all](https://hl7.org/fhirpath/N1/#allcriteria-expression-boolean) and [3.0.0](https://hl7.org/fhirpath/STU3/en/index.html#allcriteria--this-index--boolean--boolean) return true "if all return true", but do not say whether the criteria of later items are evaluated once one is not true.
+- **Tests:** `stops at the first item that does not match, without evaluating later items` and the internal sync, promise, custom-thenable and cross-realm cases in `packages/core/src/functions/existence.test.ts`; the pinned `testAll` group has no later-error case.
+- **Decision:** `all()` mirrors [`exists()`](#existence-criteria-stop-after-the-first-match). It evaluates the criteria in input order, with the [canonical Boolean rule](#filtering-criteria-use-the-canonical-singleton-boolean-rule), and stops at the first item whose criterion does not match (false or empty), returning false. Later criteria are not evaluated, including errors they would have raised; a criterion reached before that still propagates its error. Empty input returns true without evaluating the criterion.
+- **Code:** `findItem()` in `packages/core/src/functions/existence.ts`.
+
+### `allTrue()` and the like take only Booleans
+
+- **Spec:** [N1 allTrue](https://hl7.org/fhirpath/N1/#alltrue-boolean), [anyTrue](https://hl7.org/fhirpath/N1/#anytrue-boolean), [allFalse](https://hl7.org/fhirpath/N1/#allfalse-boolean) and [anyFalse](https://hl7.org/fhirpath/N1/#anyfalse-boolean) "take a collection of Boolean values", as 3.0.0 does, but neither says what an item of another type does.
+- **Tests:** `allTrue, anyTrue, allFalse and anyFalse` in `packages/core/src/functions/existence.test.ts` and `existence functions on typed nodes` in `packages/core/test/generated-models.test.ts`; the pinned `testAll` group projects Booleans only.
+- **Decision:** every input item must be a Boolean: a System Boolean or a FHIR `boolean`. Any other item raises `eval/type-mismatch`, wherever it is and whatever the other items are, so `true.combine('a').anyTrue()` is an error and the error never depends on which item decides the result. Items are not converted as `toBoolean()` would convert them, and the [singleton rule](https://hl7.org/fhirpath/N1/#singleton-evaluation-of-collections) that counts a single non-Boolean as true applies where one Boolean is expected, not to the items of a collection. A FHIR `boolean` that holds only extensions has no value and is left out, as singleton evaluation treats it as empty.
+- **Code:** `booleansOf()` in `packages/core/src/functions/existence.ts`.
+
+### `distinct()` and `isDistinct()`
+
+- **Spec:** [N1 distinct](https://hl7.org/fhirpath/N1/#distinct-collection) compares items with `=` and says the order "is not guaranteed to be preserved"; [isDistinct](https://hl7.org/fhirpath/N1/#isdistinct-boolean) is "shorthand for" `X.count() = X.distinct().count()`. N1 does not say which of equal items remains, or what an undetermined comparison means. [3.0.0](https://hl7.org/fhirpath/STU3/en/index.html#distinct--collection) lets either of two equal quantities remain, and says that "false and empty both indicate that the items are distinct".
+- **Tests:** R5 `testDistinct30`–`35` expect the last of equal items, in input order: `'a'.combine('b').combine('a').distinct()` is `'b', 'a'`. R5 `testDistinct29` and `testDistinct36` expect empty from `isDistinct()` and `distinct()` for `@2020.combine(@2020-01-01)`. Unit tests: `distinct and isDistinct` in `packages/core/src/functions/existence.test.ts`.
+- **Decision:** follow the test suite, as [T0041](tasks/T0041-fn-existence-completion.md) requires.
+  - `distinct()` keeps the last of equal items, at its position, and returns the input items themselves, so object identity and model types survive. With no repeats it returns the input.
+  - Every pair of items is compared once. When the equality of any pair is undetermined, such as dates of different precision or quantities whose units cannot be related, `distinct()` and `isDistinct()` are empty, also when another pair is equal, so the result does not depend on the order of the comparisons.
+  - This differs from 3.0.0, which counts `@2020` and `@2020-01-01` as distinct, and from `|`, `intersect()`, `exclude()`, `subsetOf()` and `supersetOf()`, for which an undetermined comparison is not equality ([below](#intersect-and-exclude-with-undetermined-equality)). Following 3.0.0 would make R5 `testDistinct29` and `testDistinct36` exceptions.
+- **Code:** `laterRepeats()` in `packages/core/src/functions/existence.ts`.
+
 ## Subsetting and combining
 
 Implemented in `packages/core/src/functions/subsetting.ts` and `combining.ts` ([T0013](tasks/T0013-fn-subsetting-combining.md)).

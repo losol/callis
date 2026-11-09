@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   adaTwice,
+  allGiven,
   containerReference,
   exactDecimal,
   expressionError,
@@ -11,19 +12,24 @@ import {
   firstGiven,
   firstTwoGiven,
   given,
+  givenDistinct,
   hasAda,
   inHours,
+  knownGiven,
   lastGiven,
   laterGiven,
   lossless,
   managedBy,
   named,
+  noNames,
   numberOfNames,
   onlyName,
   parsedDecimal,
   patient,
   quantityJson,
   selectedGiven,
+  someFalse,
+  uniqueGiven,
   variable,
   withGrace,
   withoutAda,
@@ -37,6 +43,12 @@ describe('public guide examples', () => {
     expect(numberOfNames).toEqual([1]);
     expect(hasAda).toEqual([true]);
     expect(filteredNameCount).toEqual([1]);
+    expect(noNames).toEqual([false]);
+    expect(allGiven).toEqual([true]);
+    expect(someFalse).toEqual([true]);
+    expect(knownGiven).toEqual([true]);
+    expect(uniqueGiven).toEqual(['Mina', 'Ada']);
+    expect(givenDistinct).toEqual([true]);
     expect(selectedGiven).toEqual(['Ada']);
     expect(onlyName).toEqual(patient.name);
     expect(onlyName[0]).toBe(patient.name[0]);

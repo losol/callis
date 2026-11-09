@@ -46,6 +46,22 @@ export const filteredNameCount: unknown[] = evaluate(patient, "name.where(given[
 
 Empty input gives false for existence and zero for count. Optional existence criteria use the same singleton Boolean contract as where, and stop after the first match. These functions add no new API options, model awareness or public async behavior.
 
+`empty()` is the opposite of `exists()`. `all(criteria)` is true when the criterion matches every item, under the same rules as `exists(criteria)`: it stops at the first item that does not match, and empty input gives true. `allTrue()`, `anyTrue()`, `allFalse()` and `anyFalse()` take a collection of Booleans; any other item raises `eval/type-mismatch`. For empty input, `allTrue()` and `allFalse()` give true, and `anyTrue()` and `anyFalse()` false.
+
+```ts
+export const noNames: unknown[] = evaluate(patient, 'name.empty()');
+export const allGiven: unknown[] = compile('name.all(given.exists())').evaluate(patient);
+export const someFalse: unknown[] = evaluate(null, 'true.combine(false).anyFalse()');
+```
+
+`subsetOf(other)` is true when every input item is in `other`, and `supersetOf(other)` when every item of `other` is in the input. Membership uses `=`, as `intersect()` does: an item whose equality is undetermined is not a member. `distinct()` leaves out repeated items, keeping the last of equal ones in input order, and `isDistinct()` tells whether nothing repeats. When the equality of two items is undetermined, such as `@2020` and `@2020-01-01`, both give empty, as the HL7 tests expect.
+
+```ts
+export const knownGiven: unknown[] = evaluate(patient, "name.given.subsetOf('Ada' | 'Mina' | 'Grace')");
+export const uniqueGiven: unknown[] = evaluate(patient, "name.given.combine('Ada').distinct()");
+export const givenDistinct: unknown[] = compile('name.given.isDistinct()').evaluate(patient);
+```
+
 `first()` returns the first item in input order. `single()` returns the item only when there is at most one; multiple items raise `eval/singleton-expected`, including duplicate items. Both return empty for empty input and preserve the selected input object and its provenance.
 
 ```ts
