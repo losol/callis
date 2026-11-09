@@ -21,7 +21,7 @@ Preserve the remaining contract from the original T0011 after exists/count moved
 - `all` stops at the first item whose criterion does not match, as `exists` stops at a match ([spec notes](../spec-notes.md#all-stops-at-the-first-item-that-does-not-match)).
 - `allTrue`, `anyTrue`, `allFalse` and `anyFalse` accept only Booleans, including FHIR `boolean` nodes; any other item raises `eval/type-mismatch` ([spec notes](../spec-notes.md#alltrue-and-the-like-take-only-booleans)).
 - `subsetOf` and `supersetOf` use `includesEqual()` from `subsetting.ts`, the membership rule of `intersect` and `exclude`: only a `true` equality makes an item a member, as 3.0.0 clarifies.
-- `distinct` keeps the last of equal items, in input order, and `distinct`/`isDistinct` are empty when the equality of any two items is undetermined, as the test suite expects. FHIRPath 3.0.0 says instead that an undetermined comparison means the items are distinct; the difference is recorded in the [spec notes](../spec-notes.md#distinct-and-isdistinct).
+- `distinct` keeps the last of equal items, in input order, and `distinct`/`isDistinct` are empty when two System values cannot be compared, as the test suite expects. An element that holds only extensions, or complex values whose children cannot be compared, count as not equal, so one valueless element never empties the result. FHIRPath 3.0.0 says instead that an undetermined comparison means the items are distinct; the difference is recorded in the [spec notes](../spec-notes.md#distinct-and-isdistinct).
 
 ## Acceptance criteria
 

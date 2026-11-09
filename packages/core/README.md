@@ -54,7 +54,7 @@ export const allGiven: unknown[] = compile('name.all(given.exists())').evaluate(
 export const someFalse: unknown[] = evaluate(null, 'true.combine(false).anyFalse()');
 ```
 
-`subsetOf(other)` is true when every input item is in `other`, and `supersetOf(other)` when every item of `other` is in the input. Membership uses `=`, as `intersect()` does: an item whose equality is undetermined is not a member. `distinct()` leaves out repeated items, keeping the last of equal ones in input order, and `isDistinct()` tells whether nothing repeats. When the equality of two items is undetermined, such as `@2020` and `@2020-01-01`, both give empty, as the HL7 tests expect.
+`subsetOf(other)` is true when every input item is in `other`, and `supersetOf(other)` when every item of `other` is in the input. Membership uses `=`, as `intersect()` does: an item whose equality is undetermined is not a member. `distinct()` leaves out repeated items, keeping the last of equal ones in input order, and `isDistinct()` tells whether nothing repeats. When two values cannot be compared, such as `@2020` and `@2020-01-01`, both give empty, as the HL7 tests expect; an element that holds only extensions is never equal to another item.
 
 ```ts
 export const knownGiven: unknown[] = evaluate(patient, "name.given.subsetOf('Ada' | 'Mina' | 'Grace')");
