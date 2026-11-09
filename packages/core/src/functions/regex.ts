@@ -23,7 +23,9 @@ export const BASE_FLAGS = 'su';
  * The error says why the pattern is not valid but does not repeat it: a pattern can be computed
  * from input data, and errors never include input data
  * ([architecture: security and robustness](https://github.com/losol/callis/blob/main/docs/architecture.md#security-and-robustness)).
- * For the same reason the engine's error is not kept as the `cause`.
+ * For the same reason the engine's error is not kept as the `cause`, and the message of the hook's
+ * engine, whose dialect and wording are the host's, is not repeated either: the error only says
+ * that the hook's engine rejected the pattern.
  *
  * @param engine - The bound `regex` hook of the evaluation, or undefined for `RegExp`.
  * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` when the pattern is not valid:
@@ -45,9 +47,13 @@ export function compileRegex(
     };
   } catch (error) {
     if (error instanceof SyntaxError) {
+      const reason =
+        engine === undefined
+          ? reasonOf(error, pattern, flags)
+          : 'it is not valid in the regular expression engine of the regex hook';
       throw new FhirPathEvaluationError(
         'eval/invalid-argument',
-        `The regular expression is not valid: ${reasonOf(error, pattern, flags)}`,
+        `The regular expression is not valid: ${reason}`,
       );
     }
     throw error;

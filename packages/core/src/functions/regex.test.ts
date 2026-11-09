@@ -95,14 +95,22 @@ describe('compileRegex with a regex hook', () => {
     const syntax = bindHooks(
       {
         regex: () => {
-          throw new SyntaxError('bad pattern');
+          throw new SyntaxError('secret-input: lookbehind is not supported');
         },
       },
       binding,
     ).regex;
-    expect(() => compileRegex('(', BASE_FLAGS, syntax)).toThrow(
-      expect.objectContaining({ code: 'eval/invalid-argument' }),
-    );
+    const error = catchError(() => compileRegex('(?<=secret)b', BASE_FLAGS, syntax));
+    expect(error).toMatchObject({
+      code: 'eval/invalid-argument',
+      message:
+        'The regular expression is not valid: it is not valid in the regular expression engine of the regex hook',
+    });
+    // The dialect is the host's, so the message neither blames JavaScript's nor repeats the
+    // host's message or the pattern, which may hold input data.
+    expect((error as Error).message).not.toContain('JavaScript');
+    expect((error as Error).message).not.toContain('secret');
+    expect((error as Error).cause).toBeUndefined();
     const failing = bindHooks(
       {
         regex: () => {
