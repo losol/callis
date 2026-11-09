@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   type Baseline,
+  baselineFileName,
   checkRatchet,
   formatRefs,
-  parseBaseline,
+  parseBaselineList,
   type RatchetMode,
   type RatchetResult,
   ratchetFails,
-  serializeBaseline,
+  serializeBaselineList,
   updateBaseline,
 } from './baseline.ts';
 import { makeRun } from './test-helpers.ts';
@@ -109,16 +110,38 @@ describe('ratchetFails', () => {
   });
 });
 
-describe('baseline.json', () => {
-  it('round-trips, one test per line', () => {
-    const text = serializeBaseline({ r4: ['b', 'a'], r5: [] });
-    expect(text).toContain('"r4": [\n    "a",\n    "b"\n  ]');
-    expect(parseBaseline(text)).toEqual({ r4: ['a', 'b'], r5: [] });
+describe('baseline files', () => {
+  it('are named after the suite', () => {
+    expect(baselineFileName('r4')).toBe('r4.txt');
   });
 
-  it('rejects a malformed file', () => {
-    expect(() => parseBaseline('{"r4": [1], "r5": []}')).toThrow('"r4" must be an array');
-    expect(() => parseBaseline('{"r4": []}')).toThrow('"r5" must be an array');
+  it('round-trip, one test per line and sorted', () => {
+    const text = serializeBaselineList(['b', 'a', 'testEquivalent23#2']);
+    expect(text).toBe('a\nb\ntestEquivalent23#2\n');
+    expect(parseBaselineList(text)).toEqual(['a', 'b', 'testEquivalent23#2']);
+  });
+
+  it('are empty for a suite without passing tests', () => {
+    expect(serializeBaselineList([])).toBe('');
+    expect(parseBaselineList('')).toEqual([]);
+  });
+
+  // `merge=union` in .gitattributes keeps the lines of both sides, so a merge can leave the file
+  // unsorted, with a repeated line, or with a Windows line ending.
+  it('read what a union merge of two PRs can leave', () => {
+    expect(parseBaselineList('a\nc\nb\n\na\r\nd')).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('write each test once', () => {
+    expect(serializeBaselineList(['a', 'b', 'a'])).toBe('a\nb\n');
+  });
+
+  it('keep the ID as it is, without trimming', () => {
+    expect(parseBaselineList(' a \n')).toEqual([' a ']);
+  });
+
+  it('refuse a test ID with a line break', () => {
+    expect(() => serializeBaselineList(['a\nb'])).toThrow('cannot hold a line break');
   });
 });
 

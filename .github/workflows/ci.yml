@@ -105,9 +105,10 @@ jobs:
         run: pnpm test
 
   # The HL7 FHIRPath test suite (T0022): fails on a baseline regression or on a baseline that is out
-  # of date, warns about out-of-date reports, and adds a job summary. The JSON summary and every test
-  # result are uploaded as an artifact. Blocking since T0023 converted the XML fixtures, so every
-  # phase-1 test runs.
+  # of date, and adds a job summary. The Markdown reports are generated here and never committed, so
+  # parallel PRs do not conflict on them; they are uploaded with the JSON summary and every test
+  # result as an artifact, and the site build publishes them from main (deploy.yml). Blocking since
+  # T0023 converted the XML fixtures, so every phase-1 test runs.
   conformance:
     name: Conformance
     runs-on: ubuntu-latest
@@ -127,6 +128,7 @@ jobs:
       - name: Run the HL7 test suite
         run: >-
           pnpm conformance --check
+          --reports conformance-reports
           --results conformance-results.json
           --summary conformance-summary.json
       - name: Upload results
@@ -137,10 +139,13 @@ jobs:
           path: |
             conformance-results.json
             conformance-summary.json
+            conformance-reports/
           if-no-files-found: ignore
 
   # The documentation site (T0035). It is built on pull requests only, so a change that breaks the
-  # site fails its PR; deploy.yml builds it again on main. It reads the whole git history.
+  # site fails its PR; deploy.yml builds it again on main. It reads the whole git history. The build
+  # generates the conformance reports (apps/site/scripts/collect.ts), so the pages exist without
+  # committed reports.
   site:
     name: Site build
     if: github.event_name == 'pull_request'
@@ -175,6 +180,8 @@ jobs:
           test -f index.html
           test -f architecture/index.html
           test -f progress/index.html
+          test -f conformance/r4/index.html
+          test -f conformance/r5/index.html
           test -f search-index.json
           grep -q "Callis" index.html
 

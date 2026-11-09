@@ -1,32 +1,33 @@
 /**
  * Runs the HL7 FHIRPath test suite and reports the results.
  *
- * Usage: `pnpm conformance [--update-baseline | --check] [--results <file>] [--summary <file>]`
+ * Usage: `pnpm conformance [--update-baseline | --check | --reports-only] [--reports <dir>]
+ * [--results <file>] [--summary <file>]`
  *
- * - default: run both suites, write `docs/conformance/{r4,r5}.md`, and compare with
- *   `baseline.json`. Fails if a baseline test regressed.
- * - `--update-baseline`: also record the passing tests in `baseline.json` (refused on regressions).
- * - `--check` (CI): write no reports; fail on regressions or on a baseline that is out of date, and
- *   warn about out-of-date reports. Appends a job summary to `$GITHUB_STEP_SUMMARY` when it is set.
+ * The Markdown reports are generated, never committed: every mode writes them to `docs/conformance/`
+ * (ignored by git), or to the directory of `--reports`.
+ *
+ * - default: run both suites, write the reports, and compare with the baseline in `baseline/`.
+ *   Fails if a baseline test regressed.
+ * - `--update-baseline`: also record the passing tests in the baseline (refused on regressions).
+ * - `--check` (CI): fail on regressions or on a baseline that is out of date. Appends a job summary
+ *   to `$GITHUB_STEP_SUMMARY` when it is set.
+ * - `--reports-only` (the site build): write the reports and read no baseline. Never fails on test
+ *   results.
+ * - `--reports <dir>`: where to write the Markdown reports.
  * - `--results <file>`: also write every test result as JSON (a CI artifact).
  * - `--summary <file>`: also write the counts per suite, phase and group as JSON (a CI artifact).
  *
  * The exit code comes from `ratchetFails()` in `baseline.ts`.
  */
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import {
-  checkRatchet,
-  parseBaseline,
-  type RatchetMode,
-  ratchetFails,
-  serializeBaseline,
-  updateBaseline,
-} from './baseline.ts';
+import { checkRatchet, type RatchetMode, ratchetFails, updateBaseline } from './baseline.ts';
+import { BASELINE_DIR, readBaseline, writeBaseline } from './baseline-files.ts';
 import { PHASE_LABELS, PHASES } from './classify.ts';
 import { engineAdapter } from './engine-adapter.ts';
-import { CONFORMANCE_DIR, loadSuite, REPOSITORY_ROOT, readFixtureSource } from './fixtures.ts';
+import { loadSuite, REPOSITORY_ROOT, readFixtureSource } from './fixtures.ts';
 import {
   type ReportContext,
   ratchetMessages,
@@ -42,17 +43,21 @@ const { values } = parseArgs({
   options: {
     check: { type: 'boolean', default: false },
     'update-baseline': { type: 'boolean', default: false },
+    'reports-only': { type: 'boolean', default: false },
+    reports: { type: 'string' },
     results: { type: 'string' },
     summary: { type: 'string' },
   },
 });
-if (values.check && values['update-baseline']) {
-  console.error('--check and --update-baseline cannot be combined.');
+if ([values.check, values['update-baseline'], values['reports-only']].filter(Boolean).length > 1) {
+  console.error('--check, --update-baseline and --reports-only cannot be combined.');
   process.exit(2);
 }
 
-const baselinePath = join(CONFORMANCE_DIR, 'baseline.json');
-const reportsDir = join(REPOSITORY_ROOT, 'docs', 'conformance');
+const reportsDir =
+  values.reports === undefined
+    ? join(REPOSITORY_ROOT, 'docs', 'conformance')
+    : resolve(values.reports);
 const context: ReportContext = { adapter: engineAdapter.name, source: readFixtureSource() };
 
 const runner = createRunner({ adapter: engineAdapter });
@@ -62,16 +67,13 @@ for (const id of SUITE_IDS) {
 }
 const summaries = runs.map(summarize);
 
-const reports = new Map<string, string>();
+mkdirSync(reportsDir, { recursive: true });
 for (const [i, run] of runs.entries()) {
   const summary = summaries[i];
   if (summary !== undefined) {
-    reports.set(join(reportsDir, `${run.suite.id}.md`), renderSuiteReport(run, summary, context));
+    writeFileSync(join(reportsDir, `${run.suite.id}.md`), renderSuiteReport(run, summary, context));
   }
 }
-
-const baseline = parseBaseline(readFileSync(baselinePath, 'utf8'));
-const ratchet = checkRatchet(baseline, runs);
 
 console.log(
   `FHIRPath conformance: ${context.adapter} adapter, ${context.source.repository}@${context.source.commit.slice(0, 7)}`,
@@ -84,6 +86,7 @@ for (const summary of summaries) {
     );
   }
 }
+console.log(`Reports written to ${displayPath(reportsDir)}/.`);
 
 if (values.results !== undefined) {
   writeFileSync(values.results, renderResults(runs));
@@ -92,35 +95,36 @@ if (values.summary !== undefined) {
   writeFileSync(values.summary, renderJsonSummary(summaries, context));
 }
 
-const mode: RatchetMode = values.check ? 'check' : values['update-baseline'] ? 'update' : 'report';
-const stale =
-  mode === 'check'
-    ? [...reports]
-        .filter(([path, content]) => !existsSync(path) || readFileSync(path, 'utf8') !== content)
-        .map(([path]) => relative(REPOSITORY_ROOT, path))
-    : [];
+if (!values['reports-only']) {
+  const mode: RatchetMode = values.check
+    ? 'check'
+    : values['update-baseline']
+      ? 'update'
+      : 'report';
+  const baseline = readBaseline();
+  const ratchet = checkRatchet(baseline, runs);
+  if (mode === 'update' && ratchet.regressions.length === 0) {
+    writeBaseline(updateBaseline(baseline, runs));
+    console.log(`Baseline updated: ${displayPath(BASELINE_DIR)}/.`);
+  } else {
+    for (const message of ratchetMessages(ratchet, mode)) {
+      console.log(message);
+    }
+  }
+  if (mode === 'check') {
+    const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+    if (summaryFile !== undefined && summaryFile !== '') {
+      appendFileSync(summaryFile, renderJobSummary(summaries, ratchet, context));
+    }
+  }
+  process.exitCode = ratchetFails(mode, ratchet) ? 1 : 0;
+}
 
-if (mode !== 'check') {
-  for (const [path, content] of reports) {
-    writeFileSync(path, content);
-  }
-  console.log(`Reports written to ${relative(REPOSITORY_ROOT, reportsDir)}/.`);
+/** A path relative to the repository root, or as it is when it lies outside it. */
+function displayPath(path: string): string {
+  const inside = relative(REPOSITORY_ROOT, path);
+  return inside.startsWith('..') ? path : inside || '.';
 }
-if (mode === 'update' && ratchet.regressions.length === 0) {
-  writeFileSync(baselinePath, serializeBaseline(updateBaseline(baseline, runs)));
-  console.log(`Baseline updated: ${relative(REPOSITORY_ROOT, baselinePath)}.`);
-} else {
-  for (const message of ratchetMessages(ratchet, stale, mode)) {
-    console.log(message);
-  }
-}
-if (mode === 'check') {
-  const summaryFile = process.env.GITHUB_STEP_SUMMARY;
-  if (summaryFile !== undefined && summaryFile !== '') {
-    appendFileSync(summaryFile, renderJobSummary(summaries, ratchet, stale, context));
-  }
-}
-process.exitCode = ratchetFails(mode, ratchet) ? 1 : 0;
 
 /** Every test result, for the CI artifact. */
 function renderResults(suiteRuns: readonly SuiteRun[]): string {

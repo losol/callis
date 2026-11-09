@@ -6,6 +6,10 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# The conformance reports are generated, never committed: `pnpm conformance` and the site build write
+# them, and CI uploads them as an artifact.
+docs/conformance/
+
 # The documentation site (apps/site): what its build collects and generates
 apps/site/build/
 apps/site/.lectio/

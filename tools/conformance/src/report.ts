@@ -1,7 +1,7 @@
 /**
- * Renders the conformance reports: the Markdown reports in `docs/conformance/`, the JSON summary
- * (a CI artifact) and the CI job summary. Output is deterministic (no dates), so committed reports
- * can be compared with a fresh run.
+ * Renders the conformance reports: the Markdown reports (generated into `docs/conformance/`, never
+ * committed), the JSON summary (a CI artifact) and the CI job summary. Output is deterministic (no
+ * dates), so a report only changes when an outcome changes.
  */
 import type { RatchetMode, RatchetResult } from './baseline.ts';
 import { formatRefs } from './baseline.ts';
@@ -134,7 +134,6 @@ export function renderJsonSummary(
 export function renderJobSummary(
   summaries: readonly SuiteSummary[],
   ratchet: RatchetResult,
-  staleReports: readonly string[],
   context: ReportContext,
 ): string {
   const lines = [
@@ -151,24 +150,15 @@ export function renderJobSummary(
       lines.push(`| ${label} ${countsRow(PHASE_LABELS[phase], summary.phases[phase])}`);
     }
   }
-  lines.push(
-    '',
-    ...ratchetMessages(ratchet, staleReports, 'check').map((message) => `- ${message}`),
-    '',
-  );
+  lines.push('', ...ratchetMessages(ratchet, 'check').map((message) => `- ${message}`), '');
   return lines.join('\n');
 }
 
 /**
- * Human-readable lines about the ratchet and stale reports. Baseline changes the run has not
- * recorded yet fail only in `check` mode, so they are marked ❌ there and ℹ️ otherwise. Stale
- * reports never fail a run and are marked ⚠️.
+ * Human-readable lines about the ratchet. Baseline changes the run has not recorded yet fail only
+ * in `check` mode, so they are marked ❌ there and ℹ️ otherwise.
  */
-export function ratchetMessages(
-  ratchet: RatchetResult,
-  staleReports: readonly string[],
-  mode: RatchetMode,
-): string[] {
+export function ratchetMessages(ratchet: RatchetResult, mode: RatchetMode): string[] {
   const messages: string[] = [];
   if (ratchet.regressions.length > 0) {
     messages.push(
@@ -178,7 +168,8 @@ export function ratchetMessages(
     messages.push('✅ No regressions: every test in the baseline still passes.');
   }
   const mark = mode === 'check' ? '❌' : 'ℹ️';
-  const update = 'Run `pnpm conformance --update-baseline` and commit the result.';
+  const update =
+    'Run `pnpm conformance --update-baseline` and commit `tools/conformance/baseline/`.';
   if (ratchet.vanished.length > 0) {
     messages.push(
       `${mark} ${ratchet.vanished.length} baseline test(s) are no longer in the suite: ${formatRefs(ratchet.vanished)}. ${update}`,
@@ -192,11 +183,6 @@ export function ratchetMessages(
   if (ratchet.newPasses.length > 0) {
     messages.push(
       `${mark} ${ratchet.newPasses.length} test(s) pass but are not in the baseline yet: ${formatRefs(ratchet.newPasses)}. ${update}`,
-    );
-  }
-  for (const report of staleReports) {
-    messages.push(
-      `⚠️ \`${report}\` is out of date. Run \`pnpm conformance\` and commit the result.`,
     );
   }
   return messages;

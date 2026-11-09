@@ -76,7 +76,7 @@ Design public API to last. Breaking it is a last resort, also before 1.0 ([API c
 ## Before you push
 
 - Run `pnpm check` (lint, typecheck, tests, build, package checks).
-- When evaluation behaviour changes, run `pnpm conformance --update-baseline` and commit the baseline and the reports in `docs/conformance/` ([tools/conformance](tools/conformance/README.md)).
+- When evaluation behaviour changes, run `pnpm conformance --update-baseline` and commit the baseline, `tools/conformance/baseline/` ([tools/conformance](tools/conformance/README.md#baseline-and-ci)). Never commit the reports: `docs/conformance/` is generated, ignored by git and published by the site build. The baseline files merge without conflicts (`merge=union`); after merging `main`, run `pnpm conformance --check`.
 - Re-read your own diff:
   - no debug output, no unrelated changes, no commented-out code
   - no `TODO` without a task reference, as in `TODO(T0033): …`

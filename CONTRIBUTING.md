@@ -214,7 +214,7 @@ Work on central code gets strong models and a thorough review; documentation and
 `risk:high` raises the tier one step: light → tooling → standard → core. In the core tier it adds a second reviewer from the other vendor instead. The PR labels workflow sets it when a PR:
 
 - changes public exports or API signatures: a package entry point (`packages/*/src/index.ts`) or a module that one re-exports
-- lowers the conformance baseline, that is, removes an entry from a suite in `tools/conformance/baseline.json` (adding newly passing tests is normal; an ID that moves to another suite counts as removed), or changes the conformance exceptions
+- lowers the conformance baseline, that is, removes a line from a suite's file in `tools/conformance/baseline/` (adding newly passing tests is normal; sorting a file again is not a removal; an ID that moves to another suite counts as removed), or changes the conformance exceptions
 - removes or weakens tests: deletes a test file or moves it out of the tests, removes more test cases and assertions than it adds, adds `.skip`, `.only` or `.todo`, shrinks the conformance fixtures, or changes a Vitest or Playwright configuration
 - touches a release workflow (`release.yml`, `deploy.yml`) or the changeset configuration, any other CI workflow (workflows hold the permissions and secrets), or the review-area rules themselves
 - touches dependencies: a `package.json`, `pnpm-lock.yaml` or `pnpm-workspace.yaml`
@@ -429,7 +429,8 @@ The site at <https://callis.losol.no> is built from this repository by `apps/sit
 - **What is published:** the list is in [`apps/site/docs.config.ts`](apps/site/docs.config.ts). The repository is public, so everything under `docs/` is published. To leave a document out, add its path to `ignore`.
 - **Node:** the site needs the development Node (`.node-version`, 24); a dependency of it does not support Node 26 yet, so `pnpm install` fails there. On Node 26 install without the site: `pnpm install --filter "!@callis/site"`.
 - **CI** builds the site on every pull request, so a change that breaks it fails the PR. The **Deploy** workflow builds it again and publishes it as a Cloudflare Worker with static assets on every push to `main`; it can also be run by hand.
-- **The progress page** reads the git history. It counts a task as merged at the first commit whose message has a `Task: T0001` line, which is why the PR description must start with it.
+- **The conformance reports** at `/conformance/r4` and `/conformance/r5` are generated, not committed. The site build runs the HL7 test suites with the engine of the commit it builds ([conformance runner](tools/conformance/README.md#baseline-and-ci)), so `pnpm site:dev`, `pnpm site:build` and the deploy need no committed report. Link to the published pages (`https://callis.losol.no/conformance/r5`), not to a file in `docs/conformance/`: it does not exist in a clone until something generates it.
+- **The progress page** reads the git history. It counts a task as merged at the first commit whose message has a `Task: T0001` line, which is why the PR description must start with it. Its conformance line comes from the baseline of each commit.
 
 ## Commands
 
@@ -460,8 +461,8 @@ You need Node.js 22.18+, 24.11+ or 26+ (the `engines` range in `package.json`, s
 | `pnpm changeset` | Add a changeset. |
 | `pnpm changeset:version` | Apply the pending changesets: bump versions and write changelogs. The release workflow runs it for the version PR. |
 | `pnpm release` | Build, run the package checks and publish with Changesets. Only the release workflow runs it. |
-| `pnpm conformance` | Run the HL7 FHIRPath test suite, write the reports in `docs/conformance/` and compare with the baseline. |
-| `pnpm conformance --update-baseline` | The same, and record newly passing tests in the baseline. |
+| `pnpm conformance` | Run the HL7 FHIRPath test suite, write the reports in `docs/conformance/` (generated and ignored by git) and compare with the baseline. |
+| `pnpm conformance --update-baseline` | The same, and record newly passing tests in the baseline, `tools/conformance/baseline/`. Commit the baseline, never a report. |
 | `pnpm test:conformance -t testLiterals` | Run suite tests as Vitest tests, with a diff for each wrong result. |
 
-CI also runs `pnpm conformance --check`; when it fails, so does the required `CI result` check. It fails when a baseline test stops passing or the baseline is out of date, and only warns when the reports in `docs/conformance/` are out of date. The conformance runner is described in [tools/conformance](tools/conformance/README.md).
+CI also runs `pnpm conformance --check`; when it fails, so does the required `CI result` check. It fails when a baseline test stops passing or the baseline is out of date. The reports are not committed: CI generates them and uploads them as the `conformance-results` artifact of the run, and the [documentation site](#documentation-site) generates them when it is built. The conformance runner and the baseline format are described in [tools/conformance](tools/conformance/README.md#baseline-and-ci).
