@@ -375,6 +375,88 @@ describe.each(PROVIDERS)(
       });
     });
 
+    // https://hl7.org/fhirpath/N1/#oftypetype-type-specifier-collection: the target resolution of
+    // is and as; FHIR primitives also match their System type (docs/spec-notes.md#fhir-primitives-in-is-as-and-oftype).
+    describe('ofType() with model types', () => {
+      it.each<[string, unknown[]]>([
+        ['Patient.ofType(Patient).id', ['p1']],
+        ['Patient.ofType(DomainResource).id', ['p1']],
+        ['Patient.ofType(FHIR.Resource).id', ['p1']],
+        ['Patient.ofType(Observation)', []],
+        ['Patient.gender.ofType(code)', ['male']], // testFHIRPathAsFunction17
+        ['Patient.gender.ofType(string)', ['male']], // code derives from string
+        ['Patient.gender.ofType(id)', []], // testFHIRPathAsFunction18
+        ['Patient.gender.ofType(System.String)', ['male']],
+        ['Patient.active.ofType(System.Boolean)', [true]],
+        ['Patient.active.ofType(Boolean)', [true]],
+        ['Patient.birthDate.ofType(System.Date)', ['1974-12-25']],
+        ['Patient.birthDate.ofType(System.DateTime)', []],
+        ['Patient.name.ofType(HumanName).use', ['official', 'maiden']], // testFHIRPathAsFunction22
+        ['Patient.contained.ofType(Observation).status', ['final']],
+        ['Patient.contained.ofType(Resource).count()', [2]],
+        ['Patient.children().ofType(HumanName).count()', [2]],
+      ])('%s', (expression, result) => {
+        expect(run(patient, expression)).toEqual(result);
+      });
+
+      it.each([
+        'Patient.ofType(System.Patient)',
+        'Patient.gender.ofType(string1)', // testFHIRPathAsFunction24
+        'Patient.ofType(FHIR.Boolean)',
+        'Patient.link.ofType(System.Patient)',
+      ])('%s raises eval/unknown-type, also on empty input', (expression) => {
+        expect(codeOf(() => run(patient, expression))).toBe('eval/unknown-type');
+      });
+
+      it('keeps the typed nodes themselves', () => {
+        const [name] = typed(patient, 'Patient.name.ofType(HumanName)');
+        expect(typeName(name)).toBe('HumanName');
+        expect(name).toBeInstanceOf(ModelNode);
+      });
+
+      // R5 allows Reference and Attachment for Observation.value[x]; R6 keeps Attachment only.
+      it('follows the allowed types of this version for Observation.value[x]', () => {
+        const reference = {
+          resourceType: 'Observation',
+          valueReference: { reference: 'Patient/1' },
+        };
+        const attachment = {
+          resourceType: 'Observation',
+          valueAttachment: { contentType: 'text/plain' },
+        };
+        expect(run(reference, 'Observation.value.ofType(Reference).reference')).toEqual(
+          expected.valueReference ? ['Patient/1'] : [],
+        );
+        expect(run(attachment, 'Observation.value.ofType(Attachment).contentType')).toEqual(
+          expected.valueAttachment ? ['text/plain'] : [],
+        );
+        expect(run(attachment, 'Observation.value.ofType(Reference)')).toEqual([]);
+        expect(run(observation, 'Observation.value.ofType(Quantity).unit')).toEqual(['lbs']);
+        expect(run(observation, 'Observation.value.ofType(Reference)')).toEqual([]);
+      });
+
+      it('keeps a DeviceAlert where the model has it, and raises eval/unknown-type elsewhere', () => {
+        const bundle = {
+          resourceType: 'Bundle',
+          type: 'collection',
+          entry: [{ resource: deviceAlert }, { resource: patient }],
+        };
+        expect(run(bundle, 'Bundle.entry.resource.ofType(Patient).id')).toEqual(['p1']);
+        if (expected.deviceAlert) {
+          expect(run(bundle, 'Bundle.entry.resource.ofType(DeviceAlert).label')).toEqual([
+            'SpO2 low',
+          ]);
+        } else {
+          expect(codeOf(() => run(bundle, 'Bundle.entry.resource.ofType(DeviceAlert)'))).toBe(
+            'eval/unknown-type',
+          );
+          expect(
+            codeOf(() => run(bundle, 'Bundle.entry.resource.take(0).ofType(DeviceAlert)')),
+          ).toBe('eval/unknown-type');
+        }
+      });
+    });
+
     // https://hl7.org/fhirpath/N1/#equals: different resource types with the same populated elements.
     describe('equality of typed resources', () => {
       const resources = [
@@ -511,6 +593,20 @@ describe.each(PROVIDERS)(
         expect(run(names, 'Patient.name.period.start.isDistinct()')).toEqual([]);
       });
 
+      // The 3.0.0 form of the allTrue() examples: Observation.component.select(value > 90 'mm[Hg]').
+      it('tests projected FHIR Quantity comparisons with allTrue() and the like', () => {
+        const pressure = (value: number) => ({
+          valueQuantity: { value, unit: 'mmHg', system: UCUM, code: 'mm[Hg]' },
+        });
+        const bp = { resourceType: 'Observation', component: [pressure(120), pressure(85)] };
+        const projection = "Observation.component.select(value > 90 'mm[Hg]')";
+        expect(run(bp, projection)).toEqual([true, false]);
+        expect(run(bp, `${projection}.allTrue()`)).toEqual([false]);
+        expect(run(bp, `${projection}.anyTrue()`)).toEqual([true]);
+        expect(run(bp, `${projection}.allFalse()`)).toEqual([false]);
+        expect(run(bp, `${projection}.anyFalse()`)).toEqual([true]);
+      });
+
       it('keeps the last of a code and a String with the same value (testDistinct31)', () => {
         const [string] = typed(patient, "Patient.gender.combine('male').distinct()");
         expect(string).toBe('male');
@@ -593,6 +689,20 @@ describe.each(PROVIDERS)(
           'End',
           'display',
         ]);
+      });
+
+      // https://hl7.org/fhirpath/N1/#repeatprojection-expression-collection
+      it('repeats item to every nested Questionnaire.item, breadth first', () => {
+        expect(run(questionnaire, 'Questionnaire.repeat(item).linkId')).toEqual([
+          '1',
+          '2',
+          '1.1',
+          '1.2',
+          '1.1.1',
+        ]);
+        expect(typed(questionnaire, 'Questionnaire.repeat(item)').map(typeName)).toEqual(
+          Array(5).fill('Questionnaire.item'),
+        );
       });
     });
 

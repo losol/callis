@@ -13,7 +13,13 @@ import { createRegistry, type FunctionRegistry } from '../functions/registry.ts'
 import type { ModelProvider } from '../model/model-provider.ts';
 import type { ExpressionNode } from '../parser/ast.ts';
 import { parse } from '../parser/parser.ts';
-import { type EvalContext, type Evaluator, rootFrame, type TraceSink } from '../runtime/context.ts';
+import {
+  type EvalContext,
+  type Evaluator,
+  type Limits,
+  rootFrame,
+  type TraceSink,
+} from '../runtime/context.ts';
 import { adoptResult, andThen, type MaybePromise, requireSync } from '../runtime/maybe-promise.ts';
 import { toInputCollection } from '../runtime/navigation.ts';
 import { createVariables } from '../runtime/variables.ts';
@@ -117,7 +123,31 @@ export interface EvaluateOptions extends OutputOptions {
    * host's offset; 0 (UTC) by default ([ADR-0012](https://github.com/losol/callis/blob/main/docs/adr/0012-evaluation-defaults.md)).
    */
   readonly timezoneOffset?: number | 'local';
+  /** Bounds on the work of the evaluation; see {@link EvaluationLimits} for the defaults. */
+  readonly limits?: EvaluationLimits;
 }
+
+/**
+ * Bounds on the work of one evaluation
+ * ([architecture: security and robustness](https://github.com/losol/callis/blob/main/docs/architecture.md#security-and-robustness)).
+ * Exceeding one raises `eval/limit-exceeded`. Each is a positive integer; a limit left out has
+ * its default.
+ */
+export interface EvaluationLimits {
+  /**
+   * The most items one `repeat()` call may produce; {@link DEFAULT_LIMITS} by default. `repeat()`
+   * ends on data, but a projection that makes new values, such as `'x'.repeat($this & 'x')`,
+   * would not end without it.
+   */
+  readonly maxRepeatItems?: number;
+}
+
+/** The default {@link EvaluationLimits}. */
+export const DEFAULT_LIMITS: Limits = Object.freeze({
+  // repeat() compares each new item with every earlier one, so a tree of this size already takes
+  // seconds; a projection that makes new values stops within a fraction of a second.
+  maxRepeatItems: 5_000,
+});
 
 /** A compiled expression. It holds no evaluation state, so it can be evaluated concurrently. */
 export interface CompiledExpression {
@@ -251,7 +281,32 @@ function createContext(
       return snapshot;
     },
     trace: traceSink(options, isAsync),
+    limits: resolveLimits(options.limits),
   };
+}
+
+/**
+ * The limits of an evaluation: the `limits` option with the defaults filled in.
+ *
+ * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` when the option is not an object
+ *   or a limit is not a positive integer.
+ */
+function resolveLimits(limits: EvaluationLimits | undefined): Limits {
+  if (limits === undefined) {
+    return DEFAULT_LIMITS;
+  }
+  if (typeof limits !== 'object' || limits === null) {
+    throw new FhirPathEvaluationError('eval/invalid-argument', 'Expected limits to be an object');
+  }
+  const maxRepeatItems =
+    limits.maxRepeatItems === undefined ? DEFAULT_LIMITS.maxRepeatItems : limits.maxRepeatItems;
+  if (!Number.isSafeInteger(maxRepeatItems) || maxRepeatItems < 1) {
+    throw new FhirPathEvaluationError(
+      'eval/invalid-argument',
+      'Expected limits.maxRepeatItems to be a positive integer',
+    );
+  }
+  return { maxRepeatItems };
 }
 
 /** The sink for `trace()`: the host's `trace` hook, with the items converted like a result. */

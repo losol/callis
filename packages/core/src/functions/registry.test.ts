@@ -19,7 +19,8 @@ describe('createRegistry', () => {
   it('has the standard library by default', () => {
     expect(createRegistry().names()).toEqual(
       expect.arrayContaining([
-        ...['as', 'is', 'not', 'where', 'exists', 'count', 'first', 'single'],
+        ...['as', 'is', 'not', 'where', 'select', 'repeat', 'ofType', 'exists', 'count'],
+        ...['first', 'single'],
         ...['last', 'tail', 'skip', 'take', 'intersect', 'exclude', 'union', 'combine'],
         ...['empty', 'all', 'allTrue', 'anyTrue', 'allFalse', 'anyFalse', 'subsetOf'],
         ...['supersetOf', 'distinct', 'isDistinct'],

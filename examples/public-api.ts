@@ -11,6 +11,19 @@ export const patient: Readonly<{
 export const given: unknown[] = evaluate(patient, 'Patient.name.given');
 export const firstGiven: unknown[] = compile('name.given[0]').evaluate(patient);
 export const filteredGiven: unknown[] = evaluate(patient, "name.where(given[0] = 'Ada').given");
+export const questionnaire: Readonly<{
+  resourceType: string;
+  item: readonly { linkId: string; item?: readonly { linkId: string }[] }[];
+}> = {
+  resourceType: 'Questionnaire',
+  item: [{ linkId: '1', item: [{ linkId: '1.1' }, { linkId: '1.2' }] }, { linkId: '2' }],
+};
+export const firstGivenPerName: unknown[] = evaluate(patient, 'name.select(given.first())');
+export const linkIds: unknown[] = evaluate(questionnaire, 'Questionnaire.repeat(item).linkId');
+export const onlyPatients: unknown[] = compile('ofType(Patient)').evaluate([
+  patient,
+  questionnaire,
+]);
 export const numberOfNames: unknown[] = evaluate(patient, 'name.count()');
 export const hasAda: unknown[] = compile("name.exists(given[0] = 'Ada')").evaluate(patient);
 export const filteredNameCount: unknown[] = evaluate(

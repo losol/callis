@@ -84,6 +84,18 @@ export interface EvalContext {
   now(): NowSnapshot;
   /** Receives the output of `trace()`; undefined when the host has no `trace` hook. */
   readonly trace: TraceSink | undefined;
+  /** The bounds on the work of this evaluation, with every default filled in. */
+  readonly limits: Limits;
+}
+
+/**
+ * The bounds on the work of one evaluation, from the `limits` evaluation option and its defaults
+ * ([architecture: security and robustness](https://github.com/losol/callis/blob/main/docs/architecture.md#security-and-robustness)).
+ * Exceeding one raises `eval/limit-exceeded`.
+ */
+export interface Limits {
+  /** The most items one `repeat()` call may produce. */
+  readonly maxRepeatItems: number;
 }
 
 /**

@@ -33,6 +33,7 @@ function context(model: EvalContext['model'] = undefined): EvalContext {
       throw new Error('not used');
     },
     trace: undefined,
+    limits: { maxRepeatItems: 5_000 },
   };
 }
 
