@@ -24,8 +24,8 @@ Run the official HL7 FHIRPath test suite and report the results ([design notes](
   - T0008 wires the adapter to the engine's internal `compile()`/`evaluate()`.
   - T0025 switches it to the public API.
 - A runner CLI and a Vitest project (`pnpm test:conformance`).
-- Reports: Markdown to `docs/conformance/{r4,r5}.md`, a JSON summary (a CI artifact), and a CI job summary. The CI job is non-blocking until T0023.
-- A baseline ratchet (`baseline.json`) and a CI check against it.
+- Reports: Markdown to `docs/conformance/{r4,r5}.md` (generated, never committed), a JSON summary (a CI artifact), and a CI job summary. The CI job is non-blocking until T0023.
+- A baseline ratchet (`tools/conformance/baseline/{r4,r5}.txt`) and a CI check against it.
 
 ## Design notes
 
@@ -41,8 +41,8 @@ Run the official HL7 FHIRPath test suite and report the results ([design notes](
   - `mode` (`strict`, `lenient/polymorphics`, `element`, `html`, `tx`, `cda`) maps to options or marks the test unsupported.
   - `version` marks tests that need a newer FHIRPath version.
 - **Classification:** each test is tagged *phase 1*, *STU* or *unsupported* from its group, its `testing` attribute and its `version`. The report shows pass/fail/skip per group and per phase.
-- **Outputs:** committed reports `docs/conformance/r4.md` and `r5.md`, a JSON summary uploaded with the CI results artifact, and a CI job summary.
-- **Ratchet:** `tools/conformance/baseline.json` lists the passing tests. CI fails if a test that used to pass now fails. A PR that makes more tests pass updates the baseline.
+- **Outputs:** the reports `docs/conformance/r4.md` and `r5.md`, a JSON summary uploaded with the CI results artifact, and a CI job summary. The reports are generated, never committed: `pnpm conformance`, the CI job and the site build write them, and the site publishes them at `/conformance/r4` and `/conformance/r5`. The first version of the runner committed them, and every PR that changed evaluation behaviour then conflicted on them ([#187](https://github.com/losol/callis/pull/187), 2026-11-09; [ADR-0011](../adr/0011-conformance-suite.md) has the amendment).
+- **Ratchet:** `tools/conformance/baseline/r4.txt` and `r5.txt` list the passing tests, one test ID per line, sorted (the first version was one `baseline.json`). CI fails if a test that used to pass now fails. A PR that makes more tests pass updates the baseline.
 - It also runs as a Vitest project (`pnpm test:conformance`) to get per-test diffs.
 
 ### Adapter interface
@@ -66,9 +66,9 @@ interface EvaluatorAdapter {
 - **Converted inputs:** an XML input `name.xml` is read from `name.json` in the same fixture folder. T0023 writes those files; until then the tests are skipped as "fixture not converted".
 - **Classification** is per test, not per group: a test that calls an STU function is STU even in a phase-1 group (for example `testPeriodInvariantNew` in `period`, and the `type()` tests in `testType`).
 - **Comparison** follows the HL7 Java test runner (exact types, decimals with their precision, type-only checks for empty outputs); the details and the few differences are in [spec notes](../spec-notes.md#comparing-expected-outputs).
-- **The ratchet** also fails CI when the baseline is out of date: tests that pass but are not in it yet, or tests that must leave it (`pnpm conformance --check`). Out-of-date reports only warn, so parallel PRs do not serialize on the report files (owner decision in #65). A baseline test that becomes an exception or unsupported is not a regression: `--update-baseline` drops it, as it drops tests that left the suite.
+- **The ratchet** also fails CI when the baseline is out of date: tests that pass but are not in it yet, or tests that must leave it (`pnpm conformance --check`). While the reports were committed, an out-of-date report only warned, so parallel PRs did not serialize on the report files (owner decision in #65); now that they are generated, a report cannot be out of date. A baseline test that becomes an exception or unsupported is not a regression: `--update-baseline` drops it, as it drops tests that left the suite.
 - **Exceptions** are listed in `tools/conformance/src/exceptions.ts`, each with its `spec-notes.md` entry, and are skipped.
-- **Report stability:** the committed reports show failure kinds and error codes, not engine messages or file paths, so a reworded error message does not make every open PR's reports stale.
+- **Report stability:** the reports show failure kinds and error codes, not engine messages or file paths, so a report changes only when an outcome changes, not when an error message is reworded.
 
 ## Acceptance criteria
 

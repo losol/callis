@@ -225,7 +225,7 @@ Tests live next to their sources (`*.test.ts`). Cross-module integration tests g
 - `types` → `values`
 - `model` → `types`, `values`
 - `runtime` → `values`, `types`, `model`
-- `functions`, `fhir` → `runtime`
+- `functions`, `fhir` → `runtime`, `values`. The function modules wrap the pure kernels in `values` (Decimal, Quantity, date/time and string helpers), so they import them directly instead of through a facade in `runtime`. The owner decided this on 2026-11-09 ([#178](https://github.com/losol/callis/issues/178)).
 - `compiler` → `parser` (AST types), `runtime`, `functions`
 - `analysis` → `parser`, `types`, `model`, `functions`
 - `api` → everything; `index.ts` → `api` plus public types
