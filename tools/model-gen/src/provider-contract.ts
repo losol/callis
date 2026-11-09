@@ -112,7 +112,10 @@ export function describeGeneratedProvider(
     it('preserves Resource-typed fields, primitive normalization and cardinality', () => {
       for (const [typeName, field, typeNames, isArray] of [
         ['Bundle.entry', 'resource', ['Resource'], false],
+        ['Resource', 'id', ['id'], false],
+        ['Patient', 'id', ['id'], false],
         ['Element', 'id', ['string'], false],
+        ['Address', 'id', ['string'], false],
         ['Extension', 'url', ['uri'], false],
         ['HumanName', 'given', ['string'], true],
         ['Patient', 'contact', ['Patient.contact'], true],
@@ -121,6 +124,21 @@ export function describeGeneratedProvider(
         expect(type).toBeDefined();
         if (type !== undefined)
           expect(provider.getElement(type, field)).toMatchObject({ typeNames, isArray });
+      }
+    });
+    // https://hl7.org/fhir/R4/resource-definitions.html#Resource.id is an id (as in R5 and R6),
+    // https://hl7.org/fhir/R4/element-definitions.html#Element.id a string; every element
+    // inherits one or the other, whatever its snapshot copy says (docs/spec-notes.md).
+    it('types the id of every resource as id and every other id as string', () => {
+      for (const [name, kind] of rows) {
+        const type = provider.getType(name);
+        // R5 and R6 add Base, the root of the model, which has no elements.
+        if (name === 'Base') {
+          expect(type && provider.getElements(type)).toEqual([]);
+          continue;
+        }
+        const id = type === undefined ? undefined : provider.getElement(type, 'id');
+        expect(id?.typeNames, name).toEqual(kind === 'resource' ? ['id'] : ['string']);
       }
     });
     it('does not expose mutable data', () => {

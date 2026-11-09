@@ -153,6 +153,21 @@ The math functions ([N1 §5.7](https://hl7.org/fhirpath/N1/#math), [T0016](tasks
 - **Consequence:** `Patient.birthDate.ofType(System.Date)` keeps the birth date and `Patient.birthDate.ofType(System.DateTime)` is empty, although R5's table suggests the opposite. `ofType()` filters by type and does not apply the implicit `Date → DateTime` conversion.
 - **Code:** the `ModelProvider.getSystemType()` contract in `packages/core/src/model/model-provider.ts` ([T0003](tasks/T0003-types-and-collections.md)); the generated models implement it ([T0019](tasks/T0019-fhir-model-generator.md)).
 
+### The `id` of a resource is an `id`, the `id` of any other element a `string`
+
+- **Spec:** the published definitions of [R4 `Resource.id`](https://hl7.org/fhir/R4/resource-definitions.html#Resource.id) (type `id`) and [R4 `Element.id`](https://hl7.org/fhir/R4/element-definitions.html#Element.id) (type `string`); [R5](https://hl7.org/fhir/R5/resource-definitions.html#Resource.id) and [R6](https://hl7.org/fhir/6.0.0-snapshot1/resource-definitions.html#Resource.id) give `Resource.id` the same type. [`ElementDefinition.base`](https://hl7.org/fhir/R5/elementdefinition-definitions.html#ElementDefinition.base) names the one element that defines an inherited element, and a [snapshot](https://hl7.org/fhir/R5/structuredefinition.html#snapshot) holds the base's element unless the differential changes it.
+- **Tests:** `testContainedId` (R4) expects `contained.id` to have the output type `id`. It already passed with R5.
+- **Source:** the System-typed `id` elements in the pinned packages carry their FHIR type in `structuredefinition-fhir-type`, and the sources disagree with the published definitions and with themselves:
+  - R4 4.0.1 gives `Resource.id` the type `string`, in both its snapshot and its differential, and so do the 147 resources that inherit it.
+  - R5 5.0.0 is right for `Resource.id` and its 161 copies, but gives 46 datatypes (`Address.id`, `Age.id`, …) the type `id` although they inherit `Element.id`, a `string`.
+  - R6 6.0.0-snapshot1 is right for `Resource.id` and 7 resources, but gives the 116 others (`Patient.id`, …) the type `string`.
+  - `Element.id` (`string`) and `Extension.url` (`uri`) agree with their published definitions in all three, and so does every other element typed this way.
+- **Decision:**
+  - The generator reads the FHIR type of an inherited element from the element that defines it, through `base.path`, not from its own snapshot copy. An element that its differential redefines keeps its own type.
+  - The one defining element that contradicts its published type, R4 `Resource.id`, is corrected by an entry in the release table in `tools/model-gen/src/cli.ts`. An entry names the value it replaces. Generation fails when the source no longer carries that value, or when nothing uses the entry, so changing the pin means reviewing it.
+- **Consequence:** in the R4, R5 and R6 models every resource's `id` is an `id` and every other `id` a `string`, so `Patient.id is id` and `contained.id is id` are true, and `Address.id is string` is true. Against the earlier output, 148 R4 resources and 116 R6 resources change from `string` to `id`, and 46 R5 datatypes from `id` to `string`.
+- **Code:** `generateModel()` in `tools/model-gen/src/generate.ts` and the corrections in `tools/model-gen/src/cli.ts` ([T0019](tasks/T0019-fhir-model-generator.md)).
+
 ## Collections and evaluation
 
 ### Singleton evaluation uses implicit conversions only

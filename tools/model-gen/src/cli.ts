@@ -15,6 +15,7 @@ import {
   emitInventory,
   emitModel,
   emitProvider,
+  type FhirTypeCorrection,
   generateModel,
   type StructureDefinition,
 } from './generate.ts';
@@ -22,24 +23,36 @@ import { validateArchive, validateManifest } from './source.ts';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const cache = join(root, 'tools/model-gen/.cache');
-const releases = [
+interface Release {
+  readonly name: string;
+  readonly version: string;
+  readonly sha256: string;
+  readonly url: string;
+  /** Errors in the pinned source, reviewed with the pin: see docs/spec-notes.md. */
+  readonly corrections: readonly FhirTypeCorrection[];
+}
+const releases: readonly Release[] = [
   {
     name: 'r4',
     version: '4.0.1',
     sha256: 'ebd7731df7d36b5b7d39d5fb6c9d77b44bb7fe5742f1a2e87f164738c3289d44',
     url: 'https://packages.fhir.org/hl7.fhir.r4.core/4.0.1',
+    // The 4.0.1 definitions say `string`; the R4 page for Resource.id says `id`, as R5 and R6 do.
+    corrections: [{ path: 'Resource.id', from: 'string', to: 'id' }],
   },
   {
     name: 'r5',
     version: '5.0.0',
     sha256: '74b27cd1bfce9e80eaceac431edf230b0945a443564fbf5512f82e5fa50a80d4',
     url: 'https://packages.fhir.org/hl7.fhir.r5.core/5.0.0',
+    corrections: [],
   },
   {
     name: 'r6',
     version: '6.0.0-snapshot1',
     sha256: 'c67aad1c83851aa7702f10a210f9e0e2c9fb0a54dcd43fd0826296dc6a175f59',
     url: 'https://hl7.org/fhir/6.0.0-snapshot1/hl7.fhir.r6.core.tgz',
+    corrections: [],
   },
 ];
 const check = process.argv.includes('--check');
@@ -75,7 +88,7 @@ for (const release of releases) {
       .map(
         (name) => JSON.parse(readFileSync(join(directory, name), 'utf8')) as StructureDefinition,
       );
-    const rows = generateModel(definitions);
+    const rows = generateModel(definitions, { corrections: release.corrections });
     const target = `packages/fhir-${release.name}/src`;
     const outputs: ReadonlyArray<readonly [string, string]> = [
       [join(root, target, 'provider.ts'), emitProvider(template)],

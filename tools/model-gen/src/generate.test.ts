@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { TypeRow } from '../runtime/provider.ts';
 import {
   coreDefinitions,
   emitInventory,
@@ -206,5 +207,188 @@ describe('snapshot generation', () => {
       'Quantity',
       'Quantity',
     ]);
+  });
+});
+
+const SYSTEM_STRING = 'http://hl7.org/fhirpath/System.String';
+const FHIR_TYPE = 'http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type';
+
+/** A System-typed `id` element as the pinned sources write it: `base` names its defining element. */
+function idElement(path: string, base: string, valueUrl: string) {
+  return {
+    id: path,
+    path,
+    base: { path: base },
+    max: '1',
+    type: [{ code: SYSTEM_STRING, extension: [{ url: FHIR_TYPE, valueUrl }] }],
+  };
+}
+function primitive(type: string, base: StructureDefinition): StructureDefinition {
+  return definition(type, {
+    kind: 'primitive-type',
+    baseDefinition: base.url,
+    snapshot: {
+      element: [
+        { id: type, path: type },
+        { id: `${type}.value`, path: `${type}.value`, max: '1', type: [{ code: SYSTEM_STRING }] },
+      ],
+    },
+  });
+}
+const idPrimitive = primitive('id', string);
+const uriPrimitive = primitive('uri', string);
+const elementRoot = definition('Element', {
+  abstract: true,
+  snapshot: {
+    element: [{ id: 'Element', path: 'Element' }, idElement('Element.id', 'Element.id', 'string')],
+  },
+});
+/** A root whose own `id` says `valueUrl`, as `Resource.id` does in each source. */
+function resourceRoot(valueUrl: string): StructureDefinition {
+  return definition('Resource', {
+    kind: 'resource',
+    abstract: true,
+    snapshot: {
+      element: [
+        { id: 'Resource', path: 'Resource' },
+        idElement('Resource.id', 'Resource.id', valueUrl),
+      ],
+    },
+  });
+}
+/** A definition inheriting `id` from `base`, with the snapshot copy saying `valueUrl`. */
+function inheritor(
+  type: string,
+  kind: string,
+  base: StructureDefinition,
+  baseElement: string,
+  valueUrl: string,
+  options: Partial<StructureDefinition> = {},
+): StructureDefinition {
+  return definition(type, {
+    kind,
+    baseDefinition: base.url,
+    snapshot: {
+      element: [{ id: type, path: type }, idElement(`${type}.id`, baseElement, valueUrl)],
+    },
+    ...options,
+  });
+}
+/** The shared fixture; `copies` is what the snapshot copies of the inherited `id` say. */
+function idDefinitions(
+  resourceId: string,
+  copies: { readonly resource: string; readonly datatype: string },
+  patient: Partial<StructureDefinition> = {},
+): StructureDefinition[] {
+  const resource = resourceRoot(resourceId);
+  return [
+    elementRoot,
+    resource,
+    string,
+    idPrimitive,
+    uriPrimitive,
+    inheritor('Patient', 'resource', resource, 'Resource.id', copies.resource, patient),
+    inheritor('Address', 'complex-type', elementRoot, 'Element.id', copies.datatype),
+  ];
+}
+function idTypes(rows: readonly TypeRow[]): Record<string, readonly string[] | undefined> {
+  return Object.fromEntries(
+    rows
+      .filter((row) => row[1] !== 'primitive')
+      .map((row) => [row[0], row[5].find(([field]) => field === 'id')?.[1]]),
+  );
+}
+
+// https://hl7.org/fhir/R5/elementdefinition-definitions.html#ElementDefinition.base
+// https://hl7.org/fhir/R5/structuredefinition.html#snapshot
+describe('System-typed elements and structuredefinition-fhir-type', () => {
+  it('gives an inherited element the type of the element that defines it', () => {
+    // The shapes of R6 (Patient.id says string, Resource.id says id) and of R5 (Address.id says
+    // id, Element.id says string): the snapshot copy of an inherited element has no say.
+    const rows = generateModel(idDefinitions('id', { resource: 'string', datatype: 'id' }));
+    expect(idTypes(rows)).toEqual({
+      Element: ['string'],
+      Resource: ['id'],
+      Patient: ['id'],
+      Address: ['string'],
+    });
+  });
+  it('is not affected by the order of the definitions', () => {
+    const definitions = idDefinitions('id', { resource: 'string', datatype: 'id' });
+    expect(generateModel([...definitions].reverse())).toEqual(generateModel(definitions));
+  });
+  it('keeps the snapshot type of an element that the differential redefines', () => {
+    const rows = generateModel(
+      idDefinitions(
+        'id',
+        { resource: 'uri', datatype: 'string' },
+        { differential: { element: [{ id: 'Patient.id' }] } },
+      ),
+    );
+    expect(idTypes(rows)).toMatchObject({ Resource: ['id'], Patient: ['uri'] });
+  });
+  it('rejects an inherited element whose defining element is missing or differs in type', () => {
+    const resource = resourceRoot('id');
+    const generate = (base: StructureDefinition, baseElement: string) =>
+      generateModel([
+        elementRoot,
+        base,
+        string,
+        idPrimitive,
+        inheritor('Patient', 'resource', base, baseElement, 'id'),
+      ]);
+    expect(() => generate(resource, 'Missing.id')).toThrow('Unresolved base element: Missing.id');
+    expect(() => generate(resource, 'Resource.meta')).toThrow(
+      'Unresolved base element: Resource.meta',
+    );
+    const integer = definition('Resource', {
+      kind: 'resource',
+      snapshot: {
+        element: [
+          { id: 'Resource', path: 'Resource' },
+          {
+            id: 'Resource.id',
+            path: 'Resource.id',
+            max: '1',
+            type: [{ code: 'http://hl7.org/fhirpath/System.Integer' }],
+          },
+        ],
+      },
+    });
+    expect(() => generate(integer, 'Resource.id')).toThrow(
+      'Base element differs in type: Patient.id: Resource.id',
+    );
+  });
+
+  describe('corrections of a source', () => {
+    const resourceId = { path: 'Resource.id', from: 'string', to: 'id' } as const;
+    // The shape of R4 4.0.1, where Resource.id and every copy of it say string.
+    const r4 = (): StructureDefinition[] =>
+      idDefinitions('string', { resource: 'string', datatype: 'string' });
+    it('apply where the element is defined, and inheriting elements follow', () => {
+      expect(idTypes(generateModel(r4(), { corrections: [resourceId] }))).toEqual({
+        Element: ['string'],
+        Resource: ['id'],
+        Patient: ['id'],
+        Address: ['string'],
+      });
+    });
+    it('are not applied unless they are given', () => {
+      expect(idTypes(generateModel(r4()))).toMatchObject({ Resource: ['string'] });
+    });
+    it('fail when the source no longer carries the value they correct', () => {
+      expect(() =>
+        generateModel(idDefinitions('id', { resource: 'id', datatype: 'string' }), {
+          corrections: [resourceId],
+        }),
+      ).toThrow('Stale correction: Resource.id is id, the correction expects string');
+    });
+    it('fail when no element uses them', () => {
+      expect(() =>
+        generateModel(r4(), {
+          corrections: [resourceId, { path: 'Resource.status', from: 'string', to: 'code' }],
+        }),
+      ).toThrow('Unused correction: Resource.status');
+    });
   });
 });
