@@ -426,6 +426,56 @@ describe('the repeat() limit', () => {
   });
 });
 
+// T0021's cancellation signal: repeat() checks it before each item it projects, so an abort during
+// a long walk stops it. The aborting call answers synchronously, so only that check can see it.
+describe('repeat() and the cancellation signal', () => {
+  const reason = new Error('stop');
+
+  function stepper(controller: AbortController, calls: number[], firstAsync: boolean) {
+    return hostFunction('step', (items) => {
+      const value = Number(items[0]);
+      calls.push(value);
+      if (value === 2) controller.abort(reason);
+      const next: Collection = [value + 1];
+      return firstAsync && value === 0 ? Promise.resolve(next) : next;
+    });
+  }
+
+  it('stops a running walk with eval/aborted in sync mode', () => {
+    const controller = new AbortController();
+    const calls: number[] = [];
+    const options = {
+      functions: testRegistry(stepper(controller, calls, false)),
+      signal: controller.signal,
+    };
+    expect(() => evaluateInternal(null, '0.repeat(step())', options)).toThrow(
+      expect.objectContaining({ code: 'eval/aborted', cause: reason }),
+    );
+    expect(calls).toEqual([0, 1, 2]);
+  });
+
+  it('stops a running walk with eval/aborted in async mode', async () => {
+    const controller = new AbortController();
+    const calls: number[] = [];
+    const options = {
+      functions: testRegistry(stepper(controller, calls, true)),
+      signal: controller.signal,
+    };
+    await expect(evaluateAsync(null, '0.repeat(step())', options)).rejects.toMatchObject({
+      code: 'eval/aborted',
+      cause: reason,
+    });
+    expect(calls).toEqual([0, 1, 2]);
+  });
+
+  it('walks to the end with a signal that is not aborted', async () => {
+    const options = { signal: new AbortController().signal };
+    const expression = '0.repeat(iif($this < 3, $this + 1))';
+    expect(evaluateInternal(null, expression, options)).toEqual([1, 2, 3]);
+    expect(await evaluateAsync(null, expression, options)).toEqual([1, 2, 3]);
+  });
+});
+
 // N1 §5.2.4 ofType(type): the target resolution of is and as; T0008's model-less resource names.
 // https://hl7.org/fhirpath/N1/#oftypetype-type-specifier-collection
 // docs/spec-notes.md#resource-type-names-without-a-model, #unresolved-type-specifiers-are-execution-errors

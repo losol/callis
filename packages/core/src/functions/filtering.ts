@@ -3,6 +3,7 @@
  * ([N1 §5.2](https://hl7.org/fhirpath/N1/#filtering-and-projection)).
  */
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
+import { throwIfAborted } from '../runtime/cancellation.ts';
 import { appendAll, type Collection, EMPTY, type Item } from '../runtime/collection.ts';
 import type { EvalContext } from '../runtime/context.ts';
 import { itemEquals } from '../runtime/equality.ts';
@@ -119,7 +120,8 @@ function flatten(results: readonly Collection[]): Collection {
  * `repeat()` as 3.0.0 describes it: a queue that starts with the input items; each item taken
  * from it is projected, and every new item of the projection joins the result and the end of the
  * queue. The queue holds at most the input and the result, so the limit on the result bounds it
- * too. Stays synchronous until a projection returns a promise.
+ * too. The cancellation signal is checked before each item is projected, so an abort stops a long
+ * walk with `eval/aborted`. Stays synchronous until a projection returns a promise.
  */
 function repeatProjection(
   ctx: EvalContext,
@@ -131,6 +133,7 @@ function repeatProjection(
   let next = 0;
   // The loop also visits the items that addNewItems() appends to the queue.
   for (const item of queue) {
+    throwIfAborted(ctx.signal);
     next++;
     const projected = projection.forInput([item]);
     if (isThenable(projected)) {
@@ -152,6 +155,7 @@ async function finishRepeat(
 ): Promise<Collection> {
   addNewItems(ctx, queue, result, await pending);
   for (let next = start; next < queue.length; next++) {
+    throwIfAborted(ctx.signal);
     const item = queue[next];
     if (item !== undefined) {
       addNewItems(ctx, queue, result, await projection.forInput([item]));

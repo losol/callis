@@ -94,8 +94,8 @@ export interface EvaluateOptions extends OutputOptions {
   /**
    * Stops the evaluation: an aborted signal raises `eval/aborted`, with the signal's `reason` as
    * the error's `cause`. Any `AbortSignal` fits. It is read when the evaluation starts, before
-   * each hook call and after each host result the evaluation waited for, and every hook receives
-   * it in its context. In `evaluate()` only the check at the start can see an abort, because
+   * each hook call, after each host result the evaluation waited for and before each item that
+   * `repeat()` projects, and every hook receives it in its context. In `evaluate()` only the check at the start can see an abort, because
    * nothing else runs while a synchronous evaluation does.
    */
   readonly signal?: CancellationSignal;
