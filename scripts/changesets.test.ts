@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -5,11 +6,17 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   checkChangeset,
+  checkVersions,
   isBelowOne,
   isChangesetFile,
   listChangesetFiles,
+  parseReleaseTags,
   parseWorkspaceGlobs,
+  type ReleasedVersions,
+  readReleaseTags,
+  readWorkspacePackages,
   readWorkspaceVersions,
+  type WorkspacePackage,
   type WorkspaceVersions,
 } from './changesets.ts';
 
@@ -125,6 +132,107 @@ describe('checkChangeset', () => {
   });
 });
 
+// RELEASING.md, "Every release", step 1: "never 1.0.0 before 1.0". The version PR has no changesets
+// left, so only its versions show a 1.0.0 (#171).
+describe('checkVersions', () => {
+  /** A public package in `packages/`, unless `isPrivate` is set. */
+  function workspacePackage(name: string, version: string | undefined, isPrivate = false) {
+    const dir = `packages/${name.replace(/^@callis\//, '')}`;
+    return { name, dir, version, isPrivate } satisfies WorkspacePackage;
+  }
+
+  const released: ReleasedVersions = new Map([
+    ['@callis/core', ['0.1.0', '0.1.0-next.0', '0.2.0']],
+    ['@callis/stable', ['0.9.0', '1.0.0', '1.1.0']],
+    ['@callis/one-next', ['0.4.0', '1.0.0-next.0']],
+  ]);
+
+  /** The kind and package of each problem, so tests assert on those and not on message text. */
+  function problemsOf(...packages: WorkspacePackage[]): [string, string][] {
+    return checkVersions(packages, released).map((problem) => [problem.kind, problem.packageName]);
+  }
+
+  it.each([
+    ['@callis/core', '0.2.0'],
+    ['@callis/core', '0.3.0'],
+    ['@callis/core', '0.3.0-next.0'],
+    ['@callis/new', '0.0.0'],
+    ['@callis/unversioned', undefined],
+  ])('accepts %s %s, below 1.0.0', (name, version) => {
+    expect(problemsOf(workspacePackage(name, version))).toEqual([]);
+  });
+
+  it.each([
+    ['@callis/core', '1.0.0'],
+    ['@callis/core', '1.0.0-next.0'],
+    ['@callis/core', '2.0.0'],
+    ['@callis/new', '1.0.0'],
+  ])('rejects %s %s without a release at 1.0.0 or above', (name, version) => {
+    expect(problemsOf(workspacePackage(name, version))).toEqual([['first-1.0', name]]);
+  });
+
+  it.each([
+    ['@callis/stable', '1.1.0'],
+    ['@callis/stable', '2.0.0'],
+    ['@callis/one-next', '1.0.0'],
+  ])('accepts %s %s after a release at 1.0.0 or above', (name, version) => {
+    expect(problemsOf(workspacePackage(name, version))).toEqual([]);
+  });
+
+  it('accepts a private package at 1.0.0, which is never published', () => {
+    expect(problemsOf(workspacePackage('@callis/site', '1.0.0', true))).toEqual([]);
+  });
+
+  it('reports every package that breaks the rule, and only those', () => {
+    expect(
+      problemsOf(
+        workspacePackage('@callis/core', '1.0.0'),
+        workspacePackage('@callis/stable', '2.0.0'),
+        workspacePackage('@callis/ucum', '1.0.0'),
+      ),
+    ).toEqual([
+      ['first-1.0', '@callis/core'],
+      ['first-1.0', '@callis/ucum'],
+    ]);
+  });
+
+  it('names the package.json and the package, and suggests minor', () => {
+    const [problem] = checkVersions([workspacePackage('@callis/core', '1.0.0')], released);
+    expect(problem?.file).toBe('packages/core/package.json');
+    expect(problem?.message).toContain('packages/core/package.json');
+    expect(problem?.message).toContain('@callis/core 1.0.0');
+    expect(problem?.message).toContain('"minor"');
+  });
+});
+
+describe('parseReleaseTags', () => {
+  it('reads the <name>@<version> tags that Changesets creates, by package', () => {
+    expect(
+      parseReleaseTags([
+        '@callis/core@0.1.0-next.0',
+        '@callis/core@0.1.0',
+        '@callis/ucum@0.1.1',
+        '@callis/core@0.2.0',
+        'callis-plain@1.2.3',
+        '',
+      ]),
+    ).toEqual(
+      new Map([
+        ['@callis/core', ['0.1.0-next.0', '0.1.0', '0.2.0']],
+        ['@callis/ucum', ['0.1.1']],
+        ['callis-plain', ['1.2.3']],
+      ]),
+    );
+  });
+
+  it.each(['v1.0.0', '1.0.0', 'release-1', '@callis/core', '@callis/core@1', '@callis/core@next'])(
+    'leaves out %j, which is not a release tag',
+    (tag) => {
+      expect(parseReleaseTags([tag])).toEqual(new Map());
+    },
+  );
+});
+
 describe('isBelowOne', () => {
   it.each([
     ['0.0.0', true],
@@ -222,6 +330,44 @@ describe('reading the repository', () => {
         ['@callis/cli', '1.2.0'],
       ]),
     );
+  });
+
+  it('reads the directory and the private flag of every package', () => {
+    const root = repository({
+      'pnpm-workspace.yaml': 'packages:\n  - packages/*\n  - apps/*\n',
+      'packages/core/package.json': JSON.stringify({ name: '@callis/core', version: '0.2.0' }),
+      'apps/site/package.json': JSON.stringify({
+        name: '@callis/site',
+        version: '0.0.0',
+        private: true,
+      }),
+      'apps/odd/package.json': JSON.stringify({ name: '@callis/odd', private: 'true' }),
+    });
+    expect(readWorkspacePackages(root)).toEqual([
+      { name: '@callis/core', dir: 'packages/core', version: '0.2.0', isPrivate: false },
+      { name: '@callis/odd', dir: 'apps/odd', version: undefined, isPrivate: false },
+      { name: '@callis/site', dir: 'apps/site', version: '0.0.0', isPrivate: true },
+    ]);
+  });
+
+  it('reads the release tags of a git repository', () => {
+    const root = repository({ 'README.md': '# A repository\n' });
+    const git = (...args: string[]) =>
+      execFileSync(
+        'git',
+        ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', ...args],
+        {
+          cwd: root,
+          stdio: 'ignore',
+        },
+      );
+    git('init', '--quiet');
+    git('add', 'README.md');
+    git('-c', 'commit.gpgSign=false', 'commit', '--quiet', '--message', 'Start');
+    git('tag', '@callis/core@0.1.0');
+    git('tag', '@callis/core@0.2.0');
+    git('tag', 'v1.0.0');
+    expect(readReleaseTags(root)).toEqual(new Map([['@callis/core', ['0.1.0', '0.2.0']]]));
   });
 
   it.each([

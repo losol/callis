@@ -66,8 +66,10 @@ jobs:
         run: pnpm typecheck
       - name: Roadmap
         run: pnpm check:roadmap
-      # No `major` changeset for a package below 1.0.0: it would release 1.0.0 (CONTRIBUTING.md,
-      # "Changesets").
+      # No `major` changeset for a package below 1.0.0, and no public package at 1.0.0 or above
+      # without an earlier 1.0 release: either would release 1.0.0 (CONTRIBUTING.md, "Changesets").
+      # The version check covers the version PR, which has no changesets left; it reads the release
+      # tags, which come with `fetch-depth: 0`.
       - name: Changesets
         run: pnpm check:changesets
       - name: Test with coverage

@@ -368,7 +368,7 @@ Users depend on the public API, and other packages implement its interfaces (`Mo
 Versions and changelogs are managed with [Changesets](https://github.com/changesets/changesets), not with commit messages.
 
 - Add a changeset (`pnpm changeset`) for every user-visible change to a published package: behaviour, API, types or packaging. Tests, docs and internal tooling do not need one.
-- Choose the bump with [SemVer](https://semver.org) in mind. Before 1.0, use `minor` for new features and breaking changes, and `patch` for fixes. Never use `major` before 1.0: it would release 1.0.0. `pnpm check:changesets`, part of `pnpm check` and CI, fails on a `major` changeset for a package below 1.0.0. Releasing 1.0 is the owner's decision, and until then the check has no way around it.
+- Choose the bump with [SemVer](https://semver.org) in mind. Before 1.0, use `minor` for new features and breaking changes, and `patch` for fixes. Never use `major` before 1.0: it would release 1.0.0. `pnpm check:changesets` fails on a `major` changeset for a package below 1.0.0. The version PR has no changesets left, so the check also fails on a public package at 1.0.0 or above when no release tag of that package (such as `@callis/core@0.2.0`) is at 1.0.0 or above. It runs in `pnpm check` and CI, and the [Release workflow](.github/workflows/release.yml) runs it before it opens or updates the version PR or publishes anything. Releasing 1.0 is the owner's decision, and until then the check has no way around it.
 - Write the summary for users of the package: what changed, and how to migrate if they must.
 
 ## Releases
@@ -455,7 +455,7 @@ You need Node.js 22.18+, 24.11+ or 26+ (the `engines` range in `package.json`, s
 | `pnpm check:release` | Test all five first-release packages in fresh packed Node/TypeScript and Vite/Chromium consumers. Model providers supply metadata; public model-aware evaluation remains separate work. |
 | `pnpm check:title "feat(core): add lexer"` | Check a PR title against the rules above, as CI does. |
 | `pnpm check:roadmap` | Check that the roadmap and the task files agree. |
-| `pnpm check:changesets` | Check that no changeset gives a package below 1.0.0 a `major` bump ([Changesets](#changesets)). |
+| `pnpm check:changesets` | Check that no changeset gives a package below 1.0.0 a `major` bump, and that no public package is at 1.0.0 or above before a 1.0 release of it ([Changesets](#changesets)). |
 | `pnpm sync:roadmap` | Show what the [roadmap sync](#roadmap-sync) would change on GitHub. Add `--apply` to make the changes. |
 | `pnpm review:labels` | Show the review areas, risk and tier of your branch ([Review areas and model tiers](#review-areas-and-model-tiers)). `--pr 123` checks a PR; `--setup` creates missing labels. |
 | `pnpm changeset` | Add a changeset. |
