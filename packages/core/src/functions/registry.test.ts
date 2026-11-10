@@ -21,6 +21,8 @@ describe('createRegistry', () => {
       expect.arrayContaining([
         ...['as', 'is', 'not', 'where', 'exists', 'count', 'first', 'single'],
         ...['last', 'tail', 'skip', 'take', 'intersect', 'exclude', 'union', 'combine'],
+        ...['empty', 'all', 'allTrue', 'anyTrue', 'allFalse', 'anyFalse', 'subsetOf'],
+        ...['supersetOf', 'distinct', 'isDistinct'],
         ...['children', 'descendants', 'trace', 'now', 'today', 'timeOfDay'],
       ]),
     );

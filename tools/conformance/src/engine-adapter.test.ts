@@ -192,8 +192,8 @@ describe('engineAdapter.classifyError', () => {
 
   // Honest conformance: a missing feature must never pass a test that expects an error.
   it.each([
-    'name.empty()',
-    'name.where(given.empty())',
+    'name.sort()',
+    'name.where(given.trim().exists())',
     "'a'.matchesFull('a')",
     'name.given.aggregate($total)',
     '%terminologies',

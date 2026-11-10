@@ -17,6 +17,15 @@ export const filteredNameCount: unknown[] = evaluate(
   patient,
   "name.where(given[0] = 'Ada').count()",
 );
+export const noNames: unknown[] = evaluate(patient, 'name.empty()');
+export const allGiven: unknown[] = compile('name.all(given.exists())').evaluate(patient);
+export const someFalse: unknown[] = evaluate(null, 'true.combine(false).anyFalse()');
+export const knownGiven: unknown[] = evaluate(
+  patient,
+  "name.given.subsetOf('Ada' | 'Mina' | 'Grace')",
+);
+export const uniqueGiven: unknown[] = evaluate(patient, "name.given.combine('Ada').distinct()");
+export const givenDistinct: unknown[] = compile('name.given.isDistinct()').evaluate(patient);
 export const selectedGiven: unknown[] = evaluate(patient, 'name.given.first()');
 export const onlyName: unknown[] = compile('name.single()').evaluate(patient);
 export const lastGiven: unknown[] = evaluate(patient, 'name.given.last()');

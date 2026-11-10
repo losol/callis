@@ -458,6 +458,90 @@ describe.each(PROVIDERS)(
       });
     });
 
+    // https://hl7.org/fhirpath/N1/#existence: the functions read typed nodes by their System
+    // values and return the nodes themselves (docs/spec-notes.md#distinct-and-isdistinct).
+    describe('existence functions on typed nodes', () => {
+      it('reads FHIR booleans, and leaves out a boolean that holds only extensions', () => {
+        expect(run(patient, 'Patient.active.combine(Patient.deceased).allTrue()')).toEqual([false]);
+        expect(run(patient, 'Patient.active.combine(Patient.deceased).anyTrue()')).toEqual([true]);
+        const extended = { resourceType: 'Patient', _active: { extension: [syllables] } };
+        expect(run(extended, 'Patient.active.exists()')).toEqual([true]);
+        expect(run(extended, 'Patient.active.allFalse()')).toEqual([true]);
+        expect(run(extended, 'Patient.active.anyTrue()')).toEqual([false]);
+        expect(codeOf(() => run(patient, 'Patient.gender.allTrue()'))).toBe('eval/type-mismatch');
+      });
+
+      // docs/spec-notes.md#distinct-and-isdistinct: an element without a value is never equal to
+      // another item, so it neither repeats nor empties the result.
+      it('keeps an element that holds only extensions in distinct()', () => {
+        const absent = { extension: [syllables] };
+        const one = {
+          resourceType: 'Patient',
+          name: [{ given: ['Ann', 'Ann', null], _given: [null, null, absent] }],
+        };
+        expect(run(one, 'Patient.name.given.count()')).toEqual([3]);
+        const [ann, valueless] = typed(one, 'Patient.name.given.distinct()');
+        expect(typed(one, 'Patient.name.given.distinct()')).toHaveLength(2);
+        expect(systemValue(ann)).toBe('Ann');
+        expect(typeName(valueless)).toBe('string');
+        expect(systemValue(valueless)).toBeUndefined();
+        expect(run(one, 'Patient.name.given.isDistinct()')).toEqual([false]);
+        expect(run(one, 'Patient.name.given.skip(1).isDistinct()')).toEqual([true]);
+        const two = {
+          resourceType: 'Patient',
+          name: [{ given: [null, null], _given: [absent, absent] }],
+        };
+        expect(run(two, 'Patient.name.given.distinct().count()')).toEqual([2]);
+        expect(run(two, 'Patient.name.given.isDistinct()')).toEqual([true]);
+        expect(run(two, "Patient.name.given.combine('Ann').isDistinct()")).toEqual([true]);
+      });
+
+      it('keeps complex values whose children cannot be compared in distinct()', () => {
+        const absent = { extension: [syllables] };
+        const names = {
+          resourceType: 'Patient',
+          name: [
+            { given: ['Ann', null], _given: [null, absent] },
+            { given: ['Ann', null], _given: [null, absent] },
+            { period: { start: '2020' } },
+            { period: { start: '2020-01-01' } },
+          ],
+        };
+        expect(run(names, 'Patient.name.distinct().count()')).toEqual([4]);
+        expect(run(names, 'Patient.name.isDistinct()')).toEqual([true]);
+        expect(run(names, 'Patient.name.period.start.isDistinct()')).toEqual([]);
+      });
+
+      it('keeps the last of a code and a String with the same value (testDistinct31)', () => {
+        const [string] = typed(patient, "Patient.gender.combine('male').distinct()");
+        expect(string).toBe('male');
+        const [code] = typed(patient, "'male'.combine(Patient.gender).distinct()");
+        expect(typeName(code)).toBe('code');
+        expect(run(patient, "Patient.gender.combine('male').isDistinct()")).toEqual([false]);
+      });
+
+      it('compares typed elements by type and value', () => {
+        const names = typed(patient, 'Patient.name.combine(Patient.name).distinct()');
+        expect(names.map(typeName)).toEqual(['HumanName', 'HumanName']);
+        expect(run(patient, 'Patient.name.isDistinct()')).toEqual([true]);
+        expect(run(patient, 'Patient.name.first().subsetOf(Patient.name)')).toEqual([true]);
+        expect(run(patient, 'Patient.name.supersetOf(Patient.name.last())')).toEqual([true]);
+        const shared = { text: 'x' };
+        const input = { resourceType: 'Patient', name: [shared], address: [shared] };
+        expect(run(input, 'Patient.name.combine(Patient.address).isDistinct()')).toEqual([true]);
+        expect(run(input, 'Patient.name.subsetOf(Patient.address)')).toEqual([false]);
+      });
+
+      it('compares a typed date with a date literal', () => {
+        expect(run(patient, 'Patient.birthDate.subsetOf(@1974-12-25)')).toEqual([true]);
+        expect(run(patient, 'Patient.birthDate.subsetOf(@1974-12)')).toEqual([false]);
+        expect(run(patient, 'Patient.birthDate.combine(@1974-12-25).isDistinct()')).toEqual([
+          false,
+        ]);
+        expect(run(patient, 'Patient.birthDate.combine(@1974-12).distinct()')).toEqual([]);
+      });
+    });
+
     // https://hl7.org/fhirpath/N1/#tree-navigation, docs/spec-notes.md#order-of-descendants
     describe('children() and descendants()', () => {
       const names = (input: unknown, expression: string): string[] =>

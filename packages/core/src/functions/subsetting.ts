@@ -161,9 +161,10 @@ function countOf(args: readonly Collection[]): number | undefined {
 
 /**
  * Whether `items` has an item equal (`=`) to `item`. An undetermined comparison, such as dates of
- * different precision, is not equal, as for the `|` operator.
+ * different precision, is not equal, as for the `|` operator. `subsetOf()` and `supersetOf()`
+ * use the same rule.
  */
-function includesEqual(items: Collection, item: Item, ctx: ComparisonContext): boolean {
+export function includesEqual(items: Collection, item: Item, ctx: ComparisonContext): boolean {
   for (const candidate of items) {
     if (itemEquals(candidate, item, ctx) === true) {
       return true;
