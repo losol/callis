@@ -7,7 +7,8 @@
  * This is the only file of the runner that imports the engine. It imports engine sources directly,
  * because the internal API is not part of the published package. It evaluates with the full UCUM
  * unit system of `@callis/ucum` and the `@callis/fhir-r4` and `@callis/fhir-r5` providers, also
- * from source, as T0006 requires of the runner.
+ * from source, as T0006 requires of the runner, and with the fake host hooks of `fake-hooks.ts`
+ * (T0021), so the hook-backed functions are measured too.
  */
 import { type CompileOptions, compile } from '../../../packages/core/src/api/compile.ts';
 import { childNodes } from '../../../packages/core/src/compiler/nesting.ts';
@@ -23,6 +24,7 @@ import type { ModelProvider } from '../../../packages/core/src/model/model-provi
 import type { ExpressionNode } from '../../../packages/core/src/parser/ast.ts';
 import { parse } from '../../../packages/core/src/parser/parser.ts';
 import type { Item } from '../../../packages/core/src/runtime/collection.ts';
+import type { EvaluationHooks } from '../../../packages/core/src/runtime/hooks.ts';
 import { toSystemValue } from '../../../packages/core/src/runtime/node-value.ts';
 import { systemTypeOf } from '../../../packages/core/src/runtime/type-target.ts';
 import { Quantity } from '../../../packages/core/src/values/quantity/quantity.ts';
@@ -35,6 +37,7 @@ import type {
   EvaluatorAdapter,
   ResultItem,
 } from './adapter.ts';
+import { fakeHooks } from './fake-hooks.ts';
 import { NotImplementedError } from './stub-adapter.ts';
 import type { SuiteId } from './suite.ts';
 
@@ -70,17 +73,6 @@ const PLANNED_FUNCTIONS: Readonly<Record<string, string>> = {
 };
 
 /**
- * Functions that are registered but only answer through a host hook, which the runner does not
- * pass yet. Without a hook they return empty, so a test that calls one is "not implemented"
- * rather than a wrong result ([spec notes](../../../docs/spec-notes.md#features-that-later-tasks-add)).
- * TODO(T0021): pass fake hooks to the evaluation and remove this list.
- */
-const HOOK_FUNCTIONS: Readonly<Record<string, string>> = tasks(
-  'T0021',
-  'memberOf subsumes subsumedBy conformsTo htmlChecks',
-);
-
-/**
  * Environment variables that later tasks define, as name patterns, with the task. An
  * `eval/undefined-variable` error for one of them is "not implemented"; once the task defines the
  * variable, the error no longer happens.
@@ -98,6 +90,12 @@ const REGISTRY = createRegistry();
 /** The generated model of each suite file ([ADR-0008](../../../docs/adr/0008-model-provider.md)). */
 const MODELS: Readonly<Record<SuiteId, ModelProvider>> = { r4, r5 };
 
+/** The fake hooks for each suite file, with its model. */
+const HOOKS: Readonly<Record<SuiteId, EvaluationHooks>> = {
+  r4: fakeHooks(r4),
+  r5: fakeHooks(r5),
+};
+
 /**
  * The options of every compile() for a test: UCUM units for the suite's quantities, the model of
  * the suite's FHIR version, and the choice-type suffix only for `mode="lenient/polymorphics"`
@@ -113,8 +111,7 @@ function compileOptionsFor(options: EvaluationOptions): CompileOptions {
 
 /**
  * Throws {@link NotImplementedError} when the expression calls a function of the spec that the
- * engine does not have yet, or one that needs a host hook the runner does not pass. A syntax
- * error is left to `compile()`.
+ * engine does not have yet. A syntax error is left to `compile()`.
  */
 function checkImplemented(expression: string): void {
   for (const node of nodesOf(expression)) {
@@ -124,11 +121,6 @@ function checkImplemented(expression: string): void {
     // Own properties only: `constructor()` is an unknown function, not a planned one.
     if (Object.hasOwn(PLANNED_FUNCTIONS, node.name) && REGISTRY.get(node.name) === undefined) {
       throw new NotImplementedError(`${node.name}() comes with ${PLANNED_FUNCTIONS[node.name]}`);
-    }
-    if (Object.hasOwn(HOOK_FUNCTIONS, node.name)) {
-      throw new NotImplementedError(
-        `${node.name}() needs a host hook, which the runner passes from ${HOOK_FUNCTIONS[node.name]}`,
-      );
     }
   }
 }
@@ -160,11 +152,13 @@ export const engineAdapter: EvaluatorAdapter = {
   async evaluate(input, expression, options): Promise<readonly unknown[]> {
     checkImplemented(expression);
     const compileOptions = compileOptionsFor(options);
+    const hooks = HOOKS[options.fhirVersion];
     let focus = input;
     if (options.context !== undefined) {
       checkImplemented(options.context);
       const selected = await compile(options.context, compileOptions).evaluateAsync(input, {
         output: 'typed',
+        hooks,
       });
       if (selected.length !== 1) {
         throw new Error(`the context ${options.context} selected ${selected.length} items, not 1`);
@@ -173,7 +167,7 @@ export const engineAdapter: EvaluatorAdapter = {
       // resources of the whole input (docs/tasks/T0020-fhir-functions.md).
       focus = selected[0];
     }
-    return compile(expression, compileOptions).evaluateAsync(focus, { output: 'typed' });
+    return compile(expression, compileOptions).evaluateAsync(focus, { output: 'typed', hooks });
   },
   describeValue(value: unknown): ResultItem {
     return describeItem(value as Item);

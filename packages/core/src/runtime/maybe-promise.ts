@@ -9,9 +9,11 @@
  * engine only ever sees native promises.
  *
  * These helpers live in `runtime` rather than `compiler` because library functions (`where()`,
- * `select()`, host-backed functions) use them too, and `functions` may only import `runtime`.
+ * `select()`, host-backed functions) use them too, and `functions` imports `runtime` and `values`
+ * but never `compiler`.
  */
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
+import { type CancellationSignal, throwIfAborted } from './cancellation.ts';
 
 /** A value, or a native promise of it. */
 export type MaybePromise<T> = T | Promise<T>;
@@ -75,6 +77,89 @@ export function mapSequential<T, R>(
   return results;
 }
 
+/**
+ * Calls `fn` for each item and collects the results in input order, running the calls that return
+ * a promise at the same time, at most `concurrency` of them at once. It stays synchronous until a
+ * call returns a promise, as {@link mapSequential} does. From then on, a new call starts whenever
+ * fewer than `concurrency` results are pending, in input order; a call that returns a value counts
+ * as finished at once. The first error, thrown or rejected, fails the result as soon as it is
+ * seen, without starting more calls; the calls already running are left to finish on their own,
+ * and their outcomes are ignored.
+ *
+ * Host-backed functions use this for the items of one collection, such as the references of
+ * `entry.resource.subject.resolve()`, whose hook calls are independent of each other
+ * ([T0021: sync and async](https://github.com/losol/callis/blob/main/docs/tasks/T0021-hooks-async.md#sync-and-async)).
+ *
+ * @param concurrency - The most calls that may be pending at once; at least 1, or
+ *   `Number.POSITIVE_INFINITY` for no limit.
+ */
+export function mapConcurrent<T, R>(
+  items: readonly T[],
+  fn: (item: T, index: number) => MaybePromise<R>,
+  concurrency: number,
+): MaybePromise<R[]> {
+  const results: R[] = [];
+  let index = 0;
+  for (const item of items) {
+    const result = fn(item, index);
+    if (isThenable(result)) {
+      return finishConcurrent(items, fn, results, index, result, concurrency);
+    }
+    results.push(result);
+    index++;
+  }
+  return results;
+}
+
+async function finishConcurrent<T, R>(
+  items: readonly T[],
+  fn: (item: T, index: number) => MaybePromise<R>,
+  results: R[],
+  start: number,
+  first: PromiseLike<R>,
+  concurrency: number,
+): Promise<R[]> {
+  const pending = new Set<Promise<void>>();
+  let failure: { readonly error: unknown } | undefined;
+  const track = (index: number, result: PromiseLike<R>): void => {
+    const settled: Promise<void> = Promise.resolve(result).then(
+      (value) => {
+        results[index] = value;
+        pending.delete(settled);
+      },
+      (error: unknown) => {
+        failure ??= { error };
+        pending.delete(settled);
+      },
+    );
+    pending.add(settled);
+  };
+  track(start, first);
+  let index = start + 1;
+  for (const item of items.slice(index)) {
+    if (pending.size >= concurrency) {
+      await Promise.race(pending);
+    }
+    if (failure !== undefined) {
+      break;
+    }
+    const result = fn(item, index);
+    if (isThenable(result)) {
+      track(index, result);
+    } else {
+      results[index] = result;
+    }
+    index++;
+  }
+  while (failure === undefined && pending.size > 0) {
+    await Promise.race(pending);
+  }
+  if (failure !== undefined) {
+    throw failure.error;
+  }
+  return results;
+}
+
 async function finishSequential<T, R>(
   pending: PromiseLike<R>,
   results: R[],
@@ -97,19 +182,32 @@ async function finishSequential<T, R>(
  *
  * - A value that is not a thenable is returned as it is.
  * - In async mode a thenable is adopted with `Promise.resolve()`, so a cross-realm promise or a
- *   custom thenable becomes a native promise.
+ *   custom thenable becomes a native promise. With a `signal`, the signal is read again once the
+ *   result has arrived, because that wait is where an abort can first be observed, and an aborted
+ *   signal rejects the result with `eval/aborted`.
  * - In sync mode a thenable raises `eval/async-in-sync`. The thenable is still observed, so a
  *   rejection it settles with later is not reported as unhandled; the evaluation has already
  *   failed.
  *
  * @param isAsync - Whether this is an `evaluateAsync()` evaluation.
+ * @param signal - The evaluation's cancellation signal, if the host gave one.
  * @throws {@link FhirPathEvaluationError} `eval/async-in-sync` for a thenable in sync mode.
  */
-export function adoptResult<T>(value: T | PromiseLike<T>, isAsync: boolean): MaybePromise<T> {
+export function adoptResult<T>(
+  value: T | PromiseLike<T>,
+  isAsync: boolean,
+  signal?: CancellationSignal,
+): MaybePromise<T> {
   if (isAsync && isThenable(value)) {
-    return Promise.resolve(value);
+    const adopted = Promise.resolve(value);
+    return signal === undefined ? adopted : adopted.then((result) => checkedResult(result, signal));
   }
   return requireSync(value);
+}
+
+function checkedResult<T>(result: T, signal: CancellationSignal): T {
+  throwIfAborted(signal);
+  return result;
 }
 
 /**

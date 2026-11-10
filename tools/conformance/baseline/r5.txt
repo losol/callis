@@ -1,5 +1,8 @@
 from-zulip-1
 from-zulip-2
+htmlTest02
+htmlTest03
+htmlTest04
 isEffectOnLogic1
 isEffectOnLogic1Base
 isEffectOnLogic2
@@ -107,6 +110,9 @@ testConcatenate2
 testConcatenate3
 testConcatenate4
 testConcatenate5
+testConformsTo1
+testConformsTo2
+testConformsTo3
 testContainedId
 testContainsCollection1
 testContainsCollection2

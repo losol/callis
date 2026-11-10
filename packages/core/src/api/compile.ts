@@ -6,14 +6,15 @@
  */
 import { compileExpression } from '../compiler/compile.ts';
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
-import type { SourceSpan } from '../errors/source-span.ts';
 import { fhirEquivalence } from '../fhir/equivalence.ts';
 import { createFhirEnvironment } from '../fhir/variables.ts';
 import { createRegistry, type FunctionRegistry } from '../functions/registry.ts';
 import type { ModelProvider } from '../model/model-provider.ts';
 import type { ExpressionNode } from '../parser/ast.ts';
 import { parse } from '../parser/parser.ts';
+import { type CancellationSignal, throwIfAborted } from '../runtime/cancellation.ts';
 import { type EvalContext, type Evaluator, rootFrame, type TraceSink } from '../runtime/context.ts';
+import { bindHooks, type EvaluationHooks } from '../runtime/hooks.ts';
 import { adoptResult, andThen, type MaybePromise, requireSync } from '../runtime/maybe-promise.ts';
 import { toInputCollection } from '../runtime/navigation.ts';
 import { createVariables } from '../runtime/variables.ts';
@@ -24,6 +25,8 @@ import {
 } from '../values/datetime/now.ts';
 import { minimalUnitSystem, type UnitSystem } from '../values/quantity/unit-system.ts';
 import { type OutputOptions, toOutput } from './output.ts';
+
+export type { EvaluationHooks, TraceEvent } from '../runtime/hooks.ts';
 
 /**
  * Compatibility relaxations of the spec's rules
@@ -53,40 +56,6 @@ export interface CompileOptions {
   readonly lenient?: LenientOptions;
 }
 
-/**
- * One call of `trace()`
- * ([N1 §5.9.1](https://hl7.org/fhirpath/N1/#tracename-string-projection-expression-collection)).
- */
-export interface TraceEvent {
-  /** The `name` argument. */
-  readonly name: string;
-  /**
-   * The traced collection, converted like a result of the evaluation (`output` and
-   * `decimalOutput`): the input of `trace()`, or the result of its projection.
-   */
-  readonly values: readonly unknown[];
-  /** Where the call is in the expression. */
-  readonly span: SourceSpan;
-}
-
-/**
- * Functions the host supplies for one evaluation
- * ([T0021: host hooks](https://github.com/losol/callis/blob/main/docs/tasks/T0021-hooks-async.md#host-hooks)).
- * T0021 adds the others.
- */
-export interface EvaluationHooks {
-  /**
-   * Receives the output of `trace()`, in evaluation order; without it, `trace()` only returns its
-   * input. It may return a promise in `evaluateAsync()`, which the evaluation waits for; in
-   * `evaluate()` a promise raises `eval/async-in-sync`. An error it throws ends the evaluation.
-   *
-   * The T0021 sketch returns `void`; this extends it with the sync/async rule of every host hook
-   * ([ADR-0004](https://github.com/losol/callis/blob/main/docs/adr/0004-sync-core-async-path.md),
-   * [#185](https://github.com/losol/callis/issues/185)).
-   */
-  trace?(event: TraceEvent): void | PromiseLike<void>;
-}
-
 /** Options for one evaluation. */
 export interface EvaluateOptions extends OutputOptions {
   /**
@@ -108,8 +77,29 @@ export interface EvaluateOptions extends OutputOptions {
    * that is a contained resource, and otherwise `%resource` itself.
    */
   readonly rootResource?: unknown;
-  /** Functions the host supplies, such as the `trace` hook; none by default. */
+  /**
+   * Functions the host supplies: `resolve`, `terminology`, `conformsTo`, `htmlChecks`, `regex`
+   * and `trace` ([T0021: host hooks](https://github.com/losol/callis/blob/main/docs/tasks/T0021-hooks-async.md#host-hooks));
+   * none by default. In `evaluate()` every hook must answer synchronously; a promise raises
+   * `eval/async-in-sync`. `evaluateAsync()` accepts a promise, or any other thenable, from any
+   * hook but `regex`.
+   */
   readonly hooks?: EvaluationHooks;
+  /**
+   * Stops the evaluation: an aborted signal raises `eval/aborted`, with the signal's `reason` as
+   * the error's `cause`. Any `AbortSignal` fits. It is read when the evaluation starts, before
+   * each hook call and after each host result the evaluation waited for, and every hook receives
+   * it in its context. In `evaluate()` only the check at the start can see an abort, because
+   * nothing else runs while a synchronous evaluation does.
+   */
+  readonly signal?: CancellationSignal;
+  /**
+   * In `evaluateAsync()`, the most hook calls a host-backed function such as `resolve()` starts
+   * at once for the items of one collection: at least 1, or `Number.POSITIVE_INFINITY` for no
+   * limit; 8 by default. The results keep the order of the items. Lambda functions evaluate their
+   * items one after another whatever the limit.
+   */
+  readonly concurrency?: number;
   /** The current time for `now()`, `today()` and `timeOfDay()`; the clock by default. */
   readonly now?: Date | (() => Date);
   /**
@@ -210,12 +200,20 @@ function run(
   );
 }
 
+/** The `concurrency` option by default. */
+const DEFAULT_CONCURRENCY = 8;
+
 function createContext(
   environment: Environment,
   input: unknown,
   options: EvaluateOptions,
   isAsync: boolean,
 ): EvalContext {
+  const signal = checkSignal(options.signal);
+  // An aborted signal evaluates nothing, in both modes.
+  throwIfAborted(signal);
+  const concurrency = checkConcurrency(options.concurrency);
+  const hooks = bindHooks(options.hooks, { isAsync, signal });
   const clock = options.now;
   if (clock !== undefined && !(clock instanceof Date) && typeof clock !== 'function') {
     throw new FhirPathEvaluationError(
@@ -250,32 +248,77 @@ function createContext(
       snapshot ??= takeNowSnapshot(readClock(), timezoneOffset);
       return snapshot;
     },
-    trace: traceSink(options, isAsync),
+    trace: traceSink(options, isAsync, signal),
+    hooks,
+    signal,
+    concurrency,
   };
 }
 
-/** The sink for `trace()`: the host's `trace` hook, with the items converted like a result. */
-function traceSink(options: EvaluateOptions, isAsync: boolean): TraceSink | undefined {
-  const hooks = options.hooks;
-  if (hooks === undefined) {
-    return undefined;
-  }
-  if (typeof hooks !== 'object' || hooks === null) {
-    throw new FhirPathEvaluationError('eval/invalid-argument', 'Expected hooks to be an object');
-  }
-  const trace = hooks.trace;
-  if (trace === undefined) {
-    return undefined;
-  }
-  if (typeof trace !== 'function') {
+/**
+ * The `signal` option, checked to look like an `AbortSignal`.
+ *
+ * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for anything but an object
+ *   with a boolean `aborted`.
+ */
+function checkSignal(signal: CancellationSignal | undefined): CancellationSignal | undefined {
+  if (
+    signal !== undefined &&
+    (typeof signal !== 'object' || signal === null || typeof signal.aborted !== 'boolean')
+  ) {
     throw new FhirPathEvaluationError(
       'eval/invalid-argument',
-      'Expected the trace hook to be a function',
+      'Expected the signal option to be an AbortSignal or another object with a boolean aborted',
     );
   }
-  return (name, items, span) =>
+  return signal;
+}
+
+/**
+ * The `concurrency` option: a positive integer or `Number.POSITIVE_INFINITY`.
+ *
+ * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for anything else.
+ */
+function checkConcurrency(concurrency: number | undefined): number {
+  if (concurrency === undefined) {
+    return DEFAULT_CONCURRENCY;
+  }
+  if (
+    typeof concurrency !== 'number' ||
+    (concurrency !== Number.POSITIVE_INFINITY &&
+      (!Number.isInteger(concurrency) || concurrency < 1))
+  ) {
+    throw new FhirPathEvaluationError(
+      'eval/invalid-argument',
+      'Expected the concurrency option to be a positive integer or Infinity',
+    );
+  }
+  return concurrency;
+}
+
+/**
+ * The sink for `trace()`: the host's `trace` hook, with the items converted like a result.
+ * `bindHooks()` has checked that the hook is a function.
+ */
+function traceSink(
+  options: EvaluateOptions,
+  isAsync: boolean,
+  signal: CancellationSignal | undefined,
+): TraceSink | undefined {
+  const hooks = options.hooks;
+  const trace = hooks?.trace;
+  if (hooks === undefined || trace === undefined) {
+    return undefined;
+  }
+  return (name, items, span) => {
+    throwIfAborted(signal);
     // A host boundary: a thenable is adopted in async mode and rejected in sync mode.
-    adoptResult(trace.call(hooks, { name, values: toOutput(items, options), span }), isAsync);
+    return adoptResult(
+      trace.call(hooks, { name, values: toOutput(items, options), span }),
+      isAsync,
+      signal,
+    );
+  };
 }
 
 /** Only used where `resolveTimezoneOffset()` does not read the instant. */
