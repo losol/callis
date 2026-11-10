@@ -72,6 +72,9 @@ Chromium interaction checks. Install the browser once with
 `pnpm --filter @callis/site exec playwright install chromium`. CI does this in
 the site job. The test server serves each route's prerendered HTML, including
 the `/playground/` directory route, rather than an SPA root fallback.
+Every run starts that server on a free port of its own, so runs in several
+worktrees do not test each other's build. Set `CALLIS_SITE_TEST_PORT` to choose
+the port; if something already listens on it, the run fails.
 
 The site's dev, build, typecheck and unit-test commands first build core so
 fresh checkouts use its real public package entry point. The editor and evaluator

@@ -22,6 +22,28 @@ async function chooseExample(page: Page, title: string): Promise<void> {
   await expect(page.getByRole('button', { name: /Choose example/ })).toContainText(title);
 }
 
+/**
+ * Adds links named like the header's links to the page's main content, as a document can have:
+ * the home page is the root README. Waits for the hydration first (the header publishes its
+ * height after it), so React does not see the links as a mismatch.
+ */
+async function addHeaderNamedLinks(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => document.documentElement.style.getPropertyValue('--site-header-height') !== '',
+  );
+  await page.locator('main').evaluate((main) => {
+    for (const [name, href] of [
+      ['Docs', '/'],
+      ['Playground', '/playground/'],
+    ] as const) {
+      const link = document.createElement('a');
+      link.href = href;
+      link.textContent = name;
+      main.append(link);
+    }
+  });
+}
+
 for (const viewportWidth of [1440, 390]) {
   test(`keeps width and side margins stable at ${viewportWidth}px when results change`, async ({
     page,
@@ -79,14 +101,17 @@ test('loads the editor and evaluator only after entering the playground', async 
         engineFiles.some((name) => new URL(url).pathname.endsWith(`/${name}`)),
     ),
   ).toBe(false);
-  await page.getByRole('link', { name: 'Playground', exact: true }).click();
+  // A README link named like a header link must not change which link the test finds (#169).
+  await addHeaderNamedLinks(page);
+  const header = page.locator('.site-header');
+  await header.getByRole('link', { name: 'Playground', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Input JSON', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/playground$/);
-  await expect(page.getByRole('link', { name: 'Playground', exact: true })).toHaveAttribute(
+  await expect(header.getByRole('link', { name: 'Playground', exact: true })).toHaveAttribute(
     'aria-current',
     'page',
   );
-  await expect(page.getByRole('link', { name: 'Docs', exact: true })).not.toHaveAttribute(
+  await expect(header.getByRole('link', { name: 'Docs', exact: true })).not.toHaveAttribute(
     'aria-current',
     'page',
   );
@@ -104,11 +129,13 @@ test('prerenders a labelled shell and hydrates the direct route', async ({ page,
   expect(response.ok()).toBe(true);
   expect(await response.text()).toContain('Loading the JSON editor and evaluator');
   await page.goto('/playground/');
-  await expect(page.getByRole('link', { name: 'Playground', exact: true })).toHaveAttribute(
+  await addHeaderNamedLinks(page);
+  const header = page.locator('.site-header');
+  await expect(header.getByRole('link', { name: 'Playground', exact: true })).toHaveAttribute(
     'aria-current',
     'page',
   );
-  await expect(page.getByRole('link', { name: 'Docs', exact: true })).not.toHaveAttribute(
+  await expect(header.getByRole('link', { name: 'Docs', exact: true })).not.toHaveAttribute(
     'aria-current',
     'page',
   );
@@ -202,13 +229,13 @@ test('supports keyboard exit, run and search focus in both themes and a narrow l
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(expression).toBeFocused();
-  await page.getByRole('button', { name: 'Switch theme' }).click();
+  await page.locator('.site-header').getByRole('button', { name: 'Switch theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await page.reload();
   await expect(json).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect(json).toBeVisible();
-  await page.getByRole('button', { name: 'Switch theme' }).click();
+  await page.locator('.site-header').getByRole('button', { name: 'Switch theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(expression).toBeVisible();

@@ -308,7 +308,7 @@ const PLAYER_VIEWPORTS = [
 /** Opens the progress page in a viewport and a theme. */
 async function openProgress(
   page: Page,
-  viewport: (typeof PLAYER_VIEWPORTS)[number],
+  viewport: { width: number; height: number },
   theme: 'dark' | 'light',
 ): Promise<void> {
   await page.addInitScript((value) => localStorage.setItem('callis-theme', value), theme);
@@ -373,6 +373,53 @@ for (const viewport of PLAYER_VIEWPORTS) {
       for (const control of controls) {
         await expectUncovered(control);
       }
+    });
+  }
+}
+
+/** The controls and the position of the commit player that stick out of its content box. */
+function outsidePlayer(page: Page): Promise<string[]> {
+  return page.locator('.pg-player').evaluate((player) => {
+    const style = getComputedStyle(player);
+    const box = player.getBoundingClientRect();
+    const left =
+      box.left + Number.parseFloat(style.borderLeftWidth) + Number.parseFloat(style.paddingLeft);
+    const right =
+      box.right - Number.parseFloat(style.borderRightWidth) - Number.parseFloat(style.paddingRight);
+    return [...player.querySelectorAll('button, input[type="range"], .pg-pos')]
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.left < left - 0.5 || rect.right > right + 0.5;
+      })
+      .map((element) => element.textContent || (element.getAttribute('aria-label') ?? ''));
+  });
+}
+
+// The row of the commit player was one line that did not wrap: from about 405px down the position
+// stuck out of the player, and from 360px down the page scrolled sideways (#164). Now the slider
+// and the position get a line of their own on narrow screens. Playing shows the wider pause label.
+for (const width of [320, 360, 375, 1280]) {
+  for (const theme of ['dark', 'light'] as const) {
+    test(`fits the commit player at ${width}px in the ${theme} theme, playing or not`, async ({
+      page,
+    }) => {
+      await openProgress(page, { width, height: width < 1280 ? 844 : 800 }, theme);
+      const player = page.locator('.pg-player');
+      const slider = player.getByRole('slider', { name: 'Commit' });
+      const sliderTop = async () => (await slider.boundingBox())?.y ?? 0;
+      const top = await sliderTop();
+      for (const label of ['▶ play', '❚❚ pause']) {
+        await expect(player.getByRole('button', { name: label, exact: true })).toBeVisible();
+        await expectNoSidewaysScroll(page);
+        expect(await outsidePlayer(page), label).toEqual([]);
+        for (const control of await player.locator('button, input[type="range"]').all()) {
+          await expectUncovered(control);
+        }
+        // The label changes width, which must not move the slider to another line.
+        expect(await sliderTop()).toBeCloseTo(top, 0);
+        await player.getByRole('button', { name: label, exact: true }).click();
+      }
+      await expect(player.getByRole('button', { name: '▶ play', exact: true })).toBeVisible();
     });
   }
 }
