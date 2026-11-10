@@ -188,7 +188,20 @@ function addNewItems(ctx: EvalContext, queue: Item[], result: Item[], projected:
   }
 }
 
+/**
+ * Whether `item` is in the result: the same node as an item there, or equal (`=`) to one. For two
+ * JavaScript primitives, which a projection that makes new values gives, `=` is `===`, so the
+ * comparison skips the equality kernel; a walk to the limit then takes milliseconds, not seconds.
+ */
 function isFound(result: readonly Item[], item: Item, ctx: EvalContext): boolean {
+  if (typeof item !== 'object') {
+    for (const found of result) {
+      if (typeof found === 'object' ? itemEquals(found, item, ctx) === true : found === item) {
+        return true;
+      }
+    }
+    return false;
+  }
   for (const found of result) {
     if (isSameNode(found, item) || itemEquals(found, item, ctx) === true) return true;
   }

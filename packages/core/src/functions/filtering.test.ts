@@ -346,6 +346,14 @@ describe('repeat through the public synchronous API', () => {
     expect(evaluate(input, expression)).toEqual(expected);
   });
 
+  // New primitive values compare with === among themselves, and with = against other items.
+  it('compares computed values with each other and with input nodes by =', () => {
+    expect(evaluate(null, "(1 | '1' | true).repeat($this)")).toEqual([1, '1', true]);
+    expect(evaluate(null, '(1 | 2).repeat(1.0 | 2)')).toEqual([1, 2]);
+    expect(evaluate({ s: 'a' }, "s.combine('a').repeat($this)")).toEqual(['a']);
+    expect(evaluate({ d: '2020-01-01' }, 'd.repeat(@2020-01-01 | $this).count()')).toEqual([1]);
+  });
+
   it('adds an item once even when two JSON objects hold it', () => {
     const twins = { item: [{ linkId: 'a' }, { linkId: 'a' }, { linkId: 'b' }] };
     const result = evaluate(twins, 'repeat(item)');
@@ -376,10 +384,7 @@ describe('the repeat() limit', () => {
     expect(DEFAULT_LIMITS.maxRepeatItems).toBe(5_000);
   });
 
-  // Each walk compares 5,000 new items with the earlier ones, about a second under Vitest.
-  it('stops a value-generating projection at the default limit, in sync and async mode', {
-    timeout: 20_000,
-  }, async () => {
+  it('stops a value-generating projection at the default limit, in sync and async mode', async () => {
     expect(() => evaluateInternal(null, generating)).toThrow(
       expect.objectContaining({ code: 'eval/limit-exceeded', expression: generating }),
     );
