@@ -1,3 +1,4 @@
+defineVariable10
 from-zulip-1
 from-zulip-2
 htmlTest02
@@ -17,6 +18,7 @@ isGuardIifTrue
 isGuardImpliesEmpty
 isGuardNested
 isGuardNotImplies
+isGuardOfType
 isGuardOr
 isGuardOr2
 isGuardOrBoth
@@ -29,6 +31,8 @@ testAbs1
 testAbs2
 testAbs3
 testAbsEmpty
+testAllTrue1
+testAllTrue2
 testAllTrue3
 testAllTrue4
 testBooleanImplies1
@@ -125,6 +129,7 @@ testContainsCollectionEmpty4
 testContainsCollectionEmptyDateTime
 testContainsNonString1
 testContainsString1
+testContainsString10
 testContainsString10a
 testContainsString2
 testContainsString3
@@ -184,6 +189,7 @@ testDistinct26
 testDistinct27
 testDistinct28
 testDistinct29
+testDistinct3
 testDistinct30
 testDistinct31
 testDistinct32
@@ -193,6 +199,7 @@ testDistinct35
 testDistinct36
 testDistinct4
 testDistinct5
+testDistinct6
 testDistinct7
 testDistinct8
 testDistinct9
@@ -222,6 +229,7 @@ testDollarThis1
 testDollarThis2
 testEmpty
 testEndsWith1
+testEndsWith10
 testEndsWith10a
 testEndsWith2
 testEndsWith3
@@ -316,6 +324,7 @@ testExists5
 testExp1
 testExp2
 testExp3
+testExpressions
 testExpressionsEqual
 testExtension1
 testExtension2
@@ -325,8 +334,14 @@ testFHIRPathAsFunction12
 testFHIRPathAsFunction13
 testFHIRPathAsFunction14
 testFHIRPathAsFunction15
+testFHIRPathAsFunction17
+testFHIRPathAsFunction18
+testFHIRPathAsFunction19
+testFHIRPathAsFunction20
 testFHIRPathAsFunction21
+testFHIRPathAsFunction22
 testFHIRPathAsFunction23
+testFHIRPathAsFunction24
 testFHIRPathIsFunction1
 testFHIRPathIsFunction10
 testFHIRPathIsFunction2
@@ -421,6 +436,7 @@ testIif4
 testIif5
 testIif7
 testIif8
+testIif9
 testIn1
 testIn2
 testIn3
@@ -429,6 +445,7 @@ testIn5
 testInEmptyBoth
 testInEmptyCollection
 testInEmptyValue
+testIndex
 testIndexOf1
 testIndexOf2
 testIndexOf3
@@ -786,6 +803,8 @@ testPrecedence3
 testPrecedence4
 testPrecedence5
 testPrecedence6
+testPrimitiveExtensions
+testPrimitiveExtensionsElement
 testQuantity1
 testQuantity10
 testQuantity11
@@ -808,8 +827,11 @@ testQuantityUnitTextEqual
 testQuantityUnitTextEquivalent
 testQuantityUnitVsNoUnitEqual
 testQuantityUnitVsNoUnitEquivalent
+testRepeat1
+testRepeat2
 testRepeat3
 testRepeat4
+testRepeat5
 testReplace1
 testReplace2
 testReplace3
@@ -826,6 +848,9 @@ testReplaceMatches7
 testRound1
 testRound2
 testRoundEmpty
+testSelect1
+testSelect2
+testSelect3
 testSimple
 testSimpleBackTick1
 testSimpleNone
@@ -846,6 +871,7 @@ testSqrtEmpty
 testStartsWith1
 testStartsWith10
 testStartsWith11
+testStartsWith12
 testStartsWith12a
 testStartsWith2
 testStartsWith3
@@ -910,6 +936,7 @@ testSubSetOf1
 testSubSetOf2
 testSubSetOf3
 testSubstring1
+testSubstring10
 testSubstring10a
 testSubstring11
 testSubstring12
@@ -981,6 +1008,8 @@ testTypeA2
 testTypeA3
 testTypeA4
 testUnion1
+testUnion10
+testUnion11
 testUnion12
 testUnion13
 testUnion2
@@ -990,6 +1019,7 @@ testUnion5
 testUnion6
 testUnion7
 testUnion8
+testUnion9
 testValueLength
 testVariables1
 testVariables2

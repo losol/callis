@@ -10,6 +10,7 @@ import {
   filteredGiven,
   filteredNameCount,
   firstGiven,
+  firstGivenPerName,
   firstTwoGiven,
   given,
   givenDistinct,
@@ -18,12 +19,14 @@ import {
   knownGiven,
   lastGiven,
   laterGiven,
+  linkIds,
   lossless,
   managedBy,
   named,
   noNames,
   numberOfNames,
   onlyName,
+  onlyPatients,
   parsedDecimal,
   patient,
   quantityJson,
@@ -40,6 +43,10 @@ describe('public guide examples', () => {
     expect(given).toEqual(['Ada', 'Mina']);
     expect(firstGiven).toEqual(['Ada']);
     expect(filteredGiven).toEqual(['Ada', 'Mina']);
+    expect(firstGivenPerName).toEqual(['Ada']);
+    expect(linkIds).toEqual(['1', '2', '1.1', '1.2']);
+    expect(onlyPatients).toEqual([patient]);
+    expect(onlyPatients[0]).toBe(patient);
     expect(numberOfNames).toEqual([1]);
     expect(hasAda).toEqual([true]);
     expect(filteredNameCount).toEqual([1]);

@@ -354,16 +354,16 @@ describe('allTrue, anyTrue, allFalse and anyFalse', () => {
     expect(evaluate(null, `${input}.anyFalse()`)).toEqual([anyFalse]);
   });
 
-  // The spec examples project Observation components with select(component.value > 90 'mm[Hg]');
-  // select() comes with T0042, so the test-only testSelect() runs the same comparison.
+  // The spec examples project Observation components: select(component.value > 90 'mm[Hg]'). The
+  // FHIR Quantity version is in test/generated-models.test.ts; these use Quantity literals.
   it.each([
     ['allTrue', false],
     ['anyTrue', true],
     ['allFalse', false],
     ['anyFalse', true],
   ] as const)('%s() of projected comparisons (N1 examples)', (name, expected) => {
-    const expression = `(120 'mm[Hg]').combine(85 'mm[Hg]').testSelect($this > 90 'mm[Hg]').${name}()`;
-    expect(evaluateInternal(null, expression, { functions: testRegistry() })).toEqual([expected]);
+    const expression = `(120 'mm[Hg]').combine(85 'mm[Hg]').select($this > 90 'mm[Hg]').${name}()`;
+    expect(evaluate(null, expression)).toEqual([expected]);
   });
 
   it('reads Booleans from input data', () => {

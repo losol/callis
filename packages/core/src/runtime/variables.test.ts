@@ -23,6 +23,7 @@ function context(variables: unknown): EvalContext {
     hooks: NO_HOOKS,
     signal: undefined,
     concurrency: 1,
+    limits: { maxRepeatItems: 5_000 },
   };
 }
 

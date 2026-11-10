@@ -82,7 +82,7 @@ This gives `['1.50']`; without `decimalOutput: 'string'`, `[1.5]`. A result that
 
 ## Current support and deferred API
 
-Model-less paths, literals, indexing, Boolean logic, unary polarity and type operations are available. The built-in functions are `not`, `is`, `as`, `where`, `exists`, `count`, `empty`, `all`, `allTrue`, `anyTrue`, `allFalse`, `anyFalse`, `subsetOf`, `supersetOf`, `distinct`, `isDistinct`, `first`, `single`, `last`, `tail`, `skip`, `take`, `intersect`, `exclude`, `union`, `combine`, `children`, `descendants`, `trace`, `now`, `today`, `timeOfDay`, `iif`, `toX()` and `convertsToX()` for Boolean, Integer, Decimal, Date, DateTime, Time, String and Quantity, the string functions and the FHIR functions below. `ofType()` is not implemented yet ([T0042](tasks/T0042-fn-projection-completion.md)). Arithmetic, comparisons, equality/equivalence, membership, union and string concatenation operators from T0010 are implemented. Other standard functions are still incremental work; an unavailable function such as `select()` raises `semantic/unknown-function`, rather than pretending to evaluate it.
+Model-less paths, literals, indexing, Boolean logic, unary polarity and type operations are available. The built-in functions are `not`, `is`, `as`, `where`, `select`, `repeat`, `ofType`, `exists`, `count`, `empty`, `all`, `allTrue`, `anyTrue`, `allFalse`, `anyFalse`, `subsetOf`, `supersetOf`, `distinct`, `isDistinct`, `first`, `single`, `last`, `tail`, `skip`, `take`, `intersect`, `exclude`, `union`, `combine`, `children`, `descendants`, `trace`, `now`, `today`, `timeOfDay`, `iif`, `toX()` and `convertsToX()` for Boolean, Integer, Decimal, Date, DateTime, Time, String and Quantity, the string functions and the FHIR functions below. Arithmetic, comparisons, equality/equivalence, membership, union and string concatenation operators from T0010 are implemented. Other standard functions are still incremental work; an unavailable function such as `aggregate()` raises `semantic/unknown-function`, rather than pretending to evaluate it.
 
 Filtering is now available through `where(criteria)`, using the existing synchronous API:
 
@@ -91,6 +91,14 @@ export const filteredGiven: unknown[] = evaluate(patient, "name.where(given[0] =
 ```
 
 `where` preserves input order, duplicates and input object identity. It evaluates criteria for each item with that item as `$this` and its zero-based input position as `$index`; nested filters have independent frames. True includes the item, false/empty excludes it. Criteria follow the existing FHIRPath singleton Boolean rule: a single non-Boolean item counts as true, including `0` or `''`; this is not JavaScript truthiness or string-to-Boolean conversion. Multiple criterion items raise `eval/singleton-expected`. Empty input returns empty without evaluating the criterion. This increment adds no options, model awareness or public async surface; the version-specific 0.1 matrix below remains historical.
+
+`select(projection)` evaluates the projection for each item, with the item as `$this` and its position as `$index`, and lists the results in order. `repeat(projection)` applies the projection to the input, then to every new item it gives, until no new item comes; an item is new unless it equals (`=`) one already found or is the same element. It walks nested data such as `Questionnaire.item` breadth first, and stops a projection that keeps making new values, such as `'x'.repeat($this & 'x')`, with `eval/limit-exceeded` after 5,000 items. `ofType(type)` keeps the items of a type. Without a model, a resource name such as `Patient` keeps the objects whose own `resourceType` is that name, and a qualified name that does not resolve, such as `FHIR.Patient`, raises `eval/unknown-type`.
+
+```ts
+export const firstGivenPerName: unknown[] = evaluate(patient, 'name.select(given.first())');
+export const linkIds: unknown[] = evaluate(questionnaire, 'Questionnaire.repeat(item).linkId');
+export const onlyPatients: unknown[] = compile('ofType(Patient)').evaluate([patient, questionnaire]);
+```
 
 `exists()` returns whether the input has any items, and `count()` returns its item count (including duplicates). Their empty-input results are `[false]` and `[0]`. `exists(criteria)` uses the same per-item predicate helper as `where` and stops as soon as an item matches; later criteria, including their errors, are not evaluated.
 

@@ -27,3 +27,36 @@ import type { Item } from './collection.ts';
 export function toSystemValue(item: Item): Item | undefined {
   return item instanceof ModelNode ? item.systemValue() : item;
 }
+
+/**
+ * Whether two items are the same input node: the same object, or two nodes for the same element
+ * of the same input, as when an expression reaches one element twice. Each level up to the root
+ * must have the same element name, position and JSON, and the roots the same JSON value. Values
+ * are not compared, so this also recognizes an element that holds only extensions, which `=`
+ * cannot: `repeat()` uses it to find such an element only once.
+ */
+export function isSameNode(a: Item, b: Item): boolean {
+  if (a === b) {
+    return true;
+  }
+  let left: ModelNode | undefined = a instanceof ModelNode ? a : undefined;
+  let right: ModelNode | undefined = b instanceof ModelNode ? b : undefined;
+  while (left !== undefined && right !== undefined) {
+    if (left === right) {
+      return true;
+    }
+    if (left.value !== right.value || left.primitiveElement !== right.primitiveElement) {
+      return false;
+    }
+    if (left.parent === undefined || right.parent === undefined) {
+      // A root is named by the caller, so roots compare by their JSON value only.
+      return left.parent === right.parent && typeof left.value === 'object' && left.value !== null;
+    }
+    if (left.name !== right.name || left.index !== right.index) {
+      return false;
+    }
+    left = left.parent;
+    right = right.parent;
+  }
+  return false;
+}
