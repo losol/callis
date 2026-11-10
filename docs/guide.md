@@ -5,7 +5,7 @@ Callis provides synchronous, model-less evaluation of JSON. The initial API is i
 ## Evaluate or compile
 
 ```ts
-import { compile, evaluate, FhirPathError, parseJson } from '@callis/core';
+import { compile, evaluate } from '@callis/core';
 
 export const patient: Readonly<{ resourceType: string; name: readonly { given: readonly string[] }[] }> = {
   resourceType: 'Patient', name: [{ given: ['Ada', 'Mina'] }],
@@ -49,6 +49,8 @@ This option cannot recover digits already lost through `JSON.parse` or a JavaScr
 ## Errors and synchronous behavior
 
 ```ts
+import { FhirPathError } from '@callis/core';
+
 export function expressionError(): string {
   try {
     compile('Patient.');
@@ -69,12 +71,14 @@ Catch `FhirPathError` for expression diagnostics and keep other errors separate.
 `JSON.parse` goes through JavaScript numbers, so `1.50` becomes `1.5` and `9.5e2` becomes `950`. FHIRPath can see that difference, and FHIR keeps the precision of decimals. `parseJson(text)` accepts the same JSON as `JSON.parse` and returns ordinary objects, arrays, strings, Booleans and `null`, with every number as a `JsonNumber` that holds its text (`text`, `toInteger()`, `toDecimal()`, `toNumber()`). Evaluation treats it as the Integer or Decimal it denotes: a number written without a fraction or exponent in the 32-bit range is an Integer, anything else a Decimal with the precision of the text.
 
 ```ts
+import { parseJson } from '@callis/core';
+
 export const lossless: unknown[] = evaluate(parseJson('{"value": 1.50}'), 'value', {
   decimalOutput: 'string',
 });
 ```
 
-This gives `['1.50']`; without `decimalOutput: 'string'`, `[1.5]`. A result that is an object keeps its `JsonNumber` values; `JSON.stringify()` writes them as numbers, and `String(number)` gives the text. Invalid text raises `eval/invalid-json` with the offset of the problem. Parsing is not limited by the call stack. A `__proto__` key becomes an own property, as with `JSON.parse`.
+This gives `['1.50']`; without `decimalOutput: 'string'`, `[1.5]`. A result that is an object keeps its `JsonNumber` values; `JSON.stringify()` writes them as numbers, and `String(number)` gives the text. Invalid text raises `eval/invalid-json` with the offset of the problem. Parsing is not limited by the call stack. A `__proto__` key becomes an own property, as with `JSON.parse`. `parseJson` is not in releases up to 0.2.0.
 
 ## Current support and deferred API
 
