@@ -89,6 +89,15 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
   ['dateTime', { kind: 'primitive', base: 'Element', systemType: 'DateTime' }],
   ['instant', { kind: 'primitive', base: 'Element', systemType: 'DateTime' }],
   ['time', { kind: 'primitive', base: 'Element', systemType: 'Time' }],
+  ['xhtml', { kind: 'primitive', base: 'Element', systemType: 'String' }],
+  [
+    'Narrative',
+    {
+      kind: 'complex',
+      base: 'Element',
+      elements: [element('status', ['code']), element('div', ['xhtml'])],
+    },
+  ],
   [
     'Period',
     {
@@ -195,6 +204,7 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
       base: 'Resource',
       isAbstract: true,
       elements: [
+        element('text', ['Narrative']),
         element('contained', ['Resource'], { isArray: true }),
         element('extension', ['Extension'], { isArray: true }),
       ],

@@ -1,21 +1,23 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: `${name}` is the substitution syntax under test, not a template.
 import { describe, expect, it } from 'vitest';
+import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
+import { bindHooks, type RegexMatcher } from '../runtime/hooks.ts';
 import { BASE_FLAGS, compileRegex, expandSubstitution } from './regex.ts';
 
 // https://hl7.org/fhirpath/N1/#matchesregex-string-boolean: case-sensitive, 'single line' mode,
 // Unicode characters. The dialect is JavaScript's with the u flag (docs/spec-notes.md).
 describe('compileRegex', () => {
   it('is case-sensitive, with . matching a line terminator and ^ and $ at the ends only', () => {
-    const regex = compileRegex('^A.*B$', BASE_FLAGS);
+    const regex = compileRegex('^A.*B$', BASE_FLAGS, undefined);
     expect(regex.test('A\nB')).toBe(true);
     expect(regex.test('a\nb')).toBe(false);
-    expect(compileRegex('^b', BASE_FLAGS).test('a\nb')).toBe(false);
-    expect(compileRegex('a$', BASE_FLAGS).test('a\nb')).toBe(false);
+    expect(compileRegex('^b', BASE_FLAGS, undefined).test('a\nb')).toBe(false);
+    expect(compileRegex('a$', BASE_FLAGS, undefined).test('a\nb')).toBe(false);
   });
 
   it('reads the text as characters', () => {
-    expect(compileRegex('^.$', BASE_FLAGS).test('\u{1F525}')).toBe(true);
-    expect(compileRegex('^\\p{L}+$', BASE_FLAGS).test('Åsa')).toBe(true);
+    expect(compileRegex('^.$', BASE_FLAGS, undefined).test('\u{1F525}')).toBe(true);
+    expect(compileRegex('^\\p{L}+$', BASE_FLAGS, undefined).test('Åsa')).toBe(true);
   });
 
   it.each([
@@ -27,7 +29,7 @@ describe('compileRegex', () => {
     ['(?i)a', 'an inline flag, which JavaScript does not have'],
     ['a++', 'a possessive quantifier, which JavaScript does not have'],
   ])('raises eval/invalid-argument for %j (%s)', (pattern) => {
-    expect(() => compileRegex(pattern, BASE_FLAGS)).toThrow(
+    expect(() => compileRegex(pattern, BASE_FLAGS, undefined)).toThrow(
       expect.objectContaining({ code: 'eval/invalid-argument' }),
     );
   });
@@ -38,7 +40,7 @@ describe('compileRegex', () => {
     'secret/name(', // V8 writes the source of this one differently
     'secret\nname(',
   ])('does not put the pattern %j in the error', (pattern) => {
-    const error = catchError(() => compileRegex(pattern, BASE_FLAGS));
+    const error = catchError(() => compileRegex(pattern, BASE_FLAGS, undefined));
     expect(error).toMatchObject({ code: 'eval/invalid-argument' });
     expect((error as Error).cause).toBeUndefined();
     expect((error as Error).message).not.toContain('secret');
@@ -46,8 +48,85 @@ describe('compileRegex', () => {
   });
 
   it('says why the pattern is not valid', () => {
-    expect(catchError(() => compileRegex('(', BASE_FLAGS))).toMatchObject({
+    expect(catchError(() => compileRegex('(', BASE_FLAGS, undefined))).toMatchObject({
       message: expect.stringMatching(/^The regular expression is not valid: \S+/),
+    });
+  });
+
+  it('finds every match for matchAll(), from the start and without overlap', () => {
+    const matches = [...compileRegex('a.', BASE_FLAGS, undefined).matchAll('ab ac\nad')];
+    expect(matches.map((match) => [match[0], match.index])).toEqual([
+      ['ab', 0],
+      ['ac', 3],
+      ['ad', 6],
+    ]);
+  });
+});
+
+// docs/tasks/T0021-hooks-async.md#host-hooks: a host's engine instead of RegExp.
+describe('compileRegex with a regex hook', () => {
+  const binding = { isAsync: false, signal: undefined };
+  /** An engine that records what it was asked to compile and matches with RegExp. */
+  function engine(seen: [string, string][]): RegexMatcher | undefined {
+    return bindHooks(
+      {
+        regex(pattern, flags) {
+          seen.push([pattern, flags]);
+          const regex = new RegExp(pattern, flags);
+          return {
+            test: (text) => regex.test(text),
+            matchAll: (text) => text.matchAll(new RegExp(pattern, `g${flags}`)),
+          };
+        },
+      },
+      binding,
+    ).regex?.('a.', BASE_FLAGS);
+  }
+
+  it('compiles with the hook, which gets the pattern and the base flags without g', () => {
+    const seen: [string, string][] = [];
+    const matcher = engine(seen);
+    expect(seen).toEqual([['a.', 'su']]);
+    expect(matcher?.test('xab')).toBe(true);
+    expect([...(matcher?.matchAll('ab ac') ?? [])].map((match) => match[0])).toEqual(['ab', 'ac']);
+  });
+
+  it('reports a SyntaxError of the hook as an invalid pattern, and passes other errors on', () => {
+    const syntax = bindHooks(
+      {
+        regex: () => {
+          throw new SyntaxError('secret-input: lookbehind is not supported');
+        },
+      },
+      binding,
+    ).regex;
+    const error = catchError(() => compileRegex('(?<=secret)b', BASE_FLAGS, syntax));
+    expect(error).toMatchObject({
+      code: 'eval/invalid-argument',
+      message:
+        'The regular expression is not valid: it is not valid in the regular expression engine of the regex hook',
+    });
+    // The dialect is the host's, so the message neither blames JavaScript's nor repeats the
+    // host's message or the pattern, which may hold input data.
+    expect((error as Error).message).not.toContain('JavaScript');
+    expect((error as Error).message).not.toContain('secret');
+    expect((error as Error).cause).toBeUndefined();
+    const failing = bindHooks(
+      {
+        regex: () => {
+          throw new RangeError('engine limit');
+        },
+      },
+      binding,
+    ).regex;
+    expect(() => compileRegex('a', BASE_FLAGS, failing)).toThrow(RangeError);
+  });
+
+  it('rejects a result that is not a matcher', () => {
+    const regex = bindHooks({ regex: () => ({ test: () => true }) as never }, binding).regex;
+    expect(() => compileRegex('a', BASE_FLAGS, regex)).toThrow(FhirPathEvaluationError);
+    expect(catchError(() => compileRegex('a', BASE_FLAGS, regex))).toMatchObject({
+      code: 'eval/invalid-argument',
     });
   });
 });
@@ -63,8 +142,8 @@ function catchError(action: () => unknown): unknown {
 
 /** Expands `substitution` for the first match of `pattern` in `input`. */
 function expand(pattern: string, input: string, substitution: string): string {
-  const match = input.match(compileRegex(pattern, BASE_FLAGS));
-  if (match === null) {
+  const [match] = compileRegex(pattern, BASE_FLAGS, undefined).matchAll(input);
+  if (match === undefined) {
     throw new Error('the test needs a match');
   }
   return expandSubstitution(substitution, match, input);

@@ -2,9 +2,11 @@
  * Regular expressions for `matches()` and `replaceMatches()`
  * ([N1 §5.6.9–10](https://hl7.org/fhirpath/N1/#matchesregex-string-boolean)). FHIRPath does not
  * prescribe a dialect, so Callis uses JavaScript's `RegExp` and records the differences from PCRE
- * in `docs/spec-notes.md`.
+ * in `docs/spec-notes.md`. A host that wants a safe engine instead of the backtracking `RegExp`
+ * gives a `regex` hook, which compiles the patterns ([T0021: host hooks](https://github.com/losol/callis/blob/main/docs/tasks/T0021-hooks-async.md#host-hooks)).
  */
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
+import type { BoundHooks, RegexMatcher } from '../runtime/hooks.ts';
 
 /**
  * The flags every FHIRPath regular expression has: `u` for Unicode mode, so a pattern works on
@@ -14,24 +16,44 @@ import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
 export const BASE_FLAGS = 'su';
 
 /**
- * Compiles a regular expression with the given flags, which include {@link BASE_FLAGS}.
+ * Compiles a regular expression with the given flags, which are {@link BASE_FLAGS}: with the
+ * evaluation's `regex` hook when the host gave one, and otherwise with `RegExp`, whose `g`
+ * variant finds every match for `matchAll()`.
  *
  * The error says why the pattern is not valid but does not repeat it: a pattern can be computed
  * from input data, and errors never include input data
  * ([architecture: security and robustness](https://github.com/losol/callis/blob/main/docs/architecture.md#security-and-robustness)).
- * For the same reason the engine's error is not kept as the `cause`.
+ * For the same reason the engine's error is not kept as the `cause`, and the message of the hook's
+ * engine, whose dialect and wording are the host's, is not repeated either: the error only says
+ * that the hook's engine rejected the pattern.
  *
- * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` when the pattern is not valid
- *   in JavaScript's dialect with the `u` flag.
+ * @param engine - The bound `regex` hook of the evaluation, or undefined for `RegExp`.
+ * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` when the pattern is not valid:
+ *   `RegExp` or the hook threw a `SyntaxError`. Any other error of the hook is passed on.
  */
-export function compileRegex(pattern: string, flags: string): RegExp {
+export function compileRegex(
+  pattern: string,
+  flags: string,
+  engine: BoundHooks['regex'],
+): RegexMatcher {
   try {
-    return new RegExp(pattern, flags);
+    if (engine !== undefined) {
+      return engine(pattern, flags);
+    }
+    const regex = new RegExp(pattern, flags);
+    return {
+      test: (text) => regex.test(text),
+      matchAll: (text) => text.matchAll(new RegExp(pattern, `g${flags}`)),
+    };
   } catch (error) {
     if (error instanceof SyntaxError) {
+      const reason =
+        engine === undefined
+          ? reasonOf(error, pattern, flags)
+          : 'it is not valid in the regular expression engine of the regex hook';
       throw new FhirPathEvaluationError(
         'eval/invalid-argument',
-        `The regular expression is not valid: ${reasonOf(error, pattern, flags)}`,
+        `The regular expression is not valid: ${reason}`,
       );
     }
     throw error;

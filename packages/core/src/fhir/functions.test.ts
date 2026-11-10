@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { hooksFor, MODES } from '../../test/support/hook-modes.ts';
 import { stubModel } from '../../test/support/stub-model.ts';
 import {
   type CompileOptions,
@@ -7,9 +8,11 @@ import {
   evaluate,
   evaluateAsync,
 } from '../api/compile.ts';
+import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
 import { createRegistry } from '../functions/registry.ts';
 import { parseJson } from '../model/lossless-json.ts';
 import { ModelNode } from '../model/model-node.ts';
+import type { CodedValue, EvaluationHooks, SubsumptionOutcome } from '../runtime/hooks.ts';
 import { DateValue } from '../values/datetime/date.ts';
 import { Decimal } from '../values/decimal/decimal.ts';
 import { FHIR_FUNCTIONS } from './functions.ts';
@@ -216,7 +219,8 @@ describe('hasValue() and getValue()', () => {
   });
 });
 
-// https://hl7.org/fhir/R5/fhirpath.html#functions; the hooks are T0021.
+// https://hl7.org/fhir/R5/fhirpath.html#functions, docs/tasks/T0021-hooks-async.md#host-hooks,
+// docs/spec-notes.md#hook-backed-functions-errors-and-empty-results
 describe('functions that need a host hook', () => {
   it.each([
     "Patient.gender.memberOf('http://hl7.org/fhir/ValueSet/administrative-gender')",
@@ -227,9 +231,404 @@ describe('functions that need a host hook', () => {
   ])('%s is empty without a hook, in sync and async mode', async (expression) => {
     expect(run(patient, expression, { model: stubModel })).toEqual([]);
     expect(await evaluateAsync(patient, expression, { model: stubModel })).toEqual([]);
+    // Other hooks do not help.
+    const hooks = { trace: () => undefined };
+    expect(run(patient, expression, { model: stubModel, hooks })).toEqual([]);
   });
 
-  it('still evaluates its arguments', () => {
+  it('still evaluates and checks its arguments', () => {
     expect(codeOf(() => run(patient, "conformsTo('a'.substring('x'))"))).toBe('eval/type-mismatch');
+    expect(codeOf(() => run(patient, 'conformsTo(1)'))).toBe('eval/type-mismatch');
+    expect(codeOf(() => run(patient, "Patient.gender.memberOf('a' | 'b')"))).toBe(
+      'eval/singleton-expected',
+    );
+  });
+});
+
+const observation = {
+  resourceType: 'Observation',
+  status: 'final',
+  code: {
+    coding: [
+      { system: 'http://loinc.org', code: '8480-6', display: 'Systolic' },
+      { system: 'http://snomed.info/sct', code: '271649006' },
+    ],
+    text: 'SBP',
+  },
+  valueQuantity: { value: 120, unit: 'mmHg' },
+};
+
+const VS = 'http://example.org/vs';
+
+describe.each(MODES)(
+  'memberOf(valueset) with a terminology provider, %s',
+  (_label, run, isAsync) => {
+    function provider(answer: unknown): {
+      readonly calls: [CodedValue, string][];
+      readonly hooks: EvaluationHooks;
+      readonly options: CompileOptions & EvaluateOptions;
+    } {
+      const calls: [CodedValue, string][] = [];
+      const hooks = hooksFor(
+        {
+          terminology: {
+            memberOf: (coded, valueSet) => {
+              calls.push([coded, valueSet]);
+              return answer as boolean;
+            },
+          },
+        },
+        isAsync,
+      );
+      return { calls, hooks, options: { model: stubModel, hooks } };
+    }
+
+    it('passes a code, a Coding or a CodeableConcept with the value set URL', async () => {
+      const { calls, options } = provider(true);
+      await expect(
+        run(observation, `Observation.status.memberOf('${VS}')`, options),
+      ).resolves.toEqual([true]);
+      await expect(
+        run(observation, 'Observation.code.coding[0].memberOf(%`vs-observation-codes`)', options),
+      ).resolves.toEqual([true]);
+      await expect(
+        run(observation, `Observation.code.memberOf('${VS}')`, options),
+      ).resolves.toEqual([true]);
+      await expect(run(null, `'final'.memberOf('${VS}')`, options)).resolves.toEqual([true]);
+      const loinc = { system: 'http://loinc.org', code: '8480-6', display: 'Systolic' };
+      const snomed = { system: 'http://snomed.info/sct', code: '271649006' };
+      expect(calls).toEqual([
+        [{ kind: 'code', codings: [{ code: 'final' }], value: 'final' }, VS],
+        [
+          { kind: 'Coding', codings: [loinc], value: loinc },
+          'http://hl7.org/fhir/ValueSet/observation-codes',
+        ],
+        [{ kind: 'CodeableConcept', codings: [loinc, snomed], value: observation.code }, VS],
+        [{ kind: 'code', codings: [{ code: 'final' }], value: 'final' }, VS],
+      ]);
+      expect(calls[1]?.[0].value).toBe(observation.code.coding[0]);
+      expect(calls[2]?.[0].value).toBe(observation.code);
+    });
+
+    it('gives false and empty as the provider answers', async () => {
+      const expression = `Observation.status.memberOf('${VS}')`;
+      await expect(run(observation, expression, provider(false).options)).resolves.toEqual([false]);
+      await expect(run(observation, expression, provider(undefined).options)).resolves.toEqual([]);
+      await expect(run(observation, expression, provider(null).options)).resolves.toEqual([]);
+    });
+
+    it('is empty without a call for empty or several items, an uncoded item or no value set', async () => {
+      const { calls, options } = provider(true);
+      for (const expression of [
+        `Observation.missing.memberOf('${VS}')`,
+        `Observation.code.coding.memberOf('${VS}')`,
+        `Observation.memberOf('${VS}')`,
+        `Observation.value.memberOf('${VS}')`,
+        "Observation.status.memberOf('')",
+        'Observation.status.memberOf({})',
+      ]) {
+        await expect(run(observation, expression, options)).resolves.toEqual([]);
+      }
+      expect(calls).toEqual([]);
+    });
+
+    it('reads the shape of the data without a model', async () => {
+      const { calls, hooks } = provider(true);
+      const modelless = { hooks };
+      await expect(
+        run({ system: 's', code: 'x' }, `memberOf('${VS}')`, modelless),
+      ).resolves.toEqual([true]);
+      await expect(
+        run({ coding: [{ code: 'a' }] }, `memberOf('${VS}')`, modelless),
+      ).resolves.toEqual([true]);
+      await expect(run({ foo: 1 }, `memberOf('${VS}')`, modelless)).resolves.toEqual([]);
+      expect(calls.map(([coded]) => [coded.kind, coded.codings])).toEqual([
+        ['Coding', [{ system: 's', code: 'x' }]],
+        ['CodeableConcept', [{ code: 'a' }]],
+      ]);
+    });
+
+    it('raises eval/invalid-argument for an answer that is not a boolean', async () => {
+      await expect(
+        run(observation, `Observation.status.memberOf('${VS}')`, provider('yes').options),
+      ).rejects.toMatchObject({ code: 'eval/invalid-argument' });
+    });
+  },
+);
+
+describe.each(MODES)(
+  'subsumes(code) and subsumedBy(code) with a terminology provider, %s',
+  (_label, run, isAsync) => {
+    const a = { system: 's', code: 'a' };
+    const b = { system: 's', code: 'b' };
+    const c = { system: 's', code: 'c' };
+    const d = { system: 's', code: 'd' };
+    const variables = {
+      a,
+      b,
+      aAgain: { system: 's', code: 'a', version: '2', display: 'A' },
+      other: { system: 't', code: 'a' },
+      ab: { coding: [a, b] },
+      bc: { coding: [b, c] },
+      cd: { coding: [c, d] },
+      none: { coding: [] },
+      text: { text: 'no codings' },
+    };
+
+    /** A provider whose answers are keyed `a>b` for the pair (a, b). */
+    function provider(outcomes: Readonly<Record<string, SubsumptionOutcome | undefined>>): {
+      readonly calls: string[];
+      readonly options: CompileOptions & EvaluateOptions;
+    } {
+      const calls: string[] = [];
+      const hooks = hooksFor(
+        {
+          terminology: {
+            subsumes: (x, y) => {
+              const key = `${x.code}>${y.code}`;
+              calls.push(key);
+              return outcomes[key];
+            },
+          },
+        },
+        isAsync,
+      );
+      return { calls, options: { variables, hooks } };
+    }
+
+    it.each<[SubsumptionOutcome | undefined, unknown[], unknown[]]>([
+      ['equivalent', [true], [true]],
+      ['subsumes', [true], [false]],
+      ['subsumed-by', [false], [true]],
+      ['not-subsumed', [false], [false]],
+      [undefined, [], []],
+    ])('%s from the provider gives subsumes %j and subsumedBy %j', async (outcome, yes, no) => {
+      const { calls, options } = provider({ 'a>b': outcome });
+      await expect(run(null, '%a.subsumes(%b)', options)).resolves.toEqual(yes);
+      await expect(run(null, '%a.subsumedBy(%b)', options)).resolves.toEqual(no);
+      expect(calls).toEqual(['a>b', 'a>b']);
+    });
+
+    it('knows two codings with the same system and code are equivalent without a call', async () => {
+      const { calls, options } = provider({});
+      await expect(run(null, '%a.subsumes(%aAgain)', options)).resolves.toEqual([true]);
+      await expect(run(null, '%a.subsumedBy(%aAgain)', options)).resolves.toEqual([true]);
+      await expect(run(null, '%a.subsumes(%other)', options)).resolves.toEqual([]);
+      expect(calls).toEqual(['a>a']);
+    });
+
+    it('asks about the pairs of codings of a CodeableConcept until one matches', async () => {
+      const { calls, options } = provider({ 'a>b': 'not-subsumed', 'a>c': 'subsumes' });
+      await expect(run(null, '%ab.subsumes(%bc)', options)).resolves.toEqual([true]);
+      // (a, b), (a, c) match; (b, b) and (b, c) are never asked.
+      expect(calls).toEqual(['a>b', 'a>c']);
+    });
+
+    it('is false when every pair is known not to match, and empty when one is unknown', async () => {
+      const known = provider({
+        'a>c': 'not-subsumed',
+        'a>d': 'not-subsumed',
+        'b>c': 'not-subsumed',
+        'b>d': 'subsumed-by',
+      });
+      await expect(run(null, '%ab.subsumes(%cd)', known.options)).resolves.toEqual([false]);
+      expect(known.calls).toEqual(['a>c', 'a>d', 'b>c', 'b>d']);
+      const unknown = provider({ 'a>c': 'not-subsumed', 'b>d': 'not-subsumed' });
+      await expect(run(null, '%ab.subsumes(%cd)', unknown.options)).resolves.toEqual([]);
+      const late = provider({ 'b>d': 'subsumes' });
+      await expect(run(null, '%ab.subsumes(%cd)', late.options)).resolves.toEqual([true]);
+      // A coding both concepts share is equivalent to itself, whatever the provider says.
+      const shared = provider({ 'a>b': 'not-subsumed', 'a>c': 'not-subsumed' });
+      await expect(run(null, '%ab.subsumes(%bc)', shared.options)).resolves.toEqual([true]);
+    });
+
+    it('is empty without a call for anything but one Coding or CodeableConcept on each side', async () => {
+      const { calls, options } = provider({ 'a>b': 'subsumes' });
+      for (const expression of [
+        "'a'.subsumes(%b)",
+        "%a.subsumes('b')",
+        '%a.subsumes(%a | %b)',
+        '(%a | %b).subsumes(%b)',
+        '{}.subsumes(%b)',
+        '%a.subsumes({})',
+        '%none.subsumes(%b)',
+        '%text.subsumes(%b)',
+        '%a.subsumedBy(%none)',
+      ]) {
+        await expect(run(null, expression, options)).resolves.toEqual([]);
+      }
+      expect(calls).toEqual([]);
+    });
+
+    it('works on typed codings with a model', async () => {
+      const { calls, options } = provider({ '8480-6>271649006': 'subsumes' });
+      await expect(
+        run(observation, 'Observation.code.coding[0].subsumes(Observation.code.coding[1])', {
+          ...options,
+          model: stubModel,
+        }),
+      ).resolves.toEqual([true]);
+      await expect(
+        run(observation, 'Observation.code.subsumedBy(Observation.code.coding[1])', {
+          ...options,
+          model: stubModel,
+        }),
+      ).resolves.toEqual([true]);
+      expect(calls).toEqual(['8480-6>271649006', '8480-6>271649006']);
+    });
+  },
+);
+
+describe.each(MODES)('conformsTo(structure) with a conformsTo hook, %s', (_label, run, isAsync) => {
+  const PROFILE = 'http://hl7.org/fhir/StructureDefinition/Patient';
+
+  function hook(answer: (value: unknown, profile: string) => boolean | undefined): {
+    readonly calls: [unknown, string][];
+    readonly hooks: EvaluationHooks;
+    readonly options: CompileOptions & EvaluateOptions;
+  } {
+    const calls: [unknown, string][] = [];
+    const hooks = hooksFor(
+      {
+        conformsTo: (value, profile) => {
+          calls.push([value, profile]);
+          return answer(value, profile);
+        },
+      },
+      isAsync,
+    );
+    return { calls, hooks, options: { model: stubModel, hooks } };
+  }
+
+  it('passes the JSON of the single input item and the profile URL', async () => {
+    const { calls, options } = hook(() => true);
+    await expect(run(patient, `conformsTo('${PROFILE}')`, options)).resolves.toEqual([true]);
+    await expect(run(patient, `Patient.name.conformsTo('${PROFILE}')`, options)).resolves.toEqual([
+      true,
+    ]);
+    await expect(run(null, `'x'.conformsTo('${PROFILE}')`, options)).resolves.toEqual([true]);
+    expect(calls.map(([, profile]) => profile)).toEqual([PROFILE, PROFILE, PROFILE]);
+    expect(calls[0]?.[0]).toBe(patient);
+    expect(calls[1]?.[0]).toBe(patient.name[0]);
+    expect(calls[2]?.[0]).toBe('x');
+  });
+
+  it('gives what the hook answers', async () => {
+    await expect(
+      run(patient, `conformsTo('${PROFILE}')`, hook(() => false).options),
+    ).resolves.toEqual([false]);
+    await expect(
+      run(patient, `conformsTo('${PROFILE}')`, hook(() => undefined).options),
+    ).resolves.toEqual([]);
+  });
+
+  it('is empty without a call for empty or several items and an empty structure', async () => {
+    const { calls, options } = hook(() => true);
+    await expect(
+      run(patient, `Patient.missing.conformsTo('${PROFILE}')`, options),
+    ).resolves.toEqual([]);
+    await expect(
+      run(patient, `Patient.extension.conformsTo('${PROFILE}')`, options),
+    ).resolves.toEqual([]);
+    await expect(run(patient, "conformsTo('')", options)).resolves.toEqual([]);
+    await expect(run(patient, 'conformsTo({})', options)).resolves.toEqual([]);
+    expect(calls).toEqual([]);
+  });
+
+  // docs/spec-notes.md#hook-backed-functions-errors-and-empty-results: the hook throws for a
+  // profile it cannot resolve, as the R4 text and the suites expect (testConformsTo3).
+  it('raises the error the hook throws, with the span of the call', async () => {
+    const { options } = hook((_value, profile) => {
+      if (profile === 'http://trash') {
+        throw new FhirPathEvaluationError(
+          'eval/invalid-argument',
+          'The profile cannot be resolved',
+        );
+      }
+      return true;
+    });
+    const expression = "true and conformsTo('http://trash')";
+    await expect(run(patient, expression, options)).rejects.toMatchObject({
+      code: 'eval/invalid-argument',
+      span: { start: 9, end: expression.length },
+    });
+    const failure = new RangeError('validator down');
+    const failing = hook(() => {
+      throw failure;
+    });
+    await expect(run(patient, `conformsTo('${PROFILE}')`, failing.options)).rejects.toBe(failure);
+  });
+});
+
+describe.each(MODES)('htmlChecks() with an htmlChecks hook, %s', (_label, run, isAsync) => {
+  const div = '<div xmlns="http://www.w3.org/1999/xhtml"><p>Peter</p></div>';
+  const narrated = { ...patient, text: { status: 'generated', div } };
+
+  function hook(answer: boolean | undefined): {
+    readonly calls: [string, 'xhtml' | 'string'][];
+    readonly hooks: EvaluationHooks;
+    readonly options: CompileOptions & EvaluateOptions;
+  } {
+    const calls: [string, 'xhtml' | 'string'][] = [];
+    const hooks = hooksFor(
+      {
+        htmlChecks: (html, context) => {
+          calls.push([html, context.kind]);
+          return answer;
+        },
+      },
+      isAsync,
+    );
+    return { calls, hooks, options: { model: stubModel, hooks } };
+  }
+
+  it('passes xhtml as the element itself and any other string as content', async () => {
+    const { calls, options } = hook(true);
+    await expect(run(narrated, 'Patient.text.`div`.htmlChecks()', options)).resolves.toEqual([
+      true,
+    ]);
+    await expect(run(narrated, 'Patient.name.family.htmlChecks()', options)).resolves.toEqual([
+      true,
+    ]);
+    await expect(run(narrated, 'Patient.gender.htmlChecks()', options)).resolves.toEqual([true]);
+    await expect(run(null, "'<b>x</b>'.htmlChecks()", options)).resolves.toEqual([true]);
+    expect(calls).toEqual([
+      [div, 'xhtml'],
+      ['Chalmers', 'string'],
+      ['male', 'string'],
+      ['<b>x</b>', 'string'],
+    ]);
+  });
+
+  it('reads text.div as a string without a model', async () => {
+    const { calls, hooks } = hook(true);
+    await expect(run(narrated, 'Patient.text.`div`.htmlChecks()', { hooks })).resolves.toEqual([
+      true,
+    ]);
+    expect(calls).toEqual([[div, 'string']]);
+  });
+
+  it('gives false and empty as the hook answers', async () => {
+    await expect(
+      run(narrated, 'Patient.text.`div`.htmlChecks()', hook(false).options),
+    ).resolves.toEqual([false]);
+    await expect(
+      run(narrated, 'Patient.text.`div`.htmlChecks()', hook(undefined).options),
+    ).resolves.toEqual([]);
+  });
+
+  it('is empty without a call for input that is not one string', async () => {
+    const { calls, options } = hook(true);
+    for (const expression of [
+      'Patient.active.htmlChecks()',
+      'Patient.name.htmlChecks()',
+      'Patient.birthDate.htmlChecks()',
+      'Patient.missing.htmlChecks()',
+      'Patient.extension.htmlChecks()',
+      '(1).htmlChecks()',
+    ]) {
+      await expect(run(narrated, expression, options)).resolves.toEqual([]);
+    }
+    expect(calls).toEqual([]);
   });
 });
