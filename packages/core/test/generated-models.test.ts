@@ -20,6 +20,7 @@ import { FhirPathError } from '../src/errors/fhirpath-error.ts';
 import { parseJson } from '../src/model/lossless-json.ts';
 import { ModelNode } from '../src/model/model-node.ts';
 import type { ModelProvider } from '../src/model/model-provider.ts';
+import type { CodedValue, Coding } from '../src/runtime/hooks.ts';
 import { DateValue } from '../src/values/datetime/date.ts';
 import { DateTimeValue } from '../src/values/datetime/datetime.ts';
 import { Decimal } from '../src/values/decimal/decimal.ts';
@@ -813,6 +814,150 @@ describe.each(PROVIDERS)(
         expect(
           run(unitText, 'Parameters.parameter[1].value >= Parameters.parameter[0].value'),
         ).toEqual([true]);
+      });
+    });
+
+    // docs/tasks/T0021-hooks-async.md#scope: hooks know nothing about FHIR versions; what a
+    // resolve hook returns is typed by the provider like the input.
+    describe('host hooks', () => {
+      const div = '<div xmlns="http://www.w3.org/1999/xhtml"><p>Peter</p></div>';
+      const narrated = { ...patient, text: { status: 'generated', div } };
+
+      it('types a resource from the resolve hook like the input: DeviceAlert under R6 only', () => {
+        const hooks = {
+          resolve: (reference: string) =>
+            reference === 'DeviceAlert/da1'
+              ? deviceAlert
+              : reference === 'Patient/p1'
+                ? patient
+                : undefined,
+        };
+        expect(typed(null, "'Patient/p1'.resolve()", { hooks }).map(typeName)).toEqual(['Patient']);
+        expect(run(null, "'Patient/p1'.resolve().name.use", { hooks })).toEqual([
+          'official',
+          'maiden',
+        ]);
+        expect(run(null, "'Patient/missing'.resolve()", { hooks })).toEqual([]);
+        expect(typed(null, "'DeviceAlert/da1'.resolve()", { hooks }).map(typeName)).toEqual([
+          expected.deviceAlert ? 'DeviceAlert' : undefined,
+        ]);
+        if (expected.deviceAlert) {
+          expect(run(null, "'DeviceAlert/da1'.resolve() is DeviceAlert", { hooks })).toEqual([
+            true,
+          ]);
+          expect(run(null, "'DeviceAlert/da1'.resolve().label", { hooks })).toEqual(['SpO2 low']);
+          expect(
+            run(null, "'DeviceAlert/da1'.resolve().occurrence.start < @2027", { hooks }),
+          ).toEqual([true]);
+        } else {
+          expect(
+            codeOf(() => run(null, "'DeviceAlert/da1'.resolve() is DeviceAlert", { hooks })),
+          ).toBe('eval/unknown-type');
+          // Untyped data: its keys are navigable, but its strings are not dates.
+          expect(run(null, "'DeviceAlert/da1'.resolve().label", { hooks })).toEqual(['SpO2 low']);
+          expect(
+            codeOf(() =>
+              run(null, "'DeviceAlert/da1'.resolve().occurrence.start < @2027", { hooks }),
+            ),
+          ).toBe('eval/type-mismatch');
+        }
+      });
+
+      it('forwards xhtml as the element and other strings as content to the htmlChecks hook', () => {
+        const calls: [string, string][] = [];
+        const hooks = {
+          htmlChecks: (html: string, context: { readonly kind: string }) => {
+            calls.push([html, context.kind]);
+            return true;
+          },
+        };
+        expect(run(narrated, 'Patient.text.`div`.htmlChecks()', { hooks })).toEqual([true]);
+        expect(run(narrated, 'Patient.name.family.htmlChecks()', { hooks })).toEqual([true]);
+        expect(run(narrated, 'Patient.id.htmlChecks()', { hooks })).toEqual([true]);
+        expect(run(narrated, 'Patient.active.htmlChecks()', { hooks })).toEqual([]);
+        expect(run(narrated, 'Patient.text.htmlChecks()', { hooks })).toEqual([]);
+        expect(run(narrated, 'Patient.name.htmlChecks()', { hooks })).toEqual([]);
+        expect(calls).toEqual([
+          [div, 'xhtml'],
+          ['Chalmers', 'string'],
+          ['p1', 'string'],
+        ]);
+      });
+
+      it('passes codes, Codings and CodeableConcepts to the terminology provider', () => {
+        const seen: [string, number][] = [];
+        const hooks = {
+          terminology: {
+            memberOf: (coded: CodedValue) => {
+              seen.push([coded.kind, coded.codings.length]);
+              return true;
+            },
+          },
+        };
+        const vs = 'http://example.org/vs';
+        expect(
+          run(patient, 'Patient.gender.memberOf(%`vs-administrative-gender`)', { hooks }),
+        ).toEqual([true]);
+        expect(run(container, `Patient.contained[2].code.memberOf('${vs}')`, { hooks })).toEqual([
+          true,
+        ]);
+        expect(
+          run(container, `Patient.contained[2].code.coding.first().memberOf('${vs}')`, { hooks }),
+        ).toEqual([true]);
+        expect(run(container, `Patient.contained[2].memberOf('${vs}')`, { hooks })).toEqual([]);
+        expect(seen).toEqual([
+          ['code', 1],
+          ['CodeableConcept', 2],
+          ['Coding', 1],
+        ]);
+      });
+
+      it('knows equal codings are equivalent and asks the provider about the others', () => {
+        const pairs: string[] = [];
+        const hooks = {
+          terminology: {
+            subsumes: (a: Coding, b: Coding) => {
+              pairs.push(`${a.code}>${b.code}`);
+              return 'not-subsumed' as const;
+            },
+          },
+        };
+        // The LOINC coding of the second Observation is that of the first in another version.
+        expect(
+          run(
+            container,
+            'Patient.contained[2].code.coding[1].subsumes(Patient.contained[1].code.coding[0])',
+            { hooks },
+          ),
+        ).toEqual([true]);
+        expect(
+          run(container, 'Patient.contained[1].code.subsumedBy(Patient.contained[2].code)', {
+            hooks,
+          }),
+        ).toEqual([true]);
+        expect(
+          run(
+            container,
+            'Patient.contained[2].code.coding[0].subsumes(Patient.contained[1].code.coding[0])',
+            { hooks },
+          ),
+        ).toEqual([false]);
+        expect(pairs).toEqual(['8480-6>271649006', '271649006>8480-6']);
+      });
+
+      it('passes the JSON of the resource and the profile to the conformsTo hook', () => {
+        const seen: unknown[] = [];
+        const hooks = {
+          conformsTo: (value: unknown, profile: string) => {
+            seen.push(value, profile);
+            return profile.endsWith('/Patient');
+          },
+        };
+        const base = 'http://hl7.org/fhir/StructureDefinition/';
+        expect(run(patient, `conformsTo('${base}Patient')`, { hooks })).toEqual([true]);
+        expect(run(patient, `conformsTo('${base}Person')`, { hooks })).toEqual([false]);
+        expect(seen).toEqual([patient, `${base}Patient`, patient, `${base}Person`]);
+        expect(seen[0]).toBe(patient);
       });
     });
 

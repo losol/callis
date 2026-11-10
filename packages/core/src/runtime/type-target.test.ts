@@ -8,6 +8,7 @@ import { Quantity } from '../values/quantity/quantity.ts';
 import { minimalUnitSystem } from '../values/quantity/unit-system.ts';
 import type { Item } from './collection.ts';
 import type { EvalContext } from './context.ts';
+import { NO_HOOKS } from './hooks.ts';
 import { toInputCollection } from './navigation.ts';
 import {
   asType,
@@ -33,6 +34,9 @@ function context(model: EvalContext['model'] = undefined): EvalContext {
       throw new Error('not used');
     },
     trace: undefined,
+    hooks: NO_HOOKS,
+    signal: undefined,
+    concurrency: 1,
     limits: { maxRepeatItems: 5_000 },
   };
 }

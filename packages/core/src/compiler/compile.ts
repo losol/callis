@@ -197,8 +197,9 @@ function compileFunctionCall(node: FunctionCallNode, cc: CompilerState): Evaluat
     andThen(target === undefined ? focus : target(ctx, focus, frame), (input) =>
       andThen(evaluateArgs(args, ctx, focus, frame), (values) =>
         // A function added with registry.extend() is a host boundary: a thenable result is
-        // rejected in sync mode and adopted as a native promise in async mode.
-        adoptResult(impl({ ctx, frame, name, span }, input, values), ctx.isAsync),
+        // rejected in sync mode and adopted as a native promise in async mode, where an abort of
+        // the signal is observed once the result has arrived.
+        adoptResult(impl({ ctx, frame, name, span }, input, values), ctx.isAsync, ctx.signal),
       ),
     ),
   );
@@ -417,12 +418,17 @@ function located(span: SourceSpan, expression: string, evaluator: Evaluator): Ev
   };
 }
 
+/**
+ * The error with the span attached: a copy with the same code, message and cause, so a host
+ * still finds the cause it is told about, such as the reason of an aborted signal; an error
+ * without a cause keeps the original as its cause.
+ */
 function withSpan(error: unknown, span: SourceSpan, expression: string): unknown {
   if (error instanceof FhirPathEvaluationError && error.span === undefined) {
     return new FhirPathEvaluationError(error.code, error.message, {
       span,
       expression,
-      cause: error,
+      cause: error.cause ?? error,
     });
   }
   return error;

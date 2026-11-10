@@ -196,12 +196,46 @@ describe('engineAdapter.classifyError', () => {
     'name.where(given.trim().exists())',
     "'a'.matchesFull('a')",
     'name.given.aggregate($total)',
-    "conformsTo('http://hl7.org/fhir/StructureDefinition/Patient')",
-    'name.given.memberOf(%`vs-administrative-gender`)',
     '%terminologies',
     '%server',
   ])('reports %s, which uses a feature of a later task, as not implemented', async (expression) => {
     expect(await classify(expression)).toMatchObject({ kind: 'not-implemented' });
+  });
+
+  // docs/tasks/T0021-hooks-async.md#acceptance-criteria: the fake hooks of fake-hooks.ts.
+  it('answers conformsTo() for the base profiles of the suite model', async () => {
+    const base = 'http://hl7.org/fhir/StructureDefinition/';
+    const shown = (items: readonly unknown[]) =>
+      items.map((item) => engineAdapter.describeValue(item));
+    expect(shown(await evaluate(`conformsTo('${base}Patient')`))).toEqual([
+      { type: 'System.Boolean', value: 'true' },
+    ]);
+    expect(shown(await evaluate(`conformsTo('${base}Person')`, { fhirVersion: 'r5' }))).toEqual([
+      { type: 'System.Boolean', value: 'false' },
+    ]);
+  });
+
+  it('reports a profile that cannot be resolved as an execution error (testConformsTo3)', async () => {
+    expect(await classify("conformsTo('http://trash')")).toMatchObject({
+      kind: 'execution',
+      code: 'eval/invalid-argument',
+    });
+  });
+
+  it('checks strings with htmlChecks(), and leaves other values empty', async () => {
+    const shown = (items: readonly unknown[]) =>
+      items.map((item) => engineAdapter.describeValue(item));
+    expect(shown(await evaluate("'<b>ok</b>'.htmlChecks()"))).toEqual([
+      { type: 'System.Boolean', value: 'true' },
+    ]);
+    expect(shown(await evaluate("'<button>no</button>'.htmlChecks()"))).toEqual([
+      { type: 'System.Boolean', value: 'false' },
+    ]);
+    expect(await evaluate('(5).htmlChecks()')).toEqual([]);
+  });
+
+  it('leaves memberOf() empty: no suite test needs a terminology provider', async () => {
+    expect(await evaluate('name.given.memberOf(%`vs-administrative-gender`)')).toEqual([]);
   });
 
   it.each(['(%terminologies)', '%`\\u0074erminologies`', '(%`factory`).id'])(

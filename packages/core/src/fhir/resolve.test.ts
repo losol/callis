@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { hooksFor, MODES } from '../../test/support/hook-modes.ts';
 import { stubModel } from '../../test/support/stub-model.ts';
 import {
   type CompileOptions,
+  compile,
   type EvaluateOptions,
   evaluate,
   evaluateAsync,
 } from '../api/compile.ts';
 import { ModelNode } from '../model/model-node.ts';
+import type { ResolveContext } from '../runtime/hooks.ts';
 
 // Synthetic data.
 const organization = { resourceType: 'Organization', id: 'o1', name: 'Acme' };
@@ -246,6 +249,175 @@ describe('resolve() and the host options', () => {
       run(contained, 'managingOrganization.resolve().name', { rootResource: patient }),
     ).toEqual(['Acme']);
     expect(run(null, "'#o1'.resolve().name", { rootResource: patient })).toEqual(['Acme']);
+  });
+});
+
+// docs/tasks/T0021-hooks-async.md#host-hooks: the hook for what is not in the data.
+describe.each(MODES)('resolve() with a resolve hook, %s', (_label, run, isAsync) => {
+  const remote = { resourceType: 'Organization', id: 'o9', name: 'Remote' };
+  const answers: Readonly<Record<string, unknown>> = {
+    'Organization/o9': remote,
+    'http://example.org/fhir/Organization/o9': remote,
+    'Patient/p1': { resourceType: 'Patient', id: 'p1', name: [{ family: 'Remote' }] },
+    'Patient/nothing': null,
+    'Patient/broken': () => undefined,
+  };
+
+  function hook(options: CompileOptions & EvaluateOptions = {}): {
+    readonly calls: [string, ResolveContext][];
+    readonly options: CompileOptions & EvaluateOptions;
+  } {
+    const calls: [string, ResolveContext][] = [];
+    const hooks = hooksFor(
+      {
+        resolve: (reference, context) => {
+          calls.push([reference, context]);
+          return Object.hasOwn(answers, reference) ? answers[reference] : undefined;
+        },
+      },
+      isAsync,
+    );
+    return { calls, options: { ...options, hooks } };
+  }
+
+  it('asks the hook for a reference that is not in the data, with the resource around it', async () => {
+    const { calls, options } = hook();
+    const input = observation('o1', 'Organization/o9');
+    await expect(run(input, 'Observation.subject.resolve().name', options)).resolves.toEqual([
+      'Remote',
+    ]);
+    expect(calls).toEqual([['Organization/o9', { signal: undefined, resource: input }]]);
+    expect(calls[0]?.[1].resource).toBe(input);
+  });
+
+  it('passes no resource for a String literal, and the signal it was given', async () => {
+    const signal = { aborted: false };
+    const { calls, options } = hook({ signal });
+    await expect(run(null, "'Organization/o9'.resolve().id", options)).resolves.toEqual(['o9']);
+    expect(calls).toEqual([['Organization/o9', { signal, resource: undefined }]]);
+    expect(calls[0]?.[1].signal).toBe(signal);
+  });
+
+  it('does not ask the hook for what is in the data, nor for a contained reference', async () => {
+    const { calls, options } = hook();
+    await expect(
+      run(patient, 'Patient.managingOrganization.resolve().name', options),
+    ).resolves.toEqual(['Acme']);
+    await expect(run(patient, "'#missing'.resolve()", options)).resolves.toEqual([]);
+    await expect(run(bundle, "'urn:uuid:5c4b'.resolve().id", options)).resolves.toEqual(['o1']);
+    expect(calls).toEqual([]);
+  });
+
+  it('types the result like the input, as a root node', async () => {
+    const typed = hook({ model: stubModel, output: 'typed' });
+    const [resolved] = await run(null, "'Organization/o9'.resolve()", typed.options);
+    expect(resolved).toBeInstanceOf(ModelNode);
+    expect((resolved as ModelNode).type?.name).toBe('Organization');
+    expect((resolved as ModelNode).parent).toBeUndefined();
+    expect((resolved as ModelNode).value).toBe(remote);
+    await expect(
+      run(null, "'Organization/o9'.resolve() is Organization", hook({ model: stubModel }).options),
+    ).resolves.toEqual([true]);
+    const [untyped] = await run(
+      null,
+      "'Organization/o9'.resolve()",
+      hook({ output: 'typed' }).options,
+    );
+    expect((untyped as ModelNode).type).toBeUndefined();
+    await expect(run(null, "'Organization/o9'.resolve().name", hook().options)).resolves.toEqual([
+      'Remote',
+    ]);
+  });
+
+  it('resolves nothing for undefined and null, and rejects a result that is not JSON', async () => {
+    const { calls, options } = hook();
+    await expect(
+      run(null, "('Patient/nothing' | 'Patient/unknown').resolve()", options),
+    ).resolves.toEqual([]);
+    expect(calls.map(([reference]) => reference)).toEqual(['Patient/nothing', 'Patient/unknown']);
+    await expect(run(null, "'Patient/broken'.resolve()", options)).rejects.toMatchObject({
+      code: 'eval/invalid-argument',
+    });
+  });
+
+  it('keeps the input order, with resources from the data and from the hook mixed', async () => {
+    const { calls, options } = hook();
+    const mixed = {
+      resourceType: 'Bundle',
+      entry: [
+        { fullUrl: 'urn:uuid:1', resource: observation('x1', 'Patient/p1') },
+        { fullUrl: 'urn:uuid:2', resource: observation('x2', 'urn:uuid:4') },
+        { fullUrl: 'urn:uuid:3', resource: observation('x3', 'Organization/o9') },
+        { fullUrl: 'urn:uuid:4', resource: { resourceType: 'Patient', id: 'local' } },
+      ],
+    };
+    await expect(
+      run(mixed, 'Bundle.entry.resource.subject.resolve().id', options),
+    ).resolves.toEqual(['p1', 'local', 'o9']);
+    expect(calls.map(([reference]) => reference)).toEqual(['Patient/p1', 'Organization/o9']);
+  });
+});
+
+describe('resolve() with an async hook', () => {
+  const references = ['Patient/1', 'Patient/2', 'Patient/3', 'Patient/4', 'Patient/5'];
+  const bundleOf = (subjects: readonly string[]) => ({
+    resourceType: 'Bundle',
+    entry: subjects.map((subject, index) => ({
+      fullUrl: `urn:uuid:${index}`,
+      resource: observation(`o${index}`, subject),
+    })),
+  });
+
+  it('raises eval/async-in-sync in evaluate()', () => {
+    const hooks = {
+      resolve: async (reference: string) => ({ resourceType: 'Patient', id: reference }),
+    };
+    expect(() => evaluate(null, "'Patient/1'.resolve()", { hooks })).toThrow(
+      expect.objectContaining({ code: 'eval/async-in-sync' }),
+    );
+  });
+
+  it('starts the calls of one collection concurrently, up to the concurrency, in order', async () => {
+    const release: (() => void)[] = [];
+    const started: string[] = [];
+    let running = 0;
+    let most = 0;
+    const hooks = {
+      resolve: (reference: string) => {
+        started.push(reference);
+        running++;
+        most = Math.max(most, running);
+        return new Promise<unknown>((resolve) =>
+          release.push(() => {
+            running--;
+            resolve({ resourceType: 'Patient', id: reference.slice('Patient/'.length) });
+          }),
+        );
+      },
+    };
+    // The compiled expression starts evaluating at once; evaluateAsync() starts on a microtask.
+    const pending = compile('Bundle.entry.resource.subject.resolve().id').evaluateAsync(
+      bundleOf(references),
+      { hooks, concurrency: 2 },
+    );
+    expect(started).toEqual(['Patient/1', 'Patient/2']);
+    // The call started last finishes first, and each finished call lets the next one start.
+    const settle = async (): Promise<void> => {
+      for (let turn = 0; turn < 8; turn++) {
+        await Promise.resolve();
+      }
+    };
+    while (started.length < references.length) {
+      release.pop()?.();
+      await settle();
+    }
+    while (release.length > 0) {
+      release.pop()?.();
+      await settle();
+    }
+    await expect(pending).resolves.toEqual(['1', '2', '3', '4', '5']);
+    expect(started).toEqual(references);
+    expect(most).toBe(2);
   });
 });
 

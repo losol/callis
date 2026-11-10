@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ModelNode } from '../model/model-node.ts';
 import { minimalUnitSystem } from '../values/quantity/unit-system.ts';
 import type { EvalContext } from './context.ts';
+import { NO_HOOKS } from './hooks.ts';
 import { createVariables, lookUpVariable, UCUM_URL } from './variables.ts';
 
 function context(variables: unknown): EvalContext {
@@ -19,6 +20,9 @@ function context(variables: unknown): EvalContext {
       throw new Error('not used');
     },
     trace: undefined,
+    hooks: NO_HOOKS,
+    signal: undefined,
+    concurrency: 1,
     limits: { maxRepeatItems: 5_000 },
   };
 }

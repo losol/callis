@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { compile, evaluate, evaluateAsync } from '../src/api/compile.ts';
 import { FhirPathError } from '../src/errors/fhirpath-error.ts';
 import type { Collection } from '../src/runtime/collection.ts';
+import type { EvaluationHooks } from '../src/runtime/hooks.ts';
 import { customThenable, hostFunction, testRegistry } from './support/test-functions.ts';
 
 const input = {
@@ -217,6 +218,170 @@ describe('a trace hook that returns a thenable', () => {
   it.each(results)('rejects %s with eval/async-in-sync in sync mode', async (_label, result) => {
     const hooks = { trace: result };
     expect(await codeOf(() => evaluate(input, "trace('a')", { hooks }))).toBe('eval/async-in-sync');
+  });
+});
+
+// docs/tasks/T0021-hooks-async.md#host-hooks: every hook is a host boundary like a function.
+describe('hooks that return thenables', () => {
+  const referring = {
+    resourceType: 'Patient',
+    id: 'p1',
+    managingOrganization: { reference: 'Organization/o1' },
+  };
+  const variables = { a: { system: 's', code: 'a' }, b: { system: 's', code: 'b' } };
+  const hooksWith = (wrap: <T>(value: T) => PromiseLike<T>): EvaluationHooks => ({
+    resolve: () => wrap({ resourceType: 'Organization', id: 'o1', name: 'Acme' }),
+    conformsTo: () => wrap(true),
+    htmlChecks: () => wrap(false),
+    terminology: { memberOf: () => wrap(true), subsumes: () => wrap('subsumes' as const) },
+  });
+  const cases: readonly [string, unknown[]][] = [
+    ['managingOrganization.resolve().name', ['Acme']],
+    ["conformsTo('http://hl7.org/fhir/StructureDefinition/Patient')", [true]],
+    ["'<p/>'.htmlChecks()", [false]],
+    ["id.memberOf('http://example.org/vs')", [true]],
+    ['%a.subsumes(%b)', [true]],
+    ['%b.subsumedBy(%a)', [false]],
+  ];
+
+  it.each(cases)(
+    '%s adopts a cross-realm promise and a custom thenable in async mode',
+    async (expression, expected) => {
+      for (const wrap of [crossRealmPromise, customThenable]) {
+        await expect(
+          evaluateAsync(referring, expression, { hooks: hooksWith(wrap), variables }),
+        ).resolves.toEqual(expected);
+      }
+    },
+  );
+
+  it.each(cases)('%s raises eval/async-in-sync in sync mode', async (expression) => {
+    for (const wrap of [crossRealmPromise, customThenable]) {
+      expect(
+        await codeOf(() => evaluate(referring, expression, { hooks: hooksWith(wrap), variables })),
+      ).toBe('eval/async-in-sync');
+    }
+  });
+});
+
+// docs/tasks/T0021-hooks-async.md#acceptance-criteria: resolve() through the hook, end to end.
+describe('resolve() through an async hook', () => {
+  const directory: Readonly<Record<string, unknown>> = {
+    'Patient/1': { resourceType: 'Patient', id: '1', name: [{ family: 'One' }] },
+    'Patient/2': { resourceType: 'Patient', id: '2', name: [{ family: 'Two' }] },
+    'Patient/3': { resourceType: 'Patient', id: '3', name: [{ family: 'Three' }] },
+  };
+  const bundle = {
+    resourceType: 'Bundle',
+    entry: ['Patient/1', 'Patient/2', 'Patient/3'].map((reference, index) => ({
+      fullUrl: `urn:uuid:${index}`,
+      resource: { resourceType: 'Observation', id: `o${index}`, subject: { reference } },
+    })),
+  };
+  const expression = 'Bundle.entry.resource.subject.resolve().name.family';
+  const lookUp = (reference: string): unknown => directory[reference];
+
+  it('returns the results in input order, within the concurrency, when later calls finish first', async () => {
+    const release: (() => void)[] = [];
+    let running = 0;
+    let most = 0;
+    const hooks: EvaluationHooks = {
+      resolve: (reference) => {
+        running++;
+        most = Math.max(most, running);
+        return new Promise<unknown>((resolve) =>
+          release.push(() => {
+            running--;
+            resolve(lookUp(reference));
+          }),
+        );
+      },
+    };
+    const pending = compile(expression).evaluateAsync(bundle, { hooks, concurrency: 2 });
+    expect(release).toHaveLength(2);
+    release[1]?.();
+    for (let turn = 0; turn < 8; turn++) {
+      await Promise.resolve();
+    }
+    expect(release).toHaveLength(3);
+    release[2]?.();
+    release[0]?.();
+    await expect(pending).resolves.toEqual(['One', 'Two', 'Three']);
+    expect(most).toBe(2);
+  });
+
+  it('works through evaluate() with a synchronous hook', () => {
+    expect(evaluate(bundle, expression, { hooks: { resolve: lookUp } })).toEqual([
+      'One',
+      'Two',
+      'Three',
+    ]);
+  });
+
+  it('raises eval/async-in-sync in evaluate() with an asynchronous hook', async () => {
+    const hooks: EvaluationHooks = { resolve: async (reference) => lookUp(reference) };
+    expect(await codeOf(() => evaluate(bundle, expression, { hooks }))).toBe('eval/async-in-sync');
+  });
+
+  // docs/tasks/T0021-hooks-async.md#sync-and-async: cancellation with any AbortSignal.
+  it('stops with eval/aborted at the next hook call after the signal is aborted', async () => {
+    const controller = new AbortController();
+    const signals: unknown[] = [];
+    let calls = 0;
+    const hooks: EvaluationHooks = {
+      resolve: async (reference, context) => {
+        calls++;
+        signals.push(context.signal);
+        if (calls === 1) {
+          controller.abort(new Error('the user left'));
+        }
+        return lookUp(reference);
+      },
+    };
+    let failure: unknown;
+    try {
+      await evaluateAsync(bundle, expression, { hooks, signal: controller.signal, concurrency: 1 });
+      expect.unreachable();
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(FhirPathError);
+    expect((failure as FhirPathError).code).toBe('eval/aborted');
+    // The reason stays the cause, also once the span of the call is attached.
+    expect((failure as FhirPathError).cause).toBe(controller.signal.reason);
+    expect((failure as FhirPathError).span).toBeDefined();
+    expect(calls).toBe(1);
+    expect(signals).toEqual([controller.signal]);
+  });
+
+  it('does not start more hook calls of a collection once the signal is aborted', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const hooks: EvaluationHooks = {
+      resolve: (reference) => {
+        calls++;
+        controller.abort();
+        return Promise.resolve(lookUp(reference));
+      },
+    };
+    await expect(
+      evaluateAsync(bundle, expression, { hooks, signal: controller.signal }),
+    ).rejects.toMatchObject({ code: 'eval/aborted' });
+    expect(calls).toBe(1);
+  });
+
+  it('stops after a user-defined async function once the signal is aborted', async () => {
+    const controller = new AbortController();
+    const aborting = hostFunction('aborting', async (items) => {
+      controller.abort();
+      return items;
+    });
+    await expect(
+      evaluateAsync(input, 'name.given.aborting().count()', {
+        functions: testRegistry(aborting),
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ code: 'eval/aborted', span: { start: 0, end: 21 } });
   });
 });
 

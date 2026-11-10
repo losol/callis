@@ -11,8 +11,10 @@ import type { SourceSpan } from '../errors/source-span.ts';
 import type { ModelProvider } from '../model/model-provider.ts';
 import type { NowSnapshot } from '../values/datetime/now.ts';
 import type { UnitSystem } from '../values/quantity/unit-system.ts';
+import type { CancellationSignal } from './cancellation.ts';
 import type { Collection, Item } from './collection.ts';
 import type { ModelEquivalence } from './equality.ts';
+import type { BoundHooks } from './hooks.ts';
 import type { MaybePromise } from './maybe-promise.ts';
 
 /**
@@ -34,8 +36,7 @@ export type TraceSink = (name: string, items: Collection, span: SourceSpan) => M
  *
  * Its `model`, `units` and `timezoneOffset` fields match the context the equality and ordering
  * kernels take (T0009), and `model` and `lenientChoiceSuffix` the context navigation takes, so an
- * `EvalContext` can be passed to them as it is. Later tasks add the other hooks, limits and a
- * cancellation signal (T0021, T0042).
+ * `EvalContext` can be passed to them as it is. T0042 adds the limits.
  */
 export interface EvalContext {
   /** Whether this is an `evaluateAsync()` evaluation, where hooks and functions may be async. */
@@ -84,6 +85,19 @@ export interface EvalContext {
   now(): NowSnapshot;
   /** Receives the output of `trace()`; undefined when the host has no `trace` hook. */
   readonly trace: TraceSink | undefined;
+  /**
+   * The other host hooks, bound to this evaluation: each one is already guarded for sync mode and
+   * for the signal, and its result checked ([T0021: host hooks](https://github.com/losol/callis/blob/main/docs/tasks/T0021-hooks-async.md#host-hooks)).
+   * A hook the host did not give is undefined, and the function that needs it gives empty.
+   */
+  readonly hooks: BoundHooks;
+  /** The host's cancellation signal, passed on to every hook call; undefined without one. */
+  readonly signal: CancellationSignal | undefined;
+  /**
+   * The most hook calls that a host-backed function starts at once for the items of one
+   * collection, in async mode; the `concurrency` option.
+   */
+  readonly concurrency: number;
   /** The bounds on the work of this evaluation, with every default filled in. */
   readonly limits: Limits;
 }

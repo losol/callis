@@ -106,14 +106,61 @@ describe('the evaluation context', () => {
     expect(calls).toBe(0);
   });
 
-  it.each([{ now: 'today' }, { variables: 'x' }])(
-    'raises eval/invalid-argument for the option %j',
-    (options) => {
-      expect(() => evaluate({}, '1', options as never)).toThrow(
-        expect.objectContaining({ code: 'eval/invalid-argument' }),
-      );
-    },
-  );
+  it.each([
+    { now: 'today' },
+    { variables: 'x' },
+    { signal: 'no' },
+    { signal: {} },
+    { signal: { aborted: 'yes' } },
+    { concurrency: 0 },
+    { concurrency: 1.5 },
+    { concurrency: '2' },
+    { concurrency: -1 },
+    { concurrency: Number.NaN },
+    { hooks: 1 },
+    { hooks: { resolve: 1 } },
+    { hooks: { terminology: 'server' } },
+  ])('raises eval/invalid-argument for the option %j', (options) => {
+    expect(() => evaluate({}, '1', options as never)).toThrow(
+      expect.objectContaining({ code: 'eval/invalid-argument' }),
+    );
+  });
+
+  // docs/tasks/T0021-hooks-async.md#sync-and-async
+  it('passes the signal, the concurrency and the bound hooks on', () => {
+    const seen: EvalContext[] = [];
+    const functions = probing((ctx) => {
+      seen.push(ctx);
+      return [];
+    });
+    const signal = { aborted: false };
+    const hooks = { conformsTo: () => true };
+    evaluate({}, 'probe()', { functions });
+    evaluate({}, 'probe()', { functions, signal, hooks, concurrency: 3 });
+    evaluate({}, 'probe()', { functions, concurrency: Number.POSITIVE_INFINITY });
+    expect(seen.map((ctx) => ctx.concurrency)).toEqual([8, 3, Number.POSITIVE_INFINITY]);
+    expect(seen[0]?.signal).toBeUndefined();
+    expect(seen[0]?.hooks.conformsTo).toBeUndefined();
+    expect(seen[1]?.signal).toBe(signal);
+    expect(typeof seen[1]?.hooks.conformsTo).toBe('function');
+    expect(seen[1]?.hooks.resolve).toBeUndefined();
+  });
+
+  it('evaluates nothing for an aborted signal, in sync and async mode', async () => {
+    let calls = 0;
+    const functions = probing(() => {
+      calls++;
+      return [];
+    });
+    const signal = { aborted: true, reason: 'stop' };
+    expect(() => evaluate({}, 'probe()', { functions, signal })).toThrow(
+      expect.objectContaining({ code: 'eval/aborted', cause: 'stop' }),
+    );
+    const pending = evaluateAsync({}, 'probe()', { functions, signal });
+    expect(pending).toBeInstanceOf(Promise);
+    await expect(pending).rejects.toMatchObject({ code: 'eval/aborted', cause: 'stop' });
+    expect(calls).toBe(0);
+  });
 
   it('marks async evaluations', async () => {
     const modes: boolean[] = [];
