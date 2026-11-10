@@ -39,6 +39,9 @@ export function arithmetic(
   if (isNumber(a) && isNumber(b)) return fromOptional(numeric(op, a, b));
   if (op === '+' && typeof a === 'string' && typeof b === 'string') return [a + b];
   if ((op === '+' || op === '-') && isTemporal(a) && b instanceof Quantity) {
+    // 3.0.0 asks for a warning when part of the quantity is ignored, which isFractionIgnored()
+    // detects; no channel carries it to the host yet
+    // (docs/spec-notes.md#fractions-in-datetime-arithmetic).
     return [op === '+' ? addCalendar(a, b.value, b.unit) : subtractCalendar(a, b.value, b.unit)];
   }
   if (a instanceof Quantity || b instanceof Quantity) {

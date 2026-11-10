@@ -94,14 +94,17 @@ describe('parseJson', () => {
     expect(Object.keys(value)).toEqual(['__proto__', 'a']);
   });
 
+  // The depth is what shows that parsing does not recurse. The walk asserts once at the end:
+  // an expect call per level took over 10 s on a loaded machine (#174).
   it('is not limited by the call stack', () => {
     const depth = 200_000;
-    const value = parseJson(`${'['.repeat(depth)}1${']'.repeat(depth)}`);
-    let current: JsonValue = value;
-    for (let level = 0; level < depth; level++) {
-      expect(Array.isArray(current)).toBe(true);
-      current = (current as readonly JsonValue[])[0] as JsonValue;
+    let current: JsonValue | undefined = parseJson(`${'['.repeat(depth)}1${']'.repeat(depth)}`);
+    let levels = 0;
+    while (Array.isArray(current)) {
+      current = current[0];
+      levels++;
     }
+    expect(levels).toBe(depth);
     expect(current).toBeInstanceOf(JsonNumber);
   });
 

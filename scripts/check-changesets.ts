@@ -1,19 +1,32 @@
 /**
- * Checks the pending changesets: no `major` bump for a package below 1.0.0 (see `changesets.ts`).
+ * Checks that nothing releases 1.0.0 before 1.0 (see `changesets.ts`): no pending changeset gives a
+ * package below 1.0.0 a `major` bump, and no public package is at 1.0.0 or above without an earlier
+ * release at 1.0.0 or above. The second check covers the version PR, which has no changesets left.
  *
- * Usage: `pnpm check:changesets`. `pnpm check` and CI run it.
+ * Usage: `pnpm check:changesets`. `pnpm check`, CI and the Release workflow run it. It reads the
+ * release tags with git, so it needs a clone with the tags (`fetch-depth: 0` in GitHub Actions).
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkChangeset, listChangesetFiles, readWorkspaceVersions } from './changesets.ts';
+import {
+  checkChangeset,
+  checkVersions,
+  listChangesetFiles,
+  readReleaseTags,
+  readWorkspacePackages,
+} from './changesets.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const versions = readWorkspaceVersions(root);
+const packages = readWorkspacePackages(root);
+const versions = new Map(packages.map(({ name, version }) => [name, version]));
 const files = listChangesetFiles(root);
-const problems = files.flatMap((file) =>
-  checkChangeset(file, readFileSync(join(root, file), 'utf8'), versions),
-);
+const problems = [
+  ...files.flatMap((file) =>
+    checkChangeset(file, readFileSync(join(root, file), 'utf8'), versions),
+  ),
+  ...checkVersions(packages, readReleaseTags(root)),
+];
 
 /** Escapes a workflow-command value; a property value also escapes `:` and `,`. */
 function escapeCommand(value: string, isProperty = false): string {
@@ -33,3 +46,4 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(`✓ ${files.length} changesets, none with a major bump before 1.0`);
+console.log(`✓ ${packages.length} packages, none at 1.0.0 or above before a 1.0 release`);

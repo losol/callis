@@ -159,6 +159,8 @@ testDistinct3
 testDistinct4
 testDistinct5
 testDistinct6
+testDistinct4
+testDistinct5
 testDiv1
 testDiv2
 testDiv3

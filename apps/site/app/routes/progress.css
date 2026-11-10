@@ -84,16 +84,46 @@
   border-radius: 0.75rem;
 }
 
+/*
+ * The buttons and the slider share a line on wide screens. On narrow screens the
+ * slider and the position get a line of their own, so the row is never wider
+ * than the player. A breakpoint rather than wrapping when the line is full: the
+ * play label turns into the wider pause label, and that must not move the slider
+ * to another line.
+ */
 .pg-player-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.pg-player-buttons,
+.pg-player-seek {
   display: flex;
   align-items: center;
   gap: 0.6rem;
 }
 
-.pg-player-row input[type="range"] {
+/* The buttons wrap too, on screens narrower than the four of them (about 300px). */
+.pg-player-buttons {
+  flex-wrap: wrap;
+}
+
+.pg-player-seek {
+  flex: 1 1 8rem;
+}
+
+.pg-player-seek input[type="range"] {
   flex: 1;
   min-width: 4rem;
   accent-color: var(--primary);
+}
+
+@media (max-width: 30rem) {
+  .pg-player-seek {
+    flex-basis: 100%;
+  }
 }
 
 .pg-player-row button,

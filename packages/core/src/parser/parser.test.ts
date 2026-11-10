@@ -324,12 +324,6 @@ describe('syntax errors and limits', () => {
     expect(() => parse(source(10000))).toThrow(FhirPathSyntaxError);
   });
 
-  it('handles long flat chains without consuming recursive nesting', () => {
-    expect(() => parse(`a${'.b'.repeat(10000)}`)).not.toThrow();
-    expect(() => parse(`a${' + b'.repeat(10000)}`)).not.toThrow();
-    expect(() => parse(`a${'[0]'.repeat(10000)}`)).not.toThrow();
-  });
-
   it('never crashes on bounded arbitrary text', () => {
     fc.assert(
       fc.property(fc.string({ maxLength: 200 }), (source) => {
@@ -340,6 +334,128 @@ describe('syntax errors and limits', () => {
         }
       }),
       { numRuns: 1000, seed: 170002 },
+    );
+  });
+});
+
+/** The levels from the root down to the deepest node, as a recursive walk of the tree meets them. */
+function treeDepth(node: object): number {
+  let deepest = 0;
+  for (const child of Object.values(node).flat()) {
+    if (typeof child === 'object' && child !== null && 'kind' in child) {
+      deepest = Math.max(deepest, treeDepth(child));
+    }
+  }
+  return deepest + 1;
+}
+
+/** Expressions with every node that nests, and with parenthesized groups when asked for. */
+function expressions(groups: boolean): fc.Arbitrary<string> {
+  return fc.letrec<{ expression: string }>((tie) => {
+    const operand = tie('expression');
+    return {
+      expression: fc.oneof(
+        { depthSize: 'small', withCrossShrink: true },
+        fc.constantFrom('a', '%v', '$this', "'s'"),
+        fc
+          .tuple(operand, fc.constantFrom('.b', '.f()', '.$index', '[0]', ' is T'))
+          .map(([target, step]) => target + step),
+        fc
+          .tuple(operand, fc.constantFrom(' + ', ' * ', ' and ', ' | '), operand)
+          .map((parts) => parts.join('')),
+        operand.map((value) => `-${value}`),
+        fc.tuple(operand, operand).map(([first, second]) => `f(${first}, ${second})`),
+        ...(groups ? [operand.map((value) => `(${value})`)] : []),
+      ),
+    };
+  }).expression;
+}
+
+// The limit keeps recursive walks of the tree within the call stack:
+// https://github.com/losol/callis/blob/main/docs/architecture.md#security-and-robustness
+// Chains are invocations, indexers and left-associative operators:
+// https://hl7.org/fhirpath/N1/grammar.html, https://hl7.org/fhirpath/N1/#operator-precedence
+describe('nesting depth', () => {
+  const chains: [string, string][] = [
+    ['member chains', '.b'],
+    ['function call chains', '.f()'],
+    ['frame variable chains', '.$index'],
+    ['indexer chains', '[0]'],
+    ['type operation chains', ' is T'],
+    ['left-associative operator chains', ' and b'],
+  ];
+
+  it.each(chains)('counts each step of %s as a level', (_label, step) => {
+    expect(treeDepth(parse(`a${step.repeat(999)}`))).toBe(1000);
+    // The step that would move the chain past the limit, at its operator.
+    const start = 1 + 999 * step.length + step.length - step.trimStart().length;
+    expect(() => parse(`a${step.repeat(1000)}`)).toThrowError(
+      expect.objectContaining({
+        code: 'syntax/nesting-limit',
+        span: expect.objectContaining({ start }),
+      }),
+    );
+  });
+
+  it.each(chains)(
+    'raises syntax/nesting-limit, not a RangeError, for very long %s',
+    (_label, step) => {
+      expect(() => parse(`a${step.repeat(50_000)}`)).toThrowError(
+        expect.objectContaining({ code: 'syntax/nesting-limit' }),
+      );
+    },
+  );
+
+  it.each<[string, (length: number) => string, number]>([
+    ['a deep operand', (length) => `${'-'.repeat(length)}1 + 1`, 998],
+    ['a deep right operand', (length) => `a + ${'-'.repeat(length)}1 + b`, 997],
+    ['a deep argument', (length) => `f(${'-'.repeat(length)}1).g()`, 997],
+  ])('keeps %s within the limit when later steps move it down', (_label, make, length) => {
+    expect(treeDepth(parse(make(length)))).toBe(1000);
+    expect(() => parse(make(length + 1))).toThrowError(
+      expect.objectContaining({ code: 'syntax/nesting-limit' }),
+    );
+  });
+
+  it('counts a group as a level, also when a chain continues after it', () => {
+    expect(() => parse('(a).b', { maxDepth: 3 })).not.toThrow();
+    expect(() => parse('(a).b', { maxDepth: 2 })).toThrowError(
+      expect.objectContaining({
+        code: 'syntax/nesting-limit',
+        span: expect.objectContaining({ start: 3, end: 4 }),
+      }),
+    );
+  });
+
+  it('accepts exactly the trees without groups that are within the limit', () => {
+    fc.assert(
+      fc.property(expressions(false), fc.integer({ min: 1, max: 12 }), (source, maxDepth) => {
+        const depth = treeDepth(parse(source));
+        if (depth <= maxDepth) {
+          expect(treeDepth(parse(source, { maxDepth }))).toBe(depth);
+        } else {
+          expect(() => parse(source, { maxDepth })).toThrowError(
+            expect.objectContaining({ code: 'syntax/nesting-limit' }),
+          );
+        }
+      }),
+      { numRuns: 500, seed: 1070001 },
+    );
+  });
+
+  it('never builds a tree deeper than the limit', () => {
+    fc.assert(
+      fc.property(expressions(true), fc.integer({ min: 1, max: 12 }), (source, maxDepth) => {
+        let tree: object;
+        try {
+          tree = parse(source, { maxDepth });
+        } catch (error) {
+          expect(error).toMatchObject({ code: 'syntax/nesting-limit' });
+          return;
+        }
+        expect(treeDepth(tree)).toBeLessThanOrEqual(maxDepth);
+      }),
+      { numRuns: 500, seed: 1070002 },
     );
   });
 });

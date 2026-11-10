@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { stubModel } from '../../test/support/stub-model.ts';
+import { evaluate as evaluateWithOptions } from '../api/compile.ts';
 import { evaluate } from '../index.ts';
 import { createRegistry } from './registry.ts';
 
@@ -103,6 +105,11 @@ describe('the result types', () => {
     // 3.0.0: Integer is converted to Decimal first. https://hl7.org/fhirpath/STU3/#roundprecision--integer--decimal--quantity
     ['1.round()', 'Decimal'],
     ['1.5.round()', 'Decimal'],
+    // 3.0.0: a Quantity input gives a Quantity. https://hl7.org/fhirpath/STU3/#ceiling--integer--quantity
+    ["(5.5 'mg').ceiling()", 'Quantity'],
+    ["(5.5 'mg').floor()", 'Quantity'],
+    ["(5.5 'mg').round()", 'Quantity'],
+    ["(5.5 'mg').truncate()", 'Quantity'],
   ])('%s is a %s', (expression, type) => {
     expect(run(`${expression}.is(${type})`)).toEqual([true]);
   });
@@ -156,6 +163,84 @@ describe('ceiling, floor and truncate', () => {
     '10000000000.0.truncate()',
   ])('%s is empty when the result is outside the Integer range', (expression) => {
     expect(run(expression)).toEqual([]);
+  });
+});
+
+// 3.0.0 lets ceiling(), floor(), round() and truncate() take a Quantity: "the result is a Quantity
+// with the same units and the value (Decimal) set to the integer result calculated".
+// https://hl7.org/fhirpath/STU3/#ceiling--integer--quantity, #floor--integer--quantity,
+// #truncate--integer--quantity and #roundprecision--integer--decimal--quantity.
+// docs/spec-notes.md#ceiling-floor-round-and-truncate-of-a-quantity
+describe('ceiling, floor, round and truncate of a Quantity', () => {
+  it.each([
+    ["(5.5 'mg').ceiling()", [mg('6')]], // #176
+    ["(-5.5 'mg').ceiling()", [mg('-5')]],
+    ["(5.5 'mg').floor()", [mg('5')]],
+    ["(-5.5 'mg').floor()", [mg('-6')]],
+    ["(5.5 'mg').truncate()", [mg('5')]],
+    ["(-5.5 'mg').truncate()", [mg('-5')]],
+    ["(5 'mg').ceiling()", [mg('5')]],
+    ["(5.0 'mg').floor()", [mg('5')]], // the whole number, without the scale
+    ["(5.55 'mg').round(1)", [mg('5.6')]], // #176
+    ["(-5.55 'mg').round(1)", [mg('-5.6')]], // half away from zero
+    ["(5.5 'mg').round()", [mg('6')]],
+    ["(1.5 'mg').round(3)", [mg('1.5')]], // never adds digits
+    ["(2.5 'kg').round()", [{ ...mg('3'), unit: 'kg', code: 'kg' }]], // the unit is unchanged
+    ['(1.5 days).ceiling()', [{ value: '2', unit: 'day' }]], // a calendar unit stays one
+    ["(1.5 '1').floor()", [{ ...mg('1'), unit: '1', code: '1' }]], // a unitless Quantity too
+  ])('%s', (expression, expected) => {
+    expect(run(expression)).toEqual(expected);
+  });
+
+  it.each([
+    "(5.5 'mg').ceiling() = 6 'mg'",
+    "(5.55 'mg').round(1) = 5.6 'mg'",
+    "(-5.5 'mg').truncate() = -5 'mg'",
+  ])('%s', (expression) => {
+    expect(run(expression)).toEqual([true]);
+  });
+
+  // The value of a Quantity is a Decimal, so the Integer range of a number's result does not apply.
+  it.each([
+    ["(3000000000.5 'mg').floor()", [mg('3000000000')]],
+    ["(-3000000000.5 'mg').ceiling()", [mg('-3000000000')]],
+    ["(10000000000.9 'mg').truncate()", [mg('10000000000')]],
+  ])('%s keeps a whole number outside the Integer range', (expression, expected) => {
+    expect(run(expression)).toEqual(expected);
+  });
+
+  it('checks the precision of round() as for a number', () => {
+    expect(run("(5.5 'mg').round({})")).toEqual([]);
+    expect(caught(() => run("(5.5 'mg').round(-1)"))).toMatchObject({
+      code: 'eval/invalid-argument',
+    });
+    expect(caught(() => run("(5.5 'mg').round(1.5)"))).toMatchObject({
+      code: 'eval/type-mismatch',
+    });
+  });
+
+  it.each([
+    "(1 'mg' | 2 'mg').ceiling()",
+    "(1 'mg' | 2 'mg').floor()",
+    "(1 'mg' | 2 'mg').round()",
+    "(1 'mg' | 2 'mg').truncate()",
+  ])('%s raises eval/singleton-expected', (expression) => {
+    expect(caught(() => run(expression))).toMatchObject({ code: 'eval/singleton-expected' });
+  });
+
+  // A FHIR Quantity with a UCUM code is a System Quantity (https://hl7.org/fhir/R5/fhirpath.html#types).
+  it('rounds a FHIR Quantity read with a model', () => {
+    const observation = {
+      resourceType: 'Observation',
+      valueQuantity: { value: 5.55, unit: 'mg', system: 'http://unitsofmeasure.org', code: 'mg' },
+    };
+    const options = { model: stubModel, decimalOutput: 'string' } as const;
+    expect(evaluateWithOptions(observation, 'Observation.value.round(1)', options)).toEqual([
+      mg('5.6'),
+    ]);
+    expect(evaluateWithOptions(observation, 'Observation.value.ceiling()', options)).toEqual([
+      mg('6'),
+    ]);
   });
 });
 
@@ -329,9 +414,14 @@ describe('singleton evaluation and types', () => {
     'name.truncate()',
     'flag.abs()',
     '@2020.floor()',
-    "(5 'mg').sqrt()", // a Quantity is accepted only by abs()
-    "(5 'mg').ceiling()",
-    "(5 'mg').round()",
+    // A Quantity is accepted only by abs(), ceiling(), floor(), round() and truncate().
+    "(5 'mg').exp()",
+    "(5 'mg').ln()",
+    "(5 'mg').log(10)",
+    "(5 'mg').power(2)",
+    "(5 'mg').sqrt()",
+    "2.power(5 'mg')",
+    "2.5.round(1 'mg')", // the precision is an Integer, not a Quantity
     '2.5.round(1.5)', // the precision is an Integer
   ])('%s raises eval/type-mismatch', (expression) => {
     expect(caught(() => run(expression, input))).toMatchObject({ code: 'eval/type-mismatch' });

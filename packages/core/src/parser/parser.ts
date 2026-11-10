@@ -2,18 +2,35 @@ import { FhirPathSyntaxError } from '../errors/fhirpath-error.ts';
 import { tokenize } from '../lexer/lexer.ts';
 import { LineTable } from '../lexer/line-table.ts';
 import type { Token, TokenKind } from '../lexer/token.ts';
-import type { ExpressionNode, FunctionCallNode, LiteralNode, TypeSpecifierNode } from './ast.ts';
+import type { ExpressionNode, LiteralNode, TypeSpecifierNode } from './ast.ts';
 import { INFIX_BINDING_POWER, isInfixOperator, POSTFIX_BINDING_POWER } from './precedence.ts';
 
 /** Options for syntax parsing, independent of evaluation limits. */
 export interface ParseOptions {
-  /** Maximum recursive expression depth, including the root (default and maximum 1,000). */
+  /**
+   * Maximum nesting depth (default and maximum 1,000): the levels of the expression tree from the
+   * root, which is level 1, down to its deepest node. A parenthesized group counts as a level, and
+   * each step of a chain such as `a.b.c`, `a[0][0]` or `a and b and c` nests the steps before it
+   * one level deeper.
+   */
   readonly maxDepth?: number;
+}
+
+/** A parsed expression and its height: the levels from its node down to its deepest node. */
+interface Parsed {
+  readonly node: ExpressionNode;
+  readonly height: number;
+}
+
+/** A node without sub-expressions. */
+function leaf(node: ExpressionNode): Parsed {
+  return { node, height: 1 };
 }
 
 /**
  * Parses one complete expression without resolving names or constructing literal values.
- * Grouping widens the enclosed node's span to include both parentheses.
+ * Grouping widens the enclosed node's span to include both parentheses. The tree is never deeper
+ * than `maxDepth`, so code that walks it recursively cannot exhaust the call stack.
  *
  * @throws {FhirPathSyntaxError} On the first lexical or grammatical error, or the nesting limit.
  * @see https://hl7.org/fhirpath/N1/grammar.html
@@ -75,7 +92,7 @@ class Parser {
   }
 
   run(): ExpressionNode {
-    const node = this.#expression(0, 1);
+    const { node } = this.#expression(0, 1);
     this.#expect('EOF');
     return node;
   }
@@ -115,22 +132,33 @@ class Parser {
     );
   }
 
-  #expression(minimum: number, depth: number): ExpressionNode {
-    if (depth > this.#maxDepth) {
-      const token = this.#peek();
-      throw new FhirPathSyntaxError(
-        'syntax/nesting-limit',
-        `Expected nesting depth at most ${this.#maxDepth}`,
-        {
-          expression: this.#source,
-          span: new LineTable(this.#source).span(token.start, token.end),
-        },
-      );
-    }
-    let left = this.#prefix(depth);
+  /** Raises `syntax/nesting-limit` at the next token when a node would be deeper than the limit. */
+  #limit(depth: number): void {
+    if (depth <= this.#maxDepth) return;
+    const token = this.#peek();
+    throw new FhirPathSyntaxError(
+      'syntax/nesting-limit',
+      `Expected nesting depth at most ${this.#maxDepth}`,
+      {
+        expression: this.#source,
+        span: new LineTable(this.#source).span(token.start, token.end),
+      },
+    );
+  }
+
+  /**
+   * Parses an expression whose node is at `depth`, the root being 1, and keeps every node of its
+   * tree within the limit. Operands, arguments, indexes and groups are parsed one level deeper.
+   * Each step of a chain built in this loop moves the chain so far one level down, so the chain's
+   * height is checked before the step is taken.
+   */
+  #expression(minimum: number, depth: number): Parsed {
+    this.#limit(depth);
+    let { node: left, height } = this.#prefix(depth);
     for (;;) {
       const token = this.#peek();
       if (token.kind === '.' && POSTFIX_BINDING_POWER.member >= minimum) {
+        this.#limit(depth + height);
         this.#take();
         const special = this.#peek();
         if (special.kind === '$this' || special.kind === '$index' || special.kind === '$total') {
@@ -140,29 +168,34 @@ class Parser {
             target: left,
             span: { start: left.span.start, end: special.end },
           };
+          height++;
           continue;
         }
         const name = this.#identifier();
-        left =
-          this.#peek().kind === '('
-            ? this.#call(name, left, depth)
-            : {
-                kind: 'Member',
-                target: left,
-                name: name.value,
-                delimited: name.kind === 'DelimitedIdentifier',
-                span: { start: left.span.start, end: name.end },
-              };
+        if (this.#peek().kind === '(') {
+          ({ node: left, height } = this.#call(name, { node: left, height }, depth));
+        } else {
+          left = {
+            kind: 'Member',
+            target: left,
+            name: name.value,
+            delimited: name.kind === 'DelimitedIdentifier',
+            span: { start: left.span.start, end: name.end },
+          };
+          height++;
+        }
       } else if (token.kind === '[' && POSTFIX_BINDING_POWER.indexer >= minimum) {
+        this.#limit(depth + height);
         this.#take();
         const index = this.#expression(0, depth + 1);
         const close = this.#expect(']');
         left = {
           kind: 'Indexer',
           target: left,
-          index,
+          index: index.node,
           span: { start: left.span.start, end: close.end },
         };
+        height = Math.max(height, index.height) + 1;
       } else {
         const op = token.kind === 'Identifier' ? token.value : token.kind;
         if (
@@ -171,6 +204,7 @@ class Parser {
           INFIX_BINDING_POWER[op] < minimum
         )
           break;
+        this.#limit(depth + height);
         this.#take();
         if (op === 'is' || op === 'as') {
           const type = this.#typeSpecifier();
@@ -181,22 +215,24 @@ class Parser {
             type,
             span: { start: left.span.start, end: type.span.end },
           };
+          height++;
         } else {
           const right = this.#expression(INFIX_BINDING_POWER[op] + 1, depth + 1);
           left = {
             kind: 'Binary',
             op,
             left,
-            right,
-            span: { start: left.span.start, end: right.span.end },
+            right: right.node,
+            span: { start: left.span.start, end: right.node.span.end },
           };
+          height = Math.max(height, right.height) + 1;
         }
       }
     }
-    return left;
+    return { node: left, height };
   }
 
-  #prefix(depth: number): ExpressionNode {
+  #prefix(depth: number): Parsed {
     const token = this.#peek();
     const span = { start: token.start, end: token.end };
     switch (token.kind) {
@@ -205,74 +241,81 @@ class Parser {
         this.#take();
         const operand = this.#expression(POSTFIX_BINDING_POWER.unary, depth + 1);
         return {
-          kind: 'Unary',
-          op: token.kind,
-          operand,
-          span: { start: token.start, end: operand.span.end },
+          node: {
+            kind: 'Unary',
+            op: token.kind,
+            operand: operand.node,
+            span: { start: token.start, end: operand.node.span.end },
+          },
+          height: operand.height + 1,
         };
       }
       case '(': {
         this.#take();
         const enclosed = this.#expression(0, depth + 1);
         const close = this.#expect(')');
-        return { ...enclosed, span: { start: token.start, end: close.end } };
+        // The group counts as a level, as when it was parsed, though the tree has no node for it.
+        return {
+          node: { ...enclosed.node, span: { start: token.start, end: close.end } },
+          height: enclosed.height + 1,
+        };
       }
       case '{': {
         this.#take();
         const close = this.#expect('}');
-        return {
+        return leaf({
           kind: 'Literal',
           type: 'Empty',
           raw: this.#source.slice(token.start, close.end),
           span: { start: token.start, end: close.end },
-        };
+        });
       }
       case 'Number':
-        return this.#number();
+        return leaf(this.#number());
       case 'String':
       case 'Date':
       case 'DateTime':
       case 'Time':
         this.#take();
-        return {
+        return leaf({
           kind: 'Literal',
           type: token.kind,
           raw: this.#source.slice(token.start, token.end),
           ...(token.kind === 'String' ? { value: token.value } : {}),
           span,
-        };
+        });
       case 'EnvironmentVariable': {
         // Quoted variable names can use reserved words; unquoted names follow identifier rules.
         const first = this.#source.charAt(token.start + 1);
         if (first !== "'" && first !== '"' && first !== '`' && reserved.has(token.value))
           this.#error('an identifier after %');
         this.#take();
-        return { kind: 'Variable', name: token.value, span };
+        return leaf({ kind: 'Variable', name: token.value, span });
       }
       case '$this':
       case '$index':
       case '$total':
         this.#take();
-        return {
+        return leaf({
           kind: token.kind === '$this' ? 'This' : token.kind === '$index' ? 'Index' : 'Total',
           target: null,
           span,
-        };
+        });
       case 'Identifier':
       case 'DelimitedIdentifier': {
         if (token.kind === 'Identifier' && (token.value === 'true' || token.value === 'false')) {
           this.#take();
-          return { kind: 'Literal', type: 'Boolean', raw: token.value, span };
+          return leaf({ kind: 'Literal', type: 'Boolean', raw: token.value, span });
         }
         const name = this.#identifier();
         return this.#peek().kind === '('
           ? this.#call(name, null, depth)
-          : {
+          : leaf({
               kind: 'Identifier',
               name: name.value,
               delimited: name.kind === 'DelimitedIdentifier',
               span,
-            };
+            });
       }
       default:
         return this.#error('an expression');
@@ -311,24 +354,30 @@ class Parser {
     };
   }
 
-  #call(name: Token, target: ExpressionNode | null, depth: number): FunctionCallNode {
+  #call(name: Token, target: Parsed | null, depth: number): Parsed {
     this.#expect('(');
     const args: ExpressionNode[] = [];
+    let height = target?.height ?? 0;
     if (this.#peek().kind !== ')') {
       for (;;) {
-        args.push(this.#expression(0, depth + 1));
+        const arg = this.#expression(0, depth + 1);
+        args.push(arg.node);
+        height = Math.max(height, arg.height);
         if (this.#peek().kind !== ',') break;
         this.#take();
       }
     }
     const close = this.#expect(')');
     return {
-      kind: 'FunctionCall',
-      target,
-      name: name.value,
-      delimited: name.kind === 'DelimitedIdentifier',
-      args,
-      span: { start: target?.span.start ?? name.start, end: close.end },
+      node: {
+        kind: 'FunctionCall',
+        target: target?.node ?? null,
+        name: name.value,
+        delimited: name.kind === 'DelimitedIdentifier',
+        args,
+        span: { start: target?.node.span.start ?? name.start, end: close.end },
+      },
+      height: height + 1,
     };
   }
 
