@@ -54,6 +54,14 @@ export const SUITE_EXCEPTIONS: readonly SuiteException[] = [
       'System.Patient does not resolve, so is() raises eval/unknown-type; the suite expects false',
     note: 'unresolved-type-specifiers-are-execution-errors',
   },
+  {
+    // Owner decision (2026-11-10): 3.0.0 over the suite (ADR-0001). The R4 copy has no such tests.
+    suites: ['r5'],
+    tests: ['testDistinct29', 'testDistinct36'],
+    reason:
+      '3.0.0 counts items whose equality is undetermined as distinct; the suite expects empty',
+    note: 'distinct-and-isdistinct',
+  },
 ];
 
 /** The exception for a test, if there is one. */

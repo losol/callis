@@ -461,10 +461,13 @@ describe('subsetOf and supersetOf', () => {
 });
 
 // N1 §5.1.11–5.1.12 with the 3.0.0 examples. The order of distinct() is open in the spec; the HL7
-// tests keep the last of equal items (testDistinct30–35), and expect empty when the equality of
-// two items is undetermined (testDistinct29, testDistinct36). docs/spec-notes.md#distinct-and-isdistinct
+// tests keep the last of equal items (testDistinct30–35). Items are equal only when `=` is true:
+// 3.0.0 says "false and empty both indicate that the items are distinct", so an undetermined
+// comparison counts as distinct, where testDistinct29 and testDistinct36 expect empty.
+// docs/spec-notes.md#distinct-and-isdistinct
 // https://hl7.org/fhirpath/N1/#distinct-collection
 // https://hl7.org/fhirpath/N1/#isdistinct-boolean
+// https://hl7.org/fhirpath/STU3/en/index.html#distinct--collection
 // https://hl7.org/fhirpath/STU3/en/index.html#isdistinct--boolean
 describe('distinct and isDistinct', () => {
   it('lists the distinct tags of a Patient, the last of equal ones (N1 example)', () => {
@@ -522,22 +525,28 @@ describe('distinct and isDistinct', () => {
     expect(rows).toHaveLength(3);
   });
 
+  // 3.0.0: "false and empty both indicate that the items are distinct"; `|`, intersect() and
+  // exclude() treat an undetermined comparison the same way. The HL7 tests testDistinct29 and
+  // testDistinct36 expect empty for the first input; they are conformance exceptions.
   it.each([
-    '@2020.combine(@2020-01-01)', // testDistinct29, testDistinct36
-    '@2020-01-01.combine(@2020)',
-    '@2020.combine(1).combine(@2020-01)',
-    '1.combine(1).combine(@2020).combine(@2020-01)',
-    "1 'h'.combine(1 'kg')",
-  ])('is empty for %s: the equality of two items is undetermined', (input) => {
-    expect(evaluate(null, `${input}.distinct()`)).toEqual([]);
-    expect(evaluate(null, `${input}.isDistinct()`)).toEqual([]);
+    ['@2020.combine(@2020-01-01)', ['2020', '2020-01-01'], true], // testDistinct29, testDistinct36
+    ['@2020-01-01.combine(@2020)', ['2020-01-01', '2020'], true],
+    ['@2020.combine(1).combine(@2020-01)', ['2020', '1', '2020-01'], true],
+    ["1 'h'.combine(1 'kg')", ["1 'h'", "1 'kg'"], true],
+    // A pair that is equal still repeats next to a pair whose equality is undetermined.
+    ['1.combine(1).combine(@2020).combine(@2020-01)', ['1', '2020', '2020-01'], false],
+    ['@2020.combine(@2020-01).combine(@2020)', ['2020-01', '2020'], false],
+  ] as const)('counts undetermined equality as distinct in %s', (input, items, isDistinct) => {
+    expect(evaluate(null, `${input}.distinct().select(toString())`)).toEqual(items);
+    expect(evaluate(null, `${input}.isDistinct()`)).toEqual([isDistinct]);
   });
 
   it('reads an input string as a date only next to a date literal', () => {
     const input = { d: ['2020-01-01', '2020-01'] };
     expect(evaluate(input, 'd.isDistinct()')).toEqual([true]);
     expect(evaluate(input, 'd.first().combine(@2020-01-01).isDistinct()')).toEqual([false]);
-    expect(evaluate(input, 'd.first().combine(@2020-01).isDistinct()')).toEqual([]);
+    // Read as a date, the string's equality with @2020-01 is undetermined, so they are distinct.
+    expect(evaluate(input, 'd.first().combine(@2020-01).isDistinct()')).toEqual([true]);
   });
 });
 

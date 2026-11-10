@@ -82,7 +82,7 @@ assert.deepEqual(core.evaluate(null, '(1 | 2).supersetOf(3)'), [false]);
 assert.deepEqual(core.evaluate(null, "'a'.combine('b').combine('a').distinct()"), ['b', 'a']);
 const repeated = { rows: [{ value: 1 }, { value: 1 }] };
 assert.equal(core.evaluate(repeated, 'rows.distinct()')[0], repeated.rows[1]);
-assert.deepEqual(core.evaluate(null, '@2020.combine(@2020-01-01).isDistinct()'), []);
+assert.deepEqual(core.evaluate(null, '@2020.combine(@2020-01-01).isDistinct()'), [true]);
 assert.throws(() => core.compile('all()'), error => error.code === 'semantic/wrong-arity');
 assert.deepEqual(core.evaluate(selected, 'rows.select(value * 2)'), [6, 2]);
 assert.deepEqual(core.evaluate({ item: [{ id: 'a', item: [{ id: 'b' }] }] }, 'repeat(item).id'), ['a', 'b']);

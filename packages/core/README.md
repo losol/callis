@@ -62,7 +62,7 @@ export const allGiven: unknown[] = compile('name.all(given.exists())').evaluate(
 export const someFalse: unknown[] = evaluate(null, 'true.combine(false).anyFalse()');
 ```
 
-`subsetOf(other)` is true when every input item is in `other`, and `supersetOf(other)` when every item of `other` is in the input. Membership uses `=`, as `intersect()` does: an item whose equality is undetermined is not a member. `distinct()` leaves out repeated items, keeping the last of equal ones in input order, and `isDistinct()` tells whether nothing repeats. When two values cannot be compared, such as `@2020` and `@2020-01-01`, both give empty, as the HL7 tests expect; an element that holds only extensions is never equal to another item.
+`subsetOf(other)` is true when every input item is in `other`, and `supersetOf(other)` when every item of `other` is in the input. Membership uses `=`, as `intersect()` does: an item whose equality is undetermined is not a member. `distinct()` leaves out repeated items, keeping the last of equal ones in input order, and `isDistinct()` tells whether nothing repeats. Items repeat only when `=` is true, as for membership: values that cannot be compared, such as `@2020` and `@2020-01-01`, are distinct, as FHIRPath 3.0.0 says (the HL7 tests expect empty there), and an element that holds only extensions is never equal to another item.
 
 ```ts
 export const knownGiven: unknown[] = evaluate(patient, "name.given.subsetOf('Ada' | 'Mina' | 'Grace')");

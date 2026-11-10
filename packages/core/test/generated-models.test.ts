@@ -559,7 +559,7 @@ describe.each(PROVIDERS)(
       });
 
       // docs/spec-notes.md#distinct-and-isdistinct: an element without a value is never equal to
-      // another item, so it neither repeats nor empties the result.
+      // another item, so it never repeats.
       it('keeps an element that holds only extensions in distinct()', () => {
         const absent = { extension: [syllables] };
         const one = {
@@ -596,7 +596,8 @@ describe.each(PROVIDERS)(
         };
         expect(run(names, 'Patient.name.distinct().count()')).toEqual([4]);
         expect(run(names, 'Patient.name.isDistinct()')).toEqual([true]);
-        expect(run(names, 'Patient.name.period.start.isDistinct()')).toEqual([]);
+        // The starts differ in precision, so their equality is undetermined: distinct (3.0.0).
+        expect(run(names, 'Patient.name.period.start.isDistinct()')).toEqual([true]);
       });
 
       // The 3.0.0 form of the allTrue() examples: Observation.component.select(value > 90 'mm[Hg]').
@@ -639,7 +640,13 @@ describe.each(PROVIDERS)(
         expect(run(patient, 'Patient.birthDate.combine(@1974-12-25).isDistinct()')).toEqual([
           false,
         ]);
-        expect(run(patient, 'Patient.birthDate.combine(@1974-12).distinct()')).toEqual([]);
+        // The precisions differ, so the equality is undetermined: distinct (3.0.0).
+        const [birthDate] = typed(patient, 'Patient.birthDate.combine(@1974-12).distinct()');
+        expect(typeName(birthDate)).toBe('date');
+        expect(
+          run(patient, 'Patient.birthDate.combine(@1974-12).distinct().select(toString())'),
+        ).toEqual(['1974-12-25', '1974-12']);
+        expect(run(patient, 'Patient.birthDate.combine(@1974-12).isDistinct()')).toEqual([true]);
       });
     });
 
