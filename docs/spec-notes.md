@@ -62,11 +62,11 @@ The math functions ([N1 §5.7](https://hl7.org/fhirpath/N1/#math), [T0016](tasks
 - **Tests:** `testRound1`, `testRound2`, `testRoundEmpty` (R5).
 - **Decision:** a precision that is left out is 0; an empty precision gives an empty result, as for `log()` and `power()`. A negative precision raises `eval/invalid-argument` even when the input is empty, because the argument is wrong whatever the input. A precision that is not an Integer (`2.5.round(1.5)`) raises `eval/type-mismatch`.
 
-### Only `abs()` takes a Quantity
+### `ceiling()`, `floor()`, `round()` and `truncate()` of a Quantity
 
-- **Spec:** N1 lists `Quantity` only for `abs()`. [3.0.0](https://hl7.org/fhirpath/STU3/#ceiling--integer--quantity) also lets `ceiling()`, `floor()`, `round()` and `truncate()` take a Quantity and return a Quantity with the same unit.
-- **Tests:** `testAbs3`.
-- **Decision:** T0016 scopes the Quantity support to `abs()`, as N1 does. The other functions raise `eval/type-mismatch` for a Quantity, like any other item that is not a number. The 3.0.0 behaviour is a follow-up.
+- **Spec:** N1 lists `Quantity` only for `abs()`. 3.0.0 also lets [`ceiling()`](https://hl7.org/fhirpath/STU3/#ceiling--integer--quantity), [`floor()`](https://hl7.org/fhirpath/STU3/#floor--integer--quantity) and [`truncate()`](https://hl7.org/fhirpath/STU3/#truncate--integer--quantity) take a Quantity: "the result is a Quantity with the same units and the value (Decimal) set to the integer result calculated". [`round()`](https://hl7.org/fhirpath/STU3/#roundprecision--integer--decimal--quantity) gives "a Quantity with the same units".
+- **Tests:** none in the suite; `testAbs3` covers `abs()`.
+- **Decision:** follow 3.0.0 ([ADR-0001](adr/0001-spec-baseline.md), #176): the four functions keep the unit, so `(5.5 'mg').ceiling()` is `6 'mg'` and `(5.55 'mg').round(1)` is `5.6 'mg'`. The value stays a Decimal, as the value of every Quantity is ([N1 §4.1.8](https://hl7.org/fhirpath/N1/#quantity)): `ceiling()`, `floor()` and `truncate()` give the whole number without digits after the point (`(5.0 'mg').floor()` is `5 'mg'`), and `round()` rounds it like any Decimal. Since that value is not an Integer, the Integer range does not apply: `(3000000000.5 'mg').floor()` is `3000000000 'mg'`, while `3000000000.5.floor()` is empty ([Integer results outside the Integer range are empty](#integer-results-outside-the-integer-range-are-empty)). The other math functions still raise `eval/type-mismatch` for a Quantity.
 
 ## Lexer
 
