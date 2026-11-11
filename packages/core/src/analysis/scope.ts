@@ -71,19 +71,21 @@ export function eitherGuard(a: readonly Constraint[], b: readonly Constraint[]):
  * The path of a navigation expression, which names it across the expression so that a guard on
  * `$this.start` applies wherever `$this.start` is written: `$this`, a variable, or members of
  * them. An identifier at the start of a path is relative to the focus, so it is `$this.name`.
- * Undefined for any other expression, which a guard cannot narrow.
+ * Each name is written as a JSON string, so the one delimited identifier `` `a.b` `` and the
+ * path `a.b` get different keys, as do a variable named `v.x` and the path `%v.x`. Undefined for
+ * any other expression, which a guard cannot narrow.
  */
 export function pathKey(node: ExpressionNode): string | undefined {
   switch (node.kind) {
     case 'This':
       return node.target === null ? '$this' : undefined;
     case 'Variable':
-      return `%${node.name}`;
+      return `%${JSON.stringify(node.name)}`;
     case 'Identifier':
-      return `$this.${node.name}`;
+      return `$this.${JSON.stringify(node.name)}`;
     case 'Member': {
       const target = pathKey(node.target);
-      return target === undefined ? undefined : `${target}.${node.name}`;
+      return target === undefined ? undefined : `${target}.${JSON.stringify(node.name)}`;
     }
     default:
       return undefined;

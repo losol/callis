@@ -1059,6 +1059,23 @@ describe.each(PROVIDERS)(
         expect(report('Observation.value.unit', input)).toEqual([]);
       });
 
+      // N1 §5.2.4: the projection of repeat() is applied to every item it gives.
+      it('follows the recursive items of a Questionnaire through repeat()', () => {
+        const input: CompileOptions = { inputType: 'Questionnaire' };
+        expect(report('Questionnaire.repeat(item).linkId', input)).toEqual([]);
+        expect(
+          report('Questionnaire.repeat(item).answerOption.value.ofType(string)', input),
+        ).toEqual([]);
+        expect(report('Questionnaire.repeat(item).nothing', input)).toEqual(unknownElement);
+        expect(run(questionnaire, 'Questionnaire.repeat(item).linkId', input)).toEqual([
+          '1',
+          '2',
+          '1.1',
+          '1.2',
+          '1.1.1',
+        ]);
+      });
+
       it('accepts the input types of this version', () => {
         const alert: CompileOptions = { inputType: 'DeviceAlert' };
         const unknownType = ['error semantic/unknown-type'];

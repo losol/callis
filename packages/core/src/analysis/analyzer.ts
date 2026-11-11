@@ -80,6 +80,7 @@ import {
   narrowTo,
   singleOf,
   someFits,
+  type TypeSet,
   typeSetOf,
   UNKNOWN,
   unionTypes,
@@ -210,6 +211,11 @@ const BOOLEAN: TypeExpectation = { type: 'Boolean', singleton: true };
 const INDEX: TypeExpectation = { type: 'Integer', singleton: true };
 /** The operand of the polarity operators. */
 const POLARITY: TypeExpectation = { type: ['Decimal', 'Quantity'], singleton: true };
+/**
+ * The most passes over a `repeat()` projection to find the types its focus may have. Each pass
+ * adds a type or ends the walk, so a model's types bound it; a walk still going is unknown.
+ */
+const MAX_REPEAT_STEPS = 32;
 
 class Analyzer {
   readonly #registry: FunctionRegistry;
@@ -218,8 +224,10 @@ class Analyzer {
   readonly #lenientChoiceSuffix: boolean;
   readonly #input: Inferred;
   readonly #diagnostics: DiagnosticList;
+  readonly #options: AnalysisOptions;
 
   constructor(options: AnalysisOptions, input: Inferred, diagnostics: DiagnosticList) {
+    this.#options = options;
     this.#registry = options.registry;
     this.#model = options.model;
     this.#strict = options.strict;
@@ -228,11 +236,15 @@ class Analyzer {
     this.#diagnostics = diagnostics;
   }
 
-  /** What a node evaluates to in a scope, after the type guards in force on its path. */
+  /**
+   * What a node evaluates to in a scope, after the type guards in force on its path. A value
+   * that can have no item, because a guard, `as` or `ofType()` ruled every type out, is
+   * {@link NOTHING} whatever was inferred about its cardinality.
+   */
   infer(node: ExpressionNode, scope: Scope): Inferred {
     const inferred = this.#inferNode(node, scope);
     const key = pathKey(node);
-    return key === undefined ? inferred : narrowByKey(scope, key, inferred, this.#model);
+    return nothingOr(key === undefined ? inferred : narrowByKey(scope, key, inferred, this.#model));
   }
 
   #report(
@@ -247,7 +259,7 @@ class Analyzer {
 
   /** The focus of a scope, after the guards on `$this`. */
   #focusOf(scope: Scope): Inferred {
-    return narrowByKey(scope, '$this', scope.focus, this.#model);
+    return nothingOr(narrowByKey(scope, '$this', scope.focus, this.#model));
   }
 
   #inferNode(node: ExpressionNode, scope: Scope): Inferred {
@@ -451,6 +463,9 @@ class Analyzer {
     if (definition === iifFunction) {
       return this.#inferIif(node, input, scope);
     }
+    if (definition === repeatFunction) {
+      return this.#inferRepeat(node, input, scope);
+    }
     const values: Inferred[] = [];
     let target: TypeTarget | undefined;
     node.args.forEach((arg, index) => {
@@ -531,6 +546,67 @@ class Analyzer {
     };
   }
 
+  /**
+   * `repeat(projection)`: the projection is applied to the input items and then to every new item
+   * it gives ([N1 §5.2.4](https://hl7.org/fhirpath/N1/#repeatprojection-expression-collection)),
+   * so inside it the focus may be of any type reachable that way: `Patient.repeat(name | given)`
+   * reaches the names, then their given strings. The reachable types are found first, without
+   * reporting, and the projection is then analyzed once with all of them, so an element that one
+   * reachable type has is not an error. The result holds what the projection gives, and may have
+   * any number of items.
+   */
+  #inferRepeat(node: FunctionCallNode, input: Inferred, scope: Scope): Inferred {
+    const [projection] = node.args;
+    if (projection === undefined) {
+      // The arity is already reported.
+      return UNKNOWN;
+    }
+    const focus: Inferred = {
+      types: this.#reachableTypes(projection, input, scope),
+      cardinality: 'single',
+      ordered: true,
+    };
+    const result = this.infer(projection, lambdaScope(scope, focus, false));
+    // The result is the projected items, in the order the walk finds them: undefined when the
+    // projection's is, as for repeat(children()).
+    return {
+      types: result.types,
+      cardinality: 'collection',
+      ordered: input.ordered && result.ordered,
+    };
+  }
+
+  /**
+   * The types the focus of a `repeat()` projection may have: the input types, plus what the
+   * projection gives on them, and so on until no new type comes. Unknown when the input types
+   * are unknown, when the projection gives an unknown type, or when the walk does not settle. An
+   * analyzer of its own takes the diagnostics of these passes, which the final pass reports.
+   */
+  #reachableTypes(projection: ExpressionNode, input: Inferred, scope: Scope): TypeSet {
+    let types = input.types;
+    if (types === undefined) {
+      return undefined;
+    }
+    const silent = new Analyzer(
+      this.#options,
+      this.#input,
+      new DiagnosticList(this.#options.expression),
+    );
+    for (let step = 0; step < MAX_REPEAT_STEPS; step++) {
+      const focus: Inferred = { types, cardinality: 'single', ordered: true };
+      const result = silent.infer(projection, lambdaScope(scope, focus, false));
+      const next = unionTypes(types, result.types);
+      if (next === undefined) {
+        return undefined;
+      }
+      if (next.length === types.length) {
+        return types;
+      }
+      types = next;
+    }
+    return undefined;
+  }
+
   /** The type argument of a call such as `ofType(FHIR.Patient)`, resolved. */
   #typeTarget(arg: ExpressionNode, name: string): TypeTarget | undefined {
     const specifier = typeSpecifierOf(arg);
@@ -608,9 +684,6 @@ class Analyzer {
             : widest(input.cardinality, projection.cardinality),
         ordered: input.ordered && projection.ordered,
       };
-    }
-    if (definition === repeatFunction) {
-      return { types: undefined, cardinality: 'unknown', ordered: input.ordered };
     }
     if (definition === unionFunction || definition === combineFunction) {
       return unionOf(input, values[0] ?? UNKNOWN);
@@ -1106,6 +1179,11 @@ function inferLiteral(node: LiteralNode): Inferred {
     default:
       return assertNever(node.type, 'literal type');
   }
+}
+
+/** The value, or {@link NOTHING} when it can have no item, so that nothing is checked on it. */
+function nothingOr(inferred: Inferred): Inferred {
+  return isNothing(inferred) ? NOTHING : inferred;
 }
 
 /** The union of two values, for `|`, `union()` and `combine()`. */

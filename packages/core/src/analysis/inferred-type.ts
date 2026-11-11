@@ -114,16 +114,27 @@ export function systemNameOf(
 }
 
 /**
- * Whether values of a type are accepted where `expected` is: the type itself, or one that
+ * Whether a type stands for any of its subtypes without saying which: an abstract model type
+ * without a System value, such as `Element` or `Resource`. A value of that type may be a
+ * primitive (a FHIR `boolean` is an `Element`), so nothing is known about how it converts. A
+ * concrete type's subtypes convert as it does (`code` is a `string`, `Age` is a `Quantity`).
+ */
+export function isOpenType(type: AnalysisType, model: ModelProvider | undefined): boolean {
+  return !isSystemType(type) && type.isAbstract && model?.getSystemType(type) === undefined;
+}
+
+/**
+ * Whether values of a type may be accepted where `expected` is: the type itself, one that
  * converts to it implicitly ([N1 §5.5](https://hl7.org/fhirpath/N1/#conversion), with the
- * number-to-Quantity conversion of [3.0.0](https://hl7.org/fhirpath/STU3/#conversion)).
+ * number-to-Quantity conversion of [3.0.0](https://hl7.org/fhirpath/STU3/#conversion)), or an
+ * abstract type whose subtypes may.
  */
 export function convertsTo(
   type: AnalysisType,
   expected: SystemTypeName,
   model: ModelProvider | undefined,
 ): boolean {
-  if (expected === 'Any') {
+  if (expected === 'Any' || isOpenType(type, model)) {
     return true;
   }
   const name = systemNameOf(type, model);
@@ -142,14 +153,14 @@ export function convertsTo(
   }
 }
 
-/** Whether a type fits what a function expects of its input or an argument. */
+/** Whether a type may fit what a function expects of its input or an argument. */
 export function fitsExpectation(
   type: AnalysisType,
   expected: NonNullable<TypeExpectation['type']>,
   model: ModelProvider | undefined,
 ): boolean {
   if (expected === 'primitive') {
-    return systemNameOf(type, model) !== undefined;
+    return isOpenType(type, model) || systemNameOf(type, model) !== undefined;
   }
   if (typeof expected === 'string') {
     return convertsTo(type, expected, model);

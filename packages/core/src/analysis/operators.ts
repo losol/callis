@@ -7,7 +7,7 @@
  */
 import type { ModelProvider } from '../model/model-provider.ts';
 import type { SystemTypeName } from '../types/system-types.ts';
-import { type AnalysisType, systemNameOf, type TypeSet } from './inferred-type.ts';
+import { type AnalysisType, isOpenType, systemNameOf, type TypeSet } from './inferred-type.ts';
 
 /**
  * The kind of a value as the kernels see it: its System type, or `Complex` for a resource or a
@@ -34,14 +34,18 @@ export function isTemporalKind(kind: ValueKind): boolean {
   return kind === 'Date' || kind === 'DateTime' || kind === 'Time';
 }
 
-/** The kind of values of a type, or undefined when it cannot be told. */
+/**
+ * The kind of values of a type, or undefined when it cannot be told: a `Long` (T0028), or an
+ * abstract model type, which may be any of its subtypes.
+ */
 export function kindOfType(
   type: AnalysisType,
   model: ModelProvider | undefined,
 ): ValueKind | undefined {
   const name = systemNameOf(type, model);
   if (name === undefined) {
-    return type.namespace === 'System' ? undefined : 'Complex';
+    // An abstract type may be any of its subtypes, a primitive among them.
+    return type.namespace === 'System' || isOpenType(type, model) ? undefined : 'Complex';
   }
   return name === 'Long' ? undefined : name;
 }
