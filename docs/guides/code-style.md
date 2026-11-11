@@ -7,7 +7,7 @@ How TypeScript is written in Callis. [Biome](https://biomejs.dev) handles format
 - **ESM only**, with **named exports only**. No default exports.
 - **File names** are `kebab-case.ts`. Each file holds one main concept; tests sit next to it as `kebab-case.test.ts`.
 - **No barrel files** inside `src/`. The only `index.ts` is the package entry point, which lists the public API explicitly. Internal barrels hide dependencies, create cycles and defeat tree-shaking.
-- **Respect the module dependency rules** in [architecture.md](../architecture.md#repository-layout). Imports must not form cycles.
+- **Respect the module dependency rules** in [architecture.md](../architecture.md#repository-layout). Imports between files must not form cycles. The modules `functions` and `fhir` import each other without one: `functions/registry.ts` imports `fhir`, and `fhir` imports only `functions/define.ts`, which does not import `fhir`.
 - Use `import type` and `export type` for type-only imports and exports.
 
 ## TypeScript
