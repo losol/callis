@@ -125,7 +125,6 @@ describe('public synchronous model-less API', () => {
     'functions',
     'hooks',
     'inputType',
-    'strict',
     'lenient',
     'cache',
     'output',
@@ -144,8 +143,8 @@ describe('public synchronous model-less API', () => {
     );
   });
 
-  // docs/tasks/T0024a-static-analysis-diagnostics.md: analyze().
-  it('analyzes without compiling', () => {
+  // docs/tasks/T0024-static-analysis.md: analyze() and the strict option.
+  it('analyzes without compiling, and compiles strictly on request', () => {
     expectTypeOf(analyze('1')).toEqualTypeOf<AnalysisResult>();
     expectTypeOf<keyof AnalysisResult>().toEqualTypeOf<'diagnostics'>();
     expect(analyze('1').diagnostics).toEqual([]);
@@ -161,10 +160,26 @@ describe('public synchronous model-less API', () => {
     expect(analyze('@2020-01-01 + 1.5 days').diagnostics.map((d) => d.code)).toEqual([
       'semantic/fraction-ignored',
     ]);
-    expect(evaluate(null, '@2020-01-01 + 1.5 days')).toEqual(['2020-01-02']);
+    expect(evaluate(null, '@2020-01-01 + 1.5 days', { strict: true })).toEqual(['2020-01-02']);
     expect(compile("1 + 'a'").expression).toBe("1 + 'a'");
-    expect(() => compile("'a'.abs()")).toThrow(
-      expect.objectContaining({ code: 'semantic/type-mismatch' }),
+    for (const [expression, code] of [
+      ['(1 | 2) < 3', 'semantic/singleton-expected'],
+      ['(1 | 2) = 1', 'semantic/singleton-expected'],
+      ['children()[0]', 'semantic/unordered-collection'],
+      ["1 + 'a'", 'semantic/type-mismatch'],
+      ["iif('x', 1, 2)", 'semantic/type-mismatch'],
+    ] as const) {
+      expect(() => compile(expression, { strict: true })).toThrow(
+        expect.objectContaining({ code }),
+      );
+      expect(analyze(expression, { strict: true }).diagnostics[0]).toMatchObject({
+        severity: 'error',
+        code,
+      });
+      expect(analyze(expression).diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+    }
+    expect(() => analyze('1', { strict: 'yes' } as never)).toThrow(
+      expect.objectContaining({ code: 'eval/invalid-argument' }),
     );
     expect(() => analyze('1', { inputType: 'Patient' } as never)).toThrow(
       expect.objectContaining({ code: 'eval/invalid-argument' }),
@@ -236,7 +251,7 @@ describe('public synchronous model-less API', () => {
   it('keeps public types narrow without exposing deferred internal contracts', () => {
     expectTypeOf(compile('1')).toEqualTypeOf<CompiledExpression>();
     expectTypeOf(evaluate(null, '1')).toEqualTypeOf<unknown[]>();
-    expectTypeOf<keyof CompileOptions>().toEqualTypeOf<'units'>();
+    expectTypeOf<keyof CompileOptions>().toEqualTypeOf<'units' | 'strict'>();
     expectTypeOf<keyof EvaluateOptions>().toEqualTypeOf<
       'variables' | 'resource' | 'rootResource' | 'timezoneOffset' | 'decimalOutput'
     >();

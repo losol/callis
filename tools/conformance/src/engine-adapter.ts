@@ -111,8 +111,9 @@ function compileOptionsFor(options: EvaluationOptions): CompileOptions {
 }
 
 /**
- * The options for the test's expression itself: the ones above, and the type of the focus for
- * static analysis, as the HL7 Java runner checks every test ([T0024](../../../docs/tasks/T0024-static-analysis.md)): the test's `contextType`
+ * The options for the test's expression itself: the ones above, strict mode for
+ * `mode="strict"`, and the type of the focus for static analysis, as the HL7 Java runner checks
+ * every test ([T0024](../../../docs/tasks/T0024-static-analysis.md)): the test's `contextType`
  * when it has one, else the model type of the node the `context` selected, else the resource
  * type of the input. The context expression itself is compiled without them.
  */
@@ -133,6 +134,7 @@ function expressionOptionsFor(
   return {
     ...compileOptionsFor(options),
     ...(inputType === undefined ? {} : { inputType }),
+    strict: options.strict,
   };
 }
 

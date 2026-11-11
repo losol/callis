@@ -67,14 +67,25 @@ export interface CompileOptions {
   readonly functions?: FunctionRegistry;
   /**
    * The type of the input, by its name in the model (`'Patient'`), or the types it may have
-   * (`['Period', 'Timing']`), for model-aware analysis: an element the type does not have and a
-   * leading type name that does not match are then reported when the expression is compiled
+   * (`['Period', 'Timing']`), for model-aware analysis: an element the type does not have, a
+   * leading type name that does not match, and in strict mode an element that may repeat where
+   * one item is expected, are then reported when the expression is compiled
    * ([T0024](https://github.com/losol/callis/blob/main/docs/tasks/T0024-static-analysis.md)).
    * Needs `model`. Without it the input's type is unknown, and analysis checks what the
    * expression itself makes known, such as the elements of `Patient.name` after a leading
    * `Patient`.
    */
   readonly inputType?: string | readonly string[];
+  /**
+   * Strict evaluation ([N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation)):
+   * analysis also reports, as errors, a value that may repeat where an operator or function takes
+   * a single item, a value that is not a Boolean where one is expected, equality between a single
+   * item and a collection, and `first()`, `last()`, `tail()`, `skip()`, `take()` or the indexer
+   * on `children()` or `descendants()`, whose order is undefined
+   * ([N1 §3.1](https://hl7.org/fhirpath/N1/#collections)). Off by default. It changes what
+   * compiles, never what an expression evaluates to.
+   */
+  readonly strict?: boolean;
   /** Compatibility relaxations; none by default. */
   readonly lenient?: LenientOptions;
 }
@@ -218,15 +229,15 @@ export function analyze(expression: string, options: CompileOptions = {}): Analy
 
 /**
  * Compiles an expression once, for any number of evaluations. Static analysis runs first, with
- * the model and the input type
+ * the model, the input type and the strict option
  * ([T0024](https://github.com/losol/callis/blob/main/docs/tasks/T0024-static-analysis.md)).
  *
  * @throws {@link FhirPathSyntaxError} for invalid syntax.
  * @throws {@link FhirPathSemanticError} for what analysis reports as an error, with every
  *   diagnostic attached: an unknown function, a wrong number of arguments, a type argument that
- *   is not a type name, an element the input type does not have and an input or argument of a
- *   type the function never accepts. Unknown types, operands of a type the operator never
- *   accepts and invalid literal values are not compile errors; they raise when evaluated.
+ *   is not a type name, an element the input type does not have, operands of a type the operator
+ *   never accepts, and in strict mode the unsafe uses of N1 §11. Unknown types and invalid
+ *   literal values are not compile errors; they raise when evaluated.
  * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for `inputType` without a
  *   model.
  */
@@ -297,6 +308,7 @@ function analyzeAst(
     registry: options.functions ?? DEFAULT_REGISTRY,
     model: options.model,
     inputType: options.inputType,
+    strict: options.strict === true,
     lenientChoiceSuffix: options.lenient?.choiceSuffix === true,
   }).diagnostics;
 }

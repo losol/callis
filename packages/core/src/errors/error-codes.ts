@@ -18,7 +18,8 @@ export type SyntaxErrorCode =
 /**
  * Raised by compile-time checks, before evaluation starts, and reported by static analysis
  * (T0024). `semantic/unknown-type` and `semantic/fraction-ignored` are warnings: they never stop
- * compilation.
+ * compilation. `semantic/singleton-expected` and `semantic/unordered-collection` are errors in
+ * strict mode only ([N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation)).
  */
 export type SemanticErrorCode =
   | 'semantic/unknown-function'
@@ -27,6 +28,8 @@ export type SemanticErrorCode =
   | 'semantic/unknown-type'
   | 'semantic/invalid-argument'
   | 'semantic/type-mismatch'
+  | 'semantic/singleton-expected'
+  | 'semantic/unordered-collection'
   | 'semantic/undefined-variable'
   | 'semantic/fraction-ignored';
 

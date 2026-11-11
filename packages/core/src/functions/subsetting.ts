@@ -10,7 +10,18 @@ import type { ComparisonContext } from '../runtime/comparison.ts';
 import { itemEquals } from '../runtime/equality.ts';
 import { asInteger } from '../runtime/item-conversion.ts';
 import { singleton } from '../runtime/singleton.ts';
-import { defineValueFunction, type FunctionDefinition, type ParamSpec } from './define.ts';
+import {
+  defineValueFunction,
+  type FunctionDefinition,
+  type ParamSpec,
+  type TypeExpectation,
+} from './define.ts';
+
+/**
+ * The input of a function whose result depends on the order of the items, which is undefined
+ * after `children()` and `descendants()` ([N1 §3.1](https://hl7.org/fhirpath/N1/#collections)).
+ */
+const ORDERED: TypeExpectation = { ordered: true };
 
 /**
  * `first()`: the first input item, unchanged, or empty when there is none.
@@ -20,7 +31,7 @@ export const firstFunction: FunctionDefinition = defineValueFunction(
   'first',
   0,
   (input) => fromOptional(input[0]),
-  { returns: { fromInput: true, singleton: true } },
+  { input: ORDERED, returns: { fromInput: true, singleton: true } },
 );
 
 /**
@@ -50,7 +61,7 @@ export const lastFunction: FunctionDefinition = defineValueFunction(
   'last',
   0,
   (input) => fromOptional(input.at(-1)),
-  { returns: { fromInput: true, singleton: true } },
+  { input: ORDERED, returns: { fromInput: true, singleton: true } },
 );
 
 /**
@@ -61,7 +72,7 @@ export const tailFunction: FunctionDefinition = defineValueFunction(
   'tail',
   0,
   (input) => (input.length > 1 ? input.slice(1) : EMPTY),
-  { returns: { fromInput: true } },
+  { input: ORDERED, returns: { fromInput: true } },
 );
 
 const NUM: readonly ParamSpec[] = Object.freeze([
@@ -88,7 +99,7 @@ export const skipFunction: FunctionDefinition = defineValueFunction(
     }
     return count >= input.length ? EMPTY : input.slice(count);
   },
-  { returns: { fromInput: true } },
+  { input: ORDERED, returns: { fromInput: true } },
 );
 
 /**
@@ -107,7 +118,7 @@ export const takeFunction: FunctionDefinition = defineValueFunction(
     }
     return count >= input.length ? input : input.slice(0, count);
   },
-  { returns: { fromInput: true } },
+  { input: ORDERED, returns: { fromInput: true } },
 );
 
 /**

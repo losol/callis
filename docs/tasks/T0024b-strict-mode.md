@@ -25,8 +25,8 @@ Level 3 of the [T0024 design notes](T0024-static-analysis.md#design-notes): stri
 
 ## Acceptance criteria
 
-- [ ] `testIif6` and `testDollarOrderNotAllowed` pass in R4 and R5, so every `invalid="semantic"` test in phase 1 passes.
-- [ ] In strict mode, `Patient.name.given < 'X'`, `Patient.name.given.substring(1)` and `Patient.name.given = 'Wouter'` are `semantic/singleton-expected` with `inputType: 'Patient'`; `Patient.name = Patient.name`, `Patient.name.given.first() = 'Wouter'` and `Patient.name.select(given.first() + ' ' + family)` are valid; nothing is reported without a model or an input type.
-- [ ] In strict mode, `first()`, `last()`, `tail()`, `skip()`, `take()` and the indexer on `children()` and `descendants()` are `semantic/unordered-collection`; `count()`, `where()`, `single()` and `exists()` on them are valid.
-- [ ] Unknown-type warnings do not become compile errors in strict mode, and the fraction warnings compile in strict mode too, with the same results as before.
-- [ ] The public `strict` option is accepted by `compile()`, `evaluate()` and `analyze()`, rejected when it is not a Boolean, and the cases above run against the real `r4`, `r5` and `r6` providers.
+- [x] `testIif6` and `testDollarOrderNotAllowed` pass in R4 and R5, so every `invalid="semantic"` test in phase 1 passes.
+- [x] In strict mode, `Patient.name.given < 'X'`, `Patient.name.given.substring(1)` and `Patient.name.given = 'Wouter'` are `semantic/singleton-expected` with `inputType: 'Patient'`; `Patient.name = Patient.name`, `Patient.name.given.first() = 'Wouter'` and `Patient.name.select(given.first() + ' ' + family)` are valid; nothing is reported without a model or an input type.
+- [x] In strict mode, `first()`, `last()`, `tail()`, `skip()`, `take()` and the indexer on `children()` and `descendants()` are `semantic/unordered-collection`; `count()`, `where()`, `single()` and `exists()` on them are valid.
+- [x] Unknown-type warnings do not become compile errors in strict mode, and the fraction warnings compile in strict mode too, with the same results as before.
+- [x] The public `strict` option is accepted by `compile()`, `evaluate()` and `analyze()`, rejected when it is not a Boolean, and the cases above run against the real `r4`, `r5` and `r6` providers.

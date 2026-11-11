@@ -17,12 +17,16 @@
  *   with its type suffix), a leading type name that does not match the input, and the types of
  *   `is`, `as` and `ofType()` that do not resolve, as warnings
  *   ([spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#unresolved-type-specifiers-are-execution-errors));
+ * - in strict mode ([N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation)):
+ *   the operator warnings as errors, a value that may repeat where one item is expected, a value
+ *   that is not a Boolean where one is expected, equality between a single item and a collection
+ *   or between types that are never equal, and an order-dependent operation on `children()` or
+ *   `descendants()` ([N1 §3.1](https://hl7.org/fhirpath/N1/#collections));
  * - a warning when date/time arithmetic ignores part of a quantity written in the expression
  *   ([spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#fractions-in-datetime-arithmetic)).
  *
  * Every check fires only when every possible type is wrong, and never on a value whose type is
- * unknown, so analysis without a model never rejects a valid expression. The cardinality it
- * infers is for strict mode ([T0024b](https://github.com/losol/callis/blob/main/docs/tasks/T0024b-strict-mode.md)).
+ * unknown, so analysis without a model never rejects a valid expression.
  */
 import { assertNever } from '../errors/assert-never.ts';
 import type { Diagnostic } from '../errors/diagnostic.ts';
@@ -118,6 +122,8 @@ export interface AnalysisOptions {
    * when it is unknown; an empty list means the same.
    */
   readonly inputType: string | readonly string[] | undefined;
+  /** Whether to report the unsafe uses of N1 §11 as errors. */
+  readonly strict: boolean;
   /** Whether a choice element may be written with its type suffix (`lenient.choiceSuffix`). */
   readonly lenientChoiceSuffix: boolean;
 }
@@ -164,7 +170,7 @@ function resolveInputType(options: AnalysisOptions, diagnostics: DiagnosticList)
   if (types.length === 0) {
     return UNKNOWN;
   }
-  return { types: unknown ? undefined : typeSetOf(types), cardinality: 'single' };
+  return { types: unknown ? undefined : typeSetOf(types), cardinality: 'single', ordered: true };
 }
 
 /** The diagnostics of one analysis, with their spans. */
@@ -208,6 +214,7 @@ const POLARITY: TypeExpectation = { type: ['Decimal', 'Quantity'], singleton: tr
 class Analyzer {
   readonly #registry: FunctionRegistry;
   readonly #model: ModelProvider | undefined;
+  readonly #strict: boolean;
   readonly #lenientChoiceSuffix: boolean;
   readonly #input: Inferred;
   readonly #diagnostics: DiagnosticList;
@@ -215,6 +222,7 @@ class Analyzer {
   constructor(options: AnalysisOptions, input: Inferred, diagnostics: DiagnosticList) {
     this.#registry = options.registry;
     this.#model = options.model;
+    this.#strict = options.strict;
     this.#lenientChoiceSuffix = options.lenientChoiceSuffix;
     this.#input = input;
     this.#diagnostics = diagnostics;
@@ -311,7 +319,7 @@ class Analyzer {
   /** The focus items of a type: those whose type is the type or one of its subtypes. */
   #selectType(focus: Inferred, type: ModelTypeInfo, node: AstNode): Inferred {
     if (focus.types === undefined) {
-      return { types: [type], cardinality: focus.cardinality };
+      return { types: [type], cardinality: focus.cardinality, ordered: focus.ordered };
     }
     const model = this.#model;
     const matches: AnalysisType[] = [];
@@ -331,7 +339,7 @@ class Analyzer {
         node,
       );
     }
-    return { types: typeSetOf(matches), cardinality: focus.cardinality };
+    return { types: typeSetOf(matches), cardinality: focus.cardinality, ordered: focus.ordered };
   }
 
   /**
@@ -345,7 +353,7 @@ class Analyzer {
   #navigate(input: Inferred, name: string, node: AstNode): Inferred {
     const model = this.#model;
     if (input.types === undefined || model === undefined) {
-      return { types: undefined, cardinality: 'unknown' };
+      return { types: undefined, cardinality: 'unknown', ordered: input.ordered };
     }
     const found: (AnalysisType | undefined)[] = [];
     const missing: AnalysisType[] = [];
@@ -381,11 +389,12 @@ class Analyzer {
       if (missing.length > 0) {
         this.#reportUnknownElement(missing, name, node);
       }
-      return { types: [], cardinality: 'single' };
+      return { types: [], cardinality: 'single', ordered: input.ordered };
     }
     return {
       types: unknown ? undefined : typeSetOf(found),
       cardinality: repeats ? 'collection' : unknown ? 'unknown' : input.cardinality,
+      ordered: input.ordered,
     };
   }
 
@@ -485,7 +494,7 @@ class Analyzer {
     if (param?.scope === 'input') {
       return lambdaScope(scope, input, node.target === null);
     }
-    return lambdaScope(scope, { types: input.types, cardinality: 'single' }, false);
+    return lambdaScope(scope, { types: input.types, cardinality: 'single', ordered: true }, false);
   }
 
   /**
@@ -518,6 +527,7 @@ class Analyzer {
     return {
       types: unionTypes(a.types, b.types),
       cardinality: widest(a.cardinality, b.cardinality),
+      ordered: a.ordered && b.ordered,
     };
   }
 
@@ -567,7 +577,9 @@ class Analyzer {
   ): Inferred {
     const types =
       target?.kind === 'type' ? narrowTo(input.types, [target.type], this.#model, rule) : undefined;
-    return { types, cardinality: single ? 'single' : input.cardinality };
+    return single
+      ? { types, cardinality: 'single', ordered: true }
+      : { types, cardinality: input.cardinality, ordered: input.ordered };
   }
 
   /** What a call returns: by the function for the ones whose result depends on their arguments, otherwise by its `returns` hint. */
@@ -594,10 +606,11 @@ class Analyzer {
           input.cardinality === 'single'
             ? projection.cardinality
             : widest(input.cardinality, projection.cardinality),
+        ordered: input.ordered && projection.ordered,
       };
     }
     if (definition === repeatFunction) {
-      return UNKNOWN;
+      return { types: undefined, cardinality: 'unknown', ordered: input.ordered };
     }
     if (definition === unionFunction || definition === combineFunction) {
       return unionOf(input, values[0] ?? UNKNOWN);
@@ -616,11 +629,13 @@ class Analyzer {
             ? input.types
             : undefined,
       cardinality: singleton ? 'single' : fromInput ? input.cardinality : 'unknown',
+      ordered: hint.ordered === false ? false : singleton || !fromInput ? true : input.ordered,
     };
   }
 
   #inferTypeOperation(node: TypeOperationNode, scope: Scope): Inferred {
     const operand = this.infer(node.operand, scope);
+    this.#checkSingleton(operand, node.operand, `the operand of ${node.op}`);
     const [first, ...rest] = node.type.identifiers;
     if (first === undefined) {
       // The parser never produces this; only a hand-made AST can.
@@ -638,20 +653,22 @@ class Analyzer {
 
   /**
    * `target[index]` ([N1 §6.7.1](https://hl7.org/fhirpath/N1/#index-integer-collection)): one
-   * item of the target, chosen by its position.
+   * item of the target, chosen by its position, which is undefined after `children()` or
+   * `descendants()`.
    */
   #inferIndexer(node: IndexerNode, scope: Scope): Inferred {
     const target = this.infer(node.target, scope);
     const index = this.infer(node.index, scope);
     this.#checkExpectation(index, INDEX, node.index, 'the index', true);
-    return { types: target.types, cardinality: 'single' };
+    this.#checkOrdered(target, node, 'the indexer');
+    return { types: target.types, cardinality: 'single', ordered: true };
   }
 
   /** `+x` and `-x` ([N1 §6.6](https://hl7.org/fhirpath/N1/#math)) take a number or a Quantity. */
   #inferUnary(node: UnaryNode, scope: Scope): Inferred {
     const operand = this.infer(node.operand, scope);
     this.#checkExpectation(operand, POLARITY, node, `the operand of unary ${node.op}`, true);
-    return { types: operand.types, cardinality: 'single' };
+    return { types: operand.types, cardinality: 'single', ordered: true };
   }
 
   #inferBinary(node: BinaryNode, scope: Scope): Inferred {
@@ -663,11 +680,18 @@ class Analyzer {
         return this.#inferLogic(node, scope);
       case '|':
         return unionOf(this.infer(node.left, scope), this.infer(node.right, scope));
-      case 'in':
-      case 'contains':
-        this.infer(node.left, scope);
+      case 'in': {
+        const left = this.infer(node.left, scope);
         this.infer(node.right, scope);
+        this.#checkSingleton(left, node.left, 'the left operand of in');
         return singleOf('Boolean');
+      }
+      case 'contains': {
+        this.infer(node.left, scope);
+        const right = this.infer(node.right, scope);
+        this.#checkSingleton(right, node.right, 'the right operand of contains');
+        return singleOf('Boolean');
+      }
       case '=':
       case '!=':
       case '~':
@@ -776,12 +800,35 @@ class Analyzer {
 
   /**
    * `=`, `!=`, `~` and `!~` compare whole collections, so they raise no type errors
-   * ([N1 §6.1](https://hl7.org/fhirpath/N1/#equality)); the unsafe uses of N1 §11 are for strict
-   * mode (T0024b).
+   * ([N1 §6.1](https://hl7.org/fhirpath/N1/#equality)). Strict mode reports the two unsafe uses of
+   * N1 §11: a single item compared with a collection, and two single items that can never be
+   * equal because of their types.
    */
   #inferEquality(node: BinaryNode, scope: Scope): Inferred {
-    this.infer(node.left, scope);
-    this.infer(node.right, scope);
+    const left = this.infer(node.left, scope);
+    const right = this.infer(node.right, scope);
+    if (this.#strict) {
+      const single = left.cardinality === 'single' && right.cardinality === 'single';
+      if (
+        (left.cardinality === 'single' && right.cardinality === 'collection') ||
+        (left.cardinality === 'collection' && right.cardinality === 'single')
+      ) {
+        this.#report(
+          'error',
+          'semantic/singleton-expected',
+          `One operand of ${node.op} may have more than one item while the other has one; compare two collections or two single items`,
+          node,
+        );
+      } else if (single && hasKnownTypes(left) && hasKnownTypes(right)) {
+        this.#checkPairs(
+          node,
+          left,
+          right,
+          isEqualityNever,
+          (a, b) => `Values of ${a} and ${b} are never equal`,
+        );
+      }
+    }
     return singleOf('Boolean');
   }
 
@@ -792,6 +839,8 @@ class Analyzer {
   #inferComparison(node: BinaryNode, scope: Scope): Inferred {
     const left = this.infer(node.left, scope);
     const right = this.infer(node.right, scope);
+    this.#checkSingleton(left, node.left, `the left operand of ${node.op}`);
+    this.#checkSingleton(right, node.right, `the right operand of ${node.op}`);
     this.#checkPairs(
       node,
       left,
@@ -806,10 +855,11 @@ class Analyzer {
   #inferConcatenation(node: BinaryNode, scope: Scope): Inferred {
     for (const operand of [node.left, node.right]) {
       const inferred = this.infer(operand, scope);
+      this.#checkSingleton(inferred, operand, 'an operand of &');
       const kinds = kindsOf(inferred.types, this.#model);
       if (kinds !== undefined && kinds.length > 0 && !kinds.includes('String')) {
         this.#report(
-          'warning',
+          this.#operatorSeverity(),
           'semantic/type-mismatch',
           `& takes Strings, but found ${withArticle(describeTypes(inferred.types ?? []))}`,
           operand,
@@ -826,6 +876,8 @@ class Analyzer {
   #inferArithmetic(node: BinaryNode, op: ArithmeticOperator, scope: Scope): Inferred {
     const left = this.infer(node.left, scope);
     const right = this.infer(node.right, scope);
+    this.#checkSingleton(left, node.left, `the left operand of ${op}`);
+    this.#checkSingleton(right, node.right, `the right operand of ${op}`);
     if (isNothing(left) || isNothing(right)) {
       return NOTHING;
     }
@@ -843,7 +895,7 @@ class Analyzer {
       this.#checkTemporalArithmetic(node, leftKinds);
     }
     if (leftKinds === undefined || rightKinds === undefined) {
-      return { types: undefined, cardinality: 'single' };
+      return { types: undefined, cardinality: 'single', ordered: true };
     }
     const results: AnalysisType[] = [];
     for (const a of leftKinds) {
@@ -854,7 +906,7 @@ class Analyzer {
         }
       }
     }
-    return { types: typeSetOf(results), cardinality: 'single' };
+    return { types: typeSetOf(results), cardinality: 'single', ordered: true };
   }
 
   /**
@@ -884,10 +936,8 @@ class Analyzer {
       rejected = false;
     }
     if (rejected) {
-      // An operator whose operands it never accepts raises eval/type-mismatch when evaluated,
-      // which the HL7 test suite expects (testMinus4, testPrecedence3), so this is a warning.
       this.#report(
-        'warning',
+        this.#operatorSeverity(),
         'semantic/type-mismatch',
         message(describeSide(left), describeSide(right)),
         node,
@@ -896,10 +946,19 @@ class Analyzer {
   }
 
   /**
+   * An operator whose operands it never accepts raises `eval/type-mismatch` when evaluated. That
+   * is a warning here and an error in strict mode, where N1 §11 lists it as an unsafe use; the
+   * HL7 test suite expects the execution error otherwise (`testMinus4`, `testPrecedence3`).
+   */
+  #operatorSeverity(): Diagnostic['severity'] {
+    return this.#strict ? 'error' : 'warning';
+  }
+
+  /**
    * `+` and `-` on a Date, DateTime or Time and a quantity literal
    * ([3.0.0 date/time arithmetic](https://hl7.org/fhirpath/STU3/#datetime-arithmetic)): a unit
-   * that the value cannot take is a warning, as for any other operator, and a quantity of which
-   * part is ignored is a warning, as 3.0.0 asks ([spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#fractions-in-datetime-arithmetic)).
+   * that the value cannot take is an error, and a quantity of which part is ignored is a warning,
+   * as 3.0.0 asks ([spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#fractions-in-datetime-arithmetic)).
    * Only when the left operand is known to be a date/time value, and nothing for a quantity that
    * is computed when the expression is evaluated.
    */
@@ -922,7 +981,7 @@ class Analyzer {
     if (magnitude !== undefined) {
       if (leftKinds.every((kind) => kind === 'Date') && !isDateUnit(magnitude)) {
         this.#report(
-          'warning',
+          this.#operatorSeverity(),
           'semantic/type-mismatch',
           'A Date can only be changed by years, months, weeks or days',
           node,
@@ -931,7 +990,7 @@ class Analyzer {
       }
       if (leftKinds.every((kind) => kind === 'Time') && isDateUnit(magnitude)) {
         this.#report(
-          'warning',
+          this.#operatorSeverity(),
           'semantic/type-mismatch',
           'A Time can only be changed by hours, minutes, seconds or milliseconds',
           node,
@@ -947,7 +1006,7 @@ class Analyzer {
     } catch (error) {
       // The kernel rejects the unit, so the evaluation raises this error; say so now.
       if (error instanceof FhirPathEvaluationError && error.code === 'eval/invalid-calendar-unit') {
-        this.#report('warning', 'semantic/type-mismatch', error.message, node);
+        this.#report(this.#operatorSeverity(), 'semantic/type-mismatch', error.message, node);
         return;
       }
       throw error;
@@ -967,9 +1026,10 @@ class Analyzer {
   /**
    * Checks a value against what a function expects of its input or an argument, or an operator
    * of an operand. A type that never fits is an error for a function and a warning for an
-   * operator, except where a Boolean is expected of a single item: there a value of another type
-   * counts as true ([N1 §4.5](https://hl7.org/fhirpath/N1/#singleton-evaluation-of-collections)),
-   * which only strict mode reports (T0024b), as it reports the cardinality.
+   * operator ({@link Analyzer.#operatorSeverity}), except where a Boolean is expected of a single
+   * item: there a value of another type counts as true
+   * ([N1 §4.5](https://hl7.org/fhirpath/N1/#singleton-evaluation-of-collections)), so only strict
+   * mode reports it. Cardinality and order are strict-mode checks.
    */
   #checkExpectation(
     inferred: Inferred,
@@ -988,14 +1048,44 @@ class Analyzer {
       !someFits(inferred.types, expected, this.#model)
     ) {
       const booleanRule = expected === 'Boolean' && expectation.singleton === true;
-      if (!booleanRule) {
+      if (!booleanRule || this.#strict) {
         this.#report(
-          operator ? 'warning' : 'error',
+          operator ? this.#operatorSeverity() : 'error',
           'semantic/type-mismatch',
           `Expected ${describeExpectation(expected)} for ${what}, but found ${withArticle(describeTypes(inferred.types))}`,
           node,
         );
       }
+    }
+    if (expectation.singleton === true) {
+      this.#checkSingleton(inferred, node, what);
+    }
+    if (expectation.ordered === true) {
+      this.#checkOrdered(inferred, node, what);
+    }
+  }
+
+  /** Strict mode: a value that may repeat where a single item is expected (N1 §11). */
+  #checkSingleton(inferred: Inferred, node: AstNode, what: string): void {
+    if (this.#strict && inferred.cardinality === 'collection') {
+      this.#report(
+        'error',
+        'semantic/singleton-expected',
+        `Expected a single item for ${what}, but it may have more than one; select one with first(), single() or the indexer`,
+        node,
+      );
+    }
+  }
+
+  /** Strict mode: an order-dependent operation on `children()` or `descendants()` (N1 §3.1). */
+  #checkOrdered(inferred: Inferred, node: AstNode, what: string): void {
+    if (this.#strict && !inferred.ordered) {
+      this.#report(
+        'error',
+        'semantic/unordered-collection',
+        `The order of the items is undefined after children() or descendants(), so ${what} cannot depend on it`,
+        node,
+      );
     }
   }
 }
@@ -1030,6 +1120,7 @@ function unionOf(left: Inferred, right: Inferred): Inferred {
     types: unionTypes(left.types, right.types),
     cardinality:
       left.cardinality === 'unknown' || right.cardinality === 'unknown' ? 'unknown' : 'collection',
+    ordered: left.ordered && right.ordered,
   };
 }
 
@@ -1039,6 +1130,11 @@ function widest(a: Cardinality, b: Cardinality): Cardinality {
     return 'collection';
   }
   return a === 'unknown' || b === 'unknown' ? 'unknown' : 'single';
+}
+
+/** Whether two kinds can never be equal, for the strict-mode check of `=`. */
+function isEqualityNever(a: ValueKind, b: ValueKind): boolean {
+  return a !== b && !isComparable(a, b);
 }
 
 /** The types of an operand for people, or `an unknown value`. */
