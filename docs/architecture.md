@@ -225,7 +225,9 @@ Tests live next to their sources (`*.test.ts`). Cross-module integration tests g
 - `types` → `values`
 - `model` → `types`, `values`
 - `runtime` → `values`, `types`, `model`
-- `functions`, `fhir` → `runtime`, `values`. The function modules wrap the pure kernels in `values` (Decimal, Quantity, date/time and string helpers), so they import them directly instead of through a facade in `runtime`. The owner decided this on 2026-11-09 ([#178](https://github.com/losol/callis/issues/178)).
+- `functions` → `runtime`, `values`, `types`. The function modules wrap the pure kernels in `values` (Decimal, Quantity, date/time and string helpers), so they import them directly instead of through a facade in `runtime`. The owner decided this for `values` on 2026-11-09 ([#178](https://github.com/losol/callis/issues/178)).
+- `fhir` → `runtime`, `values`, `model`, and from `functions` only `functions/define.ts`, the function-definition contract.
+- In `functions`, only `registry.ts` may import `fhir`: it is the composition root that registers every built-in function, the FHIR ones from `fhir/functions.ts` included. `define.ts` does not import `fhir`, so the two modules import each other without forming a cycle of file imports. The owner decided this, and `functions` → `types`, on 2026-11-11 ([#193](https://github.com/losol/callis/issues/193)).
 - `compiler` → `parser` (AST types), `runtime`, `functions`
 - `analysis` → `parser`, `types`, `model`, `functions`
 - `api` → everything; `index.ts` → `api` plus public types
