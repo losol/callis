@@ -37,6 +37,7 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
     'Element',
     {
       kind: 'complex',
+      isAbstract: true,
       elements: [element('id', ['string']), element('extension', ['Extension'], { isArray: true })],
     },
   ],

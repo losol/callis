@@ -252,6 +252,14 @@ describe('type specifiers', () => {
     expect(report("'a' is Integer")).toEqual([]);
   });
 
+  it('treats a value that can have no item as empty, whatever it was', () => {
+    expect(report('(1 | 2).ofType(System.String).foo', model)).toEqual([]);
+    expect(report('(1 | 2).select({}).foo', model)).toEqual([]);
+    expect(report('name.ofType(Period).unit', patient)).toEqual([]);
+    expect(report('name.first().as(Period).start.foo', patient)).toEqual([]);
+    expect(report("(1 | 2).ofType(System.String) + 'a'")).toEqual([]);
+  });
+
   it('narrows the types after as and ofType', () => {
     expect(report('(Observation.value as Period).unit', observation)).toEqual([
       'error semantic/unknown-element',
@@ -348,6 +356,29 @@ describe('with a model', () => {
     ]);
   });
 
+  // An abstract type stands for its subtypes, which may be primitives: a FHIR boolean is an
+  // Element, so ofType(Element) may keep one, and toString() then converts it.
+  it('keeps the subtypes of an abstract type possible', () => {
+    expect(report('children().ofType(Element).toString()', patient)).toEqual([]);
+    expect(
+      evaluate(
+        { resourceType: 'Patient', active: true },
+        'children().ofType(Element).toString()',
+        model,
+      ),
+    ).toEqual(['true']);
+    expect(report('children().ofType(Element).substring(0)', patient)).toEqual([]);
+    expect(report('children().ofType(Element) + 1', patient)).toEqual([]);
+    expect(report('children().ofType(Element).allTrue()', patient)).toEqual([]);
+    expect(report('contained.toString()', patient)).toEqual([]);
+    expect(report('1 + contained.first()', patient)).toEqual([]);
+    // A concrete complex type stays complex, as do its subtypes.
+    expect(report('name.toString()', patient)).toEqual(['error semantic/type-mismatch']);
+    expect(report('children().ofType(HumanName).toString()', patient)).toEqual([
+      'error semantic/type-mismatch',
+    ]);
+  });
+
   it('types the input by inputType, one type or several', () => {
     expect(report('start', { model: stubModel, inputType: 'Period' })).toEqual([]);
     expect(report('start', { model: stubModel, inputType: ['Period', 'Timing'] })).toEqual([]);
@@ -389,6 +420,44 @@ describe('with a model', () => {
     expect(report('name.toString()', patient)).toEqual(['error semantic/type-mismatch']);
     expect(report('value.toString()', observation)).toEqual([]);
     expect(report('value.convertsToQuantity()', observation)).toEqual([]);
+  });
+});
+
+// https://hl7.org/fhirpath/N1/#repeatprojection-expression-collection: the projection is also
+// applied to every item it gives, so its focus may be of every type reachable that way.
+describe('repeat()', () => {
+  it('analyzes the projection with every type the walk reaches', () => {
+    expect(report('Patient.repeat(name | given).ofType(System.String)', patient)).toEqual([]);
+    expect(report('repeat(name | given | period).start', patient)).toEqual([]);
+    expect(report('repeat(name | name.period | given)', patient)).toEqual([]);
+    expect(report('contained.repeat(status)', patient)).toEqual([]);
+    expect(report("name.repeat(given).where($this = 'Ada')", patient)).toEqual([]);
+  });
+
+  it('infers the types of what the walk gives', () => {
+    expect(report('repeat(name | given).first().given', patient)).toEqual([]);
+    expect(report('repeat(name).given.extension.url', patient)).toEqual([]);
+    expect(report('repeat(name).foo', patient)).toEqual(['error semantic/unknown-element']);
+    expect(report('repeat(name).given.foo', patient)).toEqual(['error semantic/unknown-element']);
+    expect(report('repeat(name).toString()', patient)).toEqual(['error semantic/type-mismatch']);
+  });
+
+  it('reports an element that no reachable type has, once', () => {
+    expect(report('repeat(nope)', patient)).toEqual(['error semantic/unknown-element']);
+    // given is only reachable through a name, which this walk never gives.
+    expect(report('repeat(name.period | given)', patient)).toEqual([
+      'error semantic/unknown-element',
+    ]);
+    expect(report('repeat(name | nope)', patient)).toEqual(['error semantic/unknown-element']);
+    expect(report('repeat(name | given).nope', patient)).toEqual([
+      'error semantic/unknown-element',
+    ]);
+  });
+
+  it('knows nothing when the input or the walk is unknown', () => {
+    expect(report('repeat(name).foo')).toEqual([]);
+    expect(report('repeat(%v).foo', patient)).toEqual([]);
+    expect(report('repeat(nope).foo', model)).toEqual([]);
   });
 });
 
@@ -445,6 +514,27 @@ describe('type guards', () => {
     [`$this.start is dateTime implies ${check}`, period],
   ])('rejects %s', (expression, options) => {
     expect(report(expression, options)).toEqual(['error semantic/type-mismatch']);
+  });
+
+  it('names paths without collisions between delimited and nested names', () => {
+    // One property named a.b, and the path a then b: the guard is on the first only.
+    expect(report('(`a.b` is Integer) implies a.b.substring(0).exists()')).toEqual([]);
+    expect(report('(a.b is Integer) implies `a.b`.substring(0).exists()')).toEqual([]);
+    expect(report('(%`v.x` is Integer) implies %v.x.substring(0).exists()')).toEqual([]);
+    expect(report('(%v.x is Integer) implies %`v.x`.substring(0).exists()')).toEqual([]);
+    expect(
+      evaluate(
+        { 'a.b': 1, a: { b: 'ok' } },
+        '(`a.b` is Integer) implies a.b.substring(0).exists()',
+      ),
+    ).toEqual([true]);
+    // The same path on both sides: the guard applies.
+    expect(report('(a.b is Integer) implies a.b.substring(0).exists()')).toEqual([
+      'error semantic/type-mismatch',
+    ]);
+    expect(report('(%v.x is Integer) implies %v.x.substring(0).exists()')).toEqual([
+      'error semantic/type-mismatch',
+    ]);
   });
 
   it('narrows a path, a variable and the focus of a lambda', () => {
