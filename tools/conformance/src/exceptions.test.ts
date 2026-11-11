@@ -32,6 +32,12 @@ describe('SUITE_EXCEPTIONS', () => {
     expect(findException(SUITE_EXCEPTIONS, 'r5', 'testPlusDate19')).toBeUndefined();
   });
 
+  // https://hl7.org/fhirpath/STU3/en/index.html#distinct--collection: undetermined equality means
+  // distinct. Only the R5 file has these tests (docs/spec-notes.md#distinct-and-isdistinct).
+  it.each(['testDistinct29', 'testDistinct36'])('excepts %s in R5', (id) => {
+    expect(findException(SUITE_EXCEPTIONS, 'r5', id)?.note).toBe('distinct-and-isdistinct');
+  });
+
   // docs/spec-notes.md: the model-aware exceptions T0018 registers (#111), in both suites.
   it.each(['testFHIRPathAsFunction11', 'testFHIRPathAsFunction16', 'testType22'])(
     'excepts %s in R4 and R5',

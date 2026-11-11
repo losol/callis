@@ -5,12 +5,11 @@
  * `=`, through the same kernel as `|`, `in` and `intersect()`.
  */
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
-import { type Collection, EMPTY, fromBoolean, type Item } from '../runtime/collection.ts';
+import { type Collection, EMPTY, fromBoolean } from '../runtime/collection.ts';
 import type { ComparisonContext } from '../runtime/comparison.ts';
 import { itemEquals } from '../runtime/equality.ts';
 import { andThen, isThenable, type MaybePromise } from '../runtime/maybe-promise.ts';
 import { toSystemValue } from '../runtime/node-value.ts';
-import { isComplex } from '../runtime/operands.ts';
 import { matchesCriteria } from './criteria.ts';
 import {
   defineFunction,
@@ -152,36 +151,34 @@ export const countFunction: FunctionDefinition = defineValueFunction(
 );
 
 /**
- * `distinct()`: the input items without repeats, by `=`. Of equal items the last remains, in
- * input order; the input items are returned themselves. When two System values cannot be
- * compared, such as dates of different precision, the result is empty, as the HL7 tests expect.
- * An element that holds only extensions is never equal to another item, so it stays
+ * `distinct()`: the input items without repeats. Two items are equal only when `=` is true; false
+ * and empty both mean that they are distinct, as 3.0.0 says, so `@2020` and `@2020-01-01` both
+ * remain. Of equal items the last remains, in input order; the input items are returned
+ * themselves
  * ([spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#distinct-and-isdistinct)).
  * @see https://hl7.org/fhirpath/N1/#distinct-collection
+ * @see https://hl7.org/fhirpath/STU3/en/index.html#distinct--collection
  */
 export const distinctFunction: FunctionDefinition = defineValueFunction(
   'distinct',
   0,
   (input, _args, call) => {
     const repeated = laterRepeats(input, call.ctx);
-    if (repeated === undefined) return EMPTY;
     return repeated.includes(true) ? input.filter((_item, index) => !repeated[index]) : input;
   },
 );
 
 /**
- * `isDistinct()`: whether no two input items are equal (`=`); true for empty input. Empty when two
- * System values cannot be compared, as for `distinct()`
+ * `isDistinct()`: whether no two input items are equal, by the rule of `distinct()`: only a true
+ * `=` makes two items equal. True for empty input, never empty
  * ([spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#distinct-and-isdistinct)).
  * @see https://hl7.org/fhirpath/N1/#isdistinct-boolean
+ * @see https://hl7.org/fhirpath/STU3/en/index.html#isdistinct--boolean
  */
 export const isDistinctFunction: FunctionDefinition = defineValueFunction(
   'isDistinct',
   0,
-  (input, _args, call) => {
-    const repeated = laterRepeats(input, call.ctx);
-    return fromBoolean(repeated === undefined ? undefined : !repeated.includes(true));
-  },
+  (input, _args, call) => fromBoolean(!laterRepeats(input, call.ctx).includes(true)),
   BOOLEAN,
 );
 
@@ -278,38 +275,24 @@ function isSubset(items: Collection, other: Collection, ctx: ComparisonContext):
 }
 
 /**
- * For each input item, whether a later item equals it (`=`), or undefined when two System values
- * cannot be compared. Every pair is compared once, so the result does not depend on the order in
- * which the items are compared.
- *
- * Any other undetermined comparison counts as not equal, as it does for `|`: one with an element
- * that holds only extensions, which has no value to compare, or between complex values whose
- * children cannot be compared. Otherwise one such element would empty the whole result.
+ * For each input item, whether a later item equals it: `=` is true for the pair. An undetermined
+ * comparison counts as not equal, as 3.0.0 says for `distinct()` and as it does for `|`: dates of
+ * different precision, quantities whose units cannot be related, an element that holds only
+ * extensions, or complex values whose children cannot be compared. An item already known to
+ * repeat is not compared again.
  */
-function laterRepeats(input: Collection, ctx: ComparisonContext): boolean[] | undefined {
+function laterRepeats(input: Collection, ctx: ComparisonContext): boolean[] {
   const repeated: boolean[] = [];
-  const valued: boolean[] = [];
   for (const item of input) {
-    const isValued = holdsSystemValue(item);
     let index = 0;
     for (const earlier of input) {
       if (index === repeated.length) break;
-      const equal = itemEquals(earlier, item, ctx);
-      if (equal === undefined && isValued && valued[index] === true) return undefined;
-      if (equal === true) repeated[index] = true;
+      if (repeated[index] !== true && itemEquals(earlier, item, ctx) === true) {
+        repeated[index] = true;
+      }
       index++;
     }
     repeated.push(false);
-    valued.push(isValued);
   }
   return repeated;
-}
-
-/**
- * Whether an item is or holds a System value: not an element that holds only extensions, and not
- * a resource or complex value.
- */
-function holdsSystemValue(item: Item): boolean {
-  const value = toSystemValue(item);
-  return value !== undefined && !isComplex(value);
 }

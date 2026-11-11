@@ -188,7 +188,6 @@ testDistinct25
 testDistinct26
 testDistinct27
 testDistinct28
-testDistinct29
 testDistinct3
 testDistinct30
 testDistinct31
@@ -196,7 +195,6 @@ testDistinct32
 testDistinct33
 testDistinct34
 testDistinct35
-testDistinct36
 testDistinct4
 testDistinct5
 testDistinct6
