@@ -28,6 +28,7 @@ import {
   defineValueFunction,
   type FunctionDefinition,
   type ParamSpec,
+  type TypeExpectation,
   type TypeHint,
 } from './define.ts';
 import { BASE_FLAGS, compileRegex, expandSubstitution } from './regex.ts';
@@ -74,6 +75,7 @@ function defineStringCall(
   const params: readonly ParamSpec[] = paramNames.map((paramName) => ({
     kind: 'value',
     name: paramName,
+    expects: STRING_VALUE,
   }));
   return defineValueFunction(
     name,
@@ -92,12 +94,15 @@ function defineStringCall(
       }
       return empty || text === undefined ? EMPTY : compute(call, text, ...strings);
     },
-    { returns },
+    { input: STRING_VALUE, returns },
   );
 }
 
 const BOOLEAN: TypeHint = { type: 'Boolean', singleton: true };
 const STRING: TypeHint = { type: 'String', singleton: true };
+/** The input and the arguments of the string functions: one String. */
+const STRING_VALUE: TypeExpectation = { type: 'String', singleton: true };
+const INTEGER_VALUE: TypeExpectation = { type: 'Integer', singleton: true };
 
 /**
  * `indexOf(substring)`: the 0-based index in characters of the first occurrence, -1 when there is
@@ -123,8 +128,8 @@ export const indexOfFunction: FunctionDefinition = defineStringFunction(
 export const substringFunction: FunctionDefinition = defineValueFunction(
   'substring',
   [
-    { kind: 'value', name: 'start' },
-    { kind: 'value', name: 'length', optional: true },
+    { kind: 'value', name: 'start', expects: INTEGER_VALUE },
+    { kind: 'value', name: 'length', optional: true, expects: INTEGER_VALUE },
   ],
   (input, args) => {
     const text = stringOf(input);
@@ -142,7 +147,7 @@ export const substringFunction: FunctionDefinition = defineValueFunction(
     }
     return [length <= 0 ? '' : text.slice(from, advance(text, from, length))];
   },
-  { returns: STRING },
+  { input: STRING_VALUE, returns: STRING },
 );
 
 /**

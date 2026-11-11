@@ -694,12 +694,24 @@ describe('toQuantity and convertsToQuantity', () => {
   });
 
   it.each([
-    ['1.toQuantity(1)', 'eval/type-mismatch'],
-    ['1.convertsToQuantity(true)', 'eval/type-mismatch'],
+    ['1.toQuantity(%one)', 'eval/type-mismatch'],
+    ['1.convertsToQuantity(%flag)', 'eval/type-mismatch'],
     ["1.toQuantity('a' | 'b')", 'eval/singleton-expected'],
   ])('%s raises %s for a unit that is not a single String', (expression, code) => {
-    expect(() => evaluate({}, expression)).toThrow(expect.objectContaining({ code }));
+    expect(() => evaluate({}, expression, { variables: { one: 1, flag: true } })).toThrow(
+      expect.objectContaining({ code }),
+    );
   });
+
+  // T0024: a unit literal that is not a String is rejected when the expression is compiled.
+  it.each(['1.toQuantity(1)', '1.convertsToQuantity(true)'])(
+    '%s raises semantic/type-mismatch at compile time',
+    (expression) => {
+      expect(() => evaluate({}, expression)).toThrow(
+        expect.objectContaining({ code: 'semantic/type-mismatch' }),
+      );
+    },
+  );
 
   it('uses the unit system of the compilation', () => {
     const units = {

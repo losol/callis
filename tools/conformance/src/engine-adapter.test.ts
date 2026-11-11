@@ -84,7 +84,10 @@ describe('engineAdapter.evaluate', () => {
     expect(await run('Observation.value.unit')).toEqual([
       expect.objectContaining({ value: 'lbs' }),
     ]);
-    expect(await run('Observation.valueQuantity.unit')).toEqual([]);
+    // With the input's type, the suffix form is a semantic error (T0024), unless lenient.
+    await expect(run('Observation.valueQuantity.unit')).rejects.toMatchObject({
+      code: 'semantic/unknown-element',
+    });
     expect(await run('Observation.valueQuantity.unit', { lenientChoiceSuffix: true })).toEqual([
       expect.objectContaining({ value: 'lbs' }),
     ]);

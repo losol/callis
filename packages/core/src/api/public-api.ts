@@ -3,10 +3,14 @@ import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
 import { requireSync } from '../runtime/maybe-promise.ts';
 import type { UnitSystem } from '../values/quantity/unit-system.ts';
 import {
+  type AnalysisResult,
+  analyze as analyzeInternal,
   compile as compileInternal,
   type CompileOptions as InternalCompileOptions,
   type EvaluateOptions as InternalEvaluateOptions,
 } from './compile.ts';
+
+export type { AnalysisResult } from './compile.ts';
 
 /** Options fixed for the lifetime of a compiled expression. */
 export interface CompileOptions {
@@ -57,10 +61,29 @@ export interface CompiledExpression {
 }
 
 /**
+ * Analyzes model-less FHIRPath without compiling it, for editors and other tooling: every
+ * problem that {@link compile} throws, plus warnings, as diagnostics in source order. A syntax
+ * error is a diagnostic too, with its `syntax/…` code. Errors are what `compile()` rejects;
+ * warnings (`semantic/unknown-type` for a type that does not resolve, `semantic/fraction-ignored`
+ * when date/time arithmetic ignores part of a quantity) leave the expression valid.
+ * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for unsupported options.
+ * @example
+ * analyze('@2020-01-01 + 1.5 days').diagnostics; // [{ severity: 'warning', code: 'semantic/fraction-ignored', … }]
+ * analyze("1 + 'a'").diagnostics[0]?.severity;     // 'error'
+ */
+export function analyze(expression: string, options: CompileOptions = {}): AnalysisResult {
+  checkExpression(expression);
+  checkOptions(options, COMPILE_OPTION_KEYS);
+  return analyzeInternal(expression, compileOptions(options));
+}
+
+/**
  * Compiles model-less FHIRPath for repeated synchronous evaluation.
  * Only the currently implemented operators and built-in functions are available.
  * @throws {@link FhirPathSyntaxError} for invalid syntax.
- * @throws {@link FhirPathSemanticError} for unknown functions or invalid function arguments.
+ * @throws {@link FhirPathSemanticError} for what static analysis rejects, with every diagnostic
+ *   in `diagnostics`: an unknown function, a wrong number of arguments, a type argument that is
+ *   not a type name, and an input or argument of a type the function never accepts (`'a'.abs()`).
  * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for unsupported options.
  * @example
  * const names = compile('Patient.name.given');
@@ -68,7 +91,7 @@ export interface CompiledExpression {
  */
 export function compile(expression: string, options: CompileOptions = {}): CompiledExpression {
   checkExpression(expression);
-  checkOptions(options, ['units']);
+  checkOptions(options, COMPILE_OPTION_KEYS);
   const compiled = compileInternal(expression, compileOptions(options));
   return Object.freeze({
     expression,
@@ -93,12 +116,14 @@ export function evaluate(
   options: CompileOptions & EvaluateOptions = {},
 ): unknown[] {
   checkExpression(expression);
-  checkOptions(options, ['units', ...EVALUATE_OPTION_KEYS]);
+  checkOptions(options, [...COMPILE_OPTION_KEYS, ...EVALUATE_OPTION_KEYS]);
   return compileInternal(expression, compileOptions(options)).evaluate(
     input,
     evaluateOptions(options),
   );
 }
+
+const COMPILE_OPTION_KEYS: readonly string[] = ['units'];
 
 const EVALUATE_OPTION_KEYS: readonly string[] = [
   'variables',

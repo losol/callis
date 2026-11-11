@@ -42,6 +42,8 @@
 | [T0022](tasks/T0022-conformance-runner.md) | Conformance runner | 1 | T0000 | 1 | M |
 | [T0023](tasks/T0023-xml-fixture-conversion.md) | FHIR XML fixture conversion | 1 | T0019, T0022 | 3 | M |
 | [T0024](tasks/T0024-static-analysis.md) | Static analysis and strict mode | 1 | T0018, T0019 | 5 | L |
+| [T0024a](tasks/T0024a-static-analysis-diagnostics.md) | Static analysis: type inference and diagnostics | 1 | T0018, T0019 | 5 | L |
+| [T0024b](tasks/T0024b-strict-mode.md) | Static analysis: strict mode | 1 | T0024a | 6 | M |
 | [T0025](tasks/T0025-public-api-release.md) | Minimal synchronous public API | 1 | T0007, T0008, T0009, T0010, T0023 | 5 | M |
 | [T0026](tasks/T0026-stu-aggregates.md) | STU: aggregates and variables | 2 | T0038 | 8 | M |
 | [T0027](tasks/T0027-stu-collections.md) | STU: collection additions | 2 | T0038 | 8 | M |
@@ -55,7 +57,7 @@
 | [T0035](tasks/T0035-docs-site.md) | Documentation site, progress page and deployment | 3 | T0022 | 2 | L |
 | [T0036](tasks/T0036-playground.md) | Simple FHIRPath playground | 3 | T0025, T0035 | 6 | M |
 | [T0037](tasks/T0037-first-release-readiness.md) | First 0.1 release readiness | 1 | T0025, T0036 | 7 | M |
-| [T0038](tasks/T0038-public-api-completion.md) | Complete the phase-1 public API and documentation | 1 | T0007, T0010, T0011, T0012, T0013, T0014, T0015, T0016, T0017, T0021, T0023, T0024, T0025, T0041, T0042 | 7 | L |
+| [T0038](tasks/T0038-public-api-completion.md) | Complete the phase-1 public API and documentation | 1 | T0007, T0010, T0011, T0012, T0013, T0014, T0015, T0016, T0017, T0021, T0023, T0024, T0024b, T0025, T0041, T0042 | 7 | L |
 | [T0039](tasks/T0039-fhir-r6-model.md) | Pinned FHIR R6 model provider | 1 | T0019 | 3 | M |
 | [T0040](tasks/T0040-fhir-r6-validation.md) | R6 package and compatibility validation | 1 | T0039, T0025 | 6 | M |
 | [T0041](tasks/T0041-fn-existence-completion.md) | Functions: remaining existence | 1 | T0011, T0013 | 6 | S |
@@ -97,6 +99,8 @@ flowchart TD
     T0022["T0022 Conformance runner"]
     T0023["T0023 XML fixture conversion"]
     T0024["T0024 Static analysis"]
+    T0024a["T0024a Type inference + diagnostics"]
+    T0024b["T0024b Strict mode"]
     T0025["T0025 Minimal sync API"]
     T0037["T0037 First 0.1 readiness"]
     T0038["T0038 Complete phase-1 API + docs"]
@@ -142,12 +146,13 @@ flowchart TD
   T0020 --> T0021
   T0019 & T0022 --> T0023
   T0022 --> T0035
-  T0018 & T0019 --> T0024
+  T0018 & T0019 --> T0024 & T0024a
+  T0024a --> T0024b
   T0007 & T0008 & T0009 & T0010 & T0023 --> T0025
   T0025 & T0035 --> T0036
   T0036 & T0011 --> T0043
   T0025 & T0036 --> T0037
-  T0007 & T0010 & T0011 & T0012 & T0013 & T0014 & T0015 & T0016 & T0017 & T0021 & T0023 & T0024 & T0025 & T0041 & T0042 --> T0038
+  T0007 & T0010 & T0011 & T0012 & T0013 & T0014 & T0015 & T0016 & T0017 & T0021 & T0023 & T0024 & T0024b & T0025 & T0041 & T0042 --> T0038
   T0038 --> T0026 & T0027 & T0028 & T0029 & T0030 & T0031 & T0032 & T0033 & T0034
 ```
 
@@ -162,8 +167,8 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 | 2 | T0002, T0006, T0019, T0035 | 4 | T0035 is tooling and can start as soon as the conformance runner is merged. |
 | 3 | T0007, T0008, T0009, T0023, T0039 | 5 | T0008 is on the engine path; T0039 supplies R6 required by the selected first release. |
 | 4 | T0010, T0012, T0014, T0015, T0016, T0017, T0018, T0044 | up to 8 | Function groups only add files in `src/functions/`, so they rarely conflict. |
-| 5 | T0011, T0013, T0020, T0024, T0025, T0042 | 6 | Minimal public API can land while the rest of phase 1 continues. |
-| 6 | T0021, T0036, T0040, T0041 | 4 | T0040 verifies the five-package first release; it is independent of hooks/async work. |
+| 5 | T0011, T0013, T0020, T0024, T0024a, T0025, T0042 | 6 | Minimal public API can land while the rest of phase 1 continues. T0024 was split into T0024a and T0024b on 2026-11-12 ([Pull requests](../CONTRIBUTING.md#pull-requests)); T0024 is complete when both have merged. |
+| 6 | T0021, T0024b, T0036, T0040, T0041 | 5 | T0040 verifies the five-package first release; it is independent of hooks/async work. T0024b follows T0024a. |
 | 7 | T0037, T0038, T0043 | 3 | First-release readiness and full phase-1 API completion are independent milestones. |
 | 8 | T0026–T0034 | up to 9 | STU features, FHIR phase 2, performance and CLI, all independent. |
 

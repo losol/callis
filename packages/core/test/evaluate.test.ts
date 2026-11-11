@@ -306,7 +306,15 @@ describe('$this and $index', () => {
   it('is the input outside a lambda, and $index is empty', () => {
     expect(run('$this.id')).toEqual(['example']);
     expect(run('$index')).toEqual([]);
-    expect(run('$total')).toEqual([]);
+  });
+
+  // N1 §7: $total is the accumulator of aggregate(), which is phase 2 (T0026); elsewhere it is
+  // a semantic error (T0024).
+  it('rejects $total outside aggregate() at compile time', () => {
+    expect(errorOf(() => run('$total'))).toMatchObject({ code: 'semantic/undefined-variable' });
+    expect(errorOf(() => run('name.$total'))).toMatchObject({
+      code: 'semantic/undefined-variable',
+    });
   });
 
   // https://github.com/losol/callis/blob/main/docs/spec-notes.md#frame-variables-after-a-dot

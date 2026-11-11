@@ -80,6 +80,29 @@ export const lossless: unknown[] = evaluate(parseJson('{"value": 1.50}'), 'value
 
 This gives `['1.50']`; without `decimalOutput: 'string'`, `[1.5]`. A result that is an object keeps its `JsonNumber` values; `JSON.stringify()` writes them as numbers, and `String(number)` gives the text. Invalid text raises `eval/invalid-json` with the offset of the problem. Parsing is not limited by the call stack. A `__proto__` key becomes an own property, as with `JSON.parse`. `parseJson` is not in releases up to 0.2.0.
 
+## Static analysis
+
+`analyze(expression: string, options?: CompileOptions): AnalysisResult` reports the problems of an expression without compiling it, for editors and other tooling. `diagnostics` lists them in source order, each with a `severity`, a stable `code`, a `message` for people, a `span` where the expression has one, and sometimes a `hint` with a suggested rewrite. An error is what `compile()` and `evaluate()` throw as `FhirPathSemanticError`, with the same list in its `diagnostics`; a syntax error is a diagnostic with its `syntax/…` code. A warning leaves the expression valid.
+
+```ts
+import { analyze } from '@callis/core';
+
+export const fractionDiagnostics: readonly unknown[] = analyze('@2020-01-01 + 1.5 days').diagnostics;
+export const unknownFunction: readonly unknown[] = analyze('nothing()').diagnostics;
+```
+
+The first gives one warning, `semantic/fraction-ignored`: date/time arithmetic ignores the fraction of `1.5 days`, so the expression adds one day, as [FHIRPath 3.0.0](https://hl7.org/fhirpath/STU3/#datetime-arithmetic) says and as before. The second gives one error, `semantic/unknown-function`. Analysis knows the types of literals, operators and functions, and reports what can never work: an operator whose operands it never accepts (`1 + 'a'`) is a warning, because evaluation raises `eval/type-mismatch` there; an input or argument of a type a function never accepts (`'a'.abs()`, `skip('1')`) is an error; a type that does not resolve in `is`, `as` or `ofType()` is a warning, and evaluation raises `eval/unknown-type` as before. Without a model it knows nothing about the elements of the input, so `name.given1` reports nothing; the model-aware checks (an unknown element, a choice element written with its type suffix, a leading type name that does not match the input) run inside the engine and reach the public API with the `model` option of the expanded API ([T0038](tasks/T0038-public-api-completion.md)).
+
+The expression still evaluates:
+
+```ts
+import { evaluate } from '@callis/core';
+
+export const addedDay: unknown[] = evaluate(null, '@2020-01-01 + 1.5 days');
+```
+
+`addedDay` is `['2020-01-02']`. The strict evaluation of [N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation), which also rejects a value that may repeat where a single item is expected, is [T0024b](tasks/T0024b-strict-mode.md).
+
 ## Current support and deferred API
 
 Model-less paths, literals, indexing, Boolean logic, unary polarity and type operations are available. The built-in functions are `not`, `is`, `as`, `where`, `select`, `repeat`, `ofType`, `exists`, `count`, `empty`, `all`, `allTrue`, `anyTrue`, `allFalse`, `anyFalse`, `subsetOf`, `supersetOf`, `distinct`, `isDistinct`, `first`, `single`, `last`, `tail`, `skip`, `take`, `intersect`, `exclude`, `union`, `combine`, `children`, `descendants`, `trace`, `now`, `today`, `timeOfDay`, `iif`, `toX()` and `convertsToX()` for Boolean, Integer, Decimal, Date, DateTime, Time, String and Quantity, the string functions and the FHIR functions below. Arithmetic, comparisons, equality/equivalence, membership, union and string concatenation operators from T0010 are implemented. Other standard functions are still incremental work; an unavailable function such as `aggregate()` raises `semantic/unknown-function`, rather than pretending to evaluate it.
@@ -176,7 +199,7 @@ export const containerReference: unknown[] = evaluate(
 
 These give `['Acme']` and `['#o1']`. `%resource` and `%rootResource` are the input unless the `resource` and `rootResource` options say otherwise, as in the second example, which evaluates a contained resource on its own. `hasValue()` is true for a single item with a primitive value and false otherwise. Without a model, `extension()` finds the extensions of resources and complex values, but not those of a primitive, which sit in its `_name` object; the model option of the expanded API (T0038) reads those. `memberOf()`, `subsumes()`, `subsumedBy()`, `conformsTo()` and `htmlChecks()` compile, but return empty in the public API, which has no hooks yet; the engine's host hooks ([T0021](tasks/T0021-hooks-async.md)) reach it with the expanded API (T0038). The interpretations behind these are in the [spec notes](spec-notes.md#fhir-functions).
 
-The public surface has no parser, AST input/property, static analyzer, typed output mode, async evaluation, hooks, model option, custom function registry, strict/lenient options or cache. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages. The engine evaluates with a model internally since [T0018](tasks/T0018-model-aware-evaluation.md): choice elements, FHIR primitives with their `_name` extensions, FHIR values as System values and the root identifier as a type with inheritance, which the conformance runner measures with the R4 and R5 providers; the engine's tests also run it against the R6 provider. The public `model` and `lenient` options arrive with the expanded API (T0038); a model provider export does not imply them yet.
+The public surface has no parser, AST input/property, typed output mode, async evaluation, hooks, model option, custom function registry, strict/lenient options or cache; the analyzer is described above. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages. The engine evaluates with a model internally since [T0018](tasks/T0018-model-aware-evaluation.md): choice elements, FHIR primitives with their `_name` extensions, FHIR values as System values and the root identifier as a type with inheritance, which the conformance runner measures with the R4 and R5 providers; the engine's tests also run it against the R6 provider. The public `model` and `lenient` options arrive with the expanded API (T0038); a model provider export does not imply them yet.
 
 The examples are executed by the public documentation tests. Handwritten TSDoc and this small guide describe the initial API; a generated API reference is deferred with the expanded API.
 

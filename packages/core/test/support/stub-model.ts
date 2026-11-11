@@ -107,6 +107,17 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
     },
   ],
   [
+    'Timing',
+    {
+      kind: 'complex',
+      base: 'BackboneElement',
+      elements: [
+        element('event', ['dateTime'], { isArray: true }),
+        element('code', ['CodeableConcept']),
+      ],
+    },
+  ],
+  [
     'Coding',
     {
       kind: 'complex',

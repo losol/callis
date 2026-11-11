@@ -96,13 +96,24 @@ describe('choice elements', () => {
     expect(run(observation, expression)).toEqual(expected);
   });
 
-  // ADR-0012: the suffix form is not an element; empty at runtime, a semantic error with T0024.
+  // ADR-0012: the suffix form is not an element; a semantic error with a hint when analysis
+  // knows the type (T0024, testPolymorphismB), and empty at runtime otherwise.
   it.each(['Observation.valueQuantity', 'Observation.valueQuantity.unit'])(
-    '%s is empty by default',
+    '%s is a semantic error by default',
     (expression) => {
-      expect(run(observation, expression)).toEqual([]);
+      expect(() => run(observation, expression)).toThrow(
+        expect.objectContaining({
+          code: 'semantic/unknown-element',
+          diagnostics: [expect.objectContaining({ hint: 'value.ofType(Quantity)' })],
+        }),
+      );
     },
   );
+
+  it('navigates the suffix form to empty when the type is only known at runtime', () => {
+    expect(run(observation, '%context.valueQuantity')).toEqual([]);
+    expect(run(observation, '%context.valueQuantity.unit')).toEqual([]);
+  });
 
   it('accepts the type suffix with lenient.choiceSuffix', () => {
     const lenient: Options = { lenient: { choiceSuffix: true } };
@@ -110,7 +121,9 @@ describe('choice elements', () => {
     expect(run(observation, 'Observation.valueQuantity.exists()', lenient)).toEqual([true]);
     expect(run(observation, 'Observation.valueString.exists()', lenient)).toEqual([false]);
     expect(run(observation, 'Observation.value.unit', lenient)).toEqual(['lbs']);
-    expect(run(observation, 'Observation.valueQuantity', { lenient: {} })).toEqual([]);
+    expect(codeOf(() => run(observation, 'Observation.valueQuantity', { lenient: {} }))).toBe(
+      'semantic/unknown-element',
+    );
   });
 
   it('converts a Quantity with a UCUM code to a System.Quantity', () => {
@@ -206,8 +219,8 @@ describe('primitive extensions', () => {
     expect(run(input, 'Patient.active implies false')).toEqual([]);
     expect(run(input, 'Patient.active.not()')).toEqual([]);
     expect(run(input, 'Patient.active = true')).toEqual([]);
-    expect(run(input, 'Patient.name.where(Patient.active).given')).toEqual([]);
-    expect(run(input, 'Patient.name.exists(Patient.active)')).toEqual([false]);
+    expect(run(input, 'Patient.name.where(%context.active).given')).toEqual([]);
+    expect(run(input, 'Patient.name.exists(%context.active)')).toEqual([false]);
     expect(run(input, 'Patient.name.given[Patient.multipleBirth]')).toEqual([]);
     expect(run(input, '-Patient.multipleBirth')).toEqual([]);
     expect(run(input, 'Patient.multipleBirth + 1')).toEqual([]);
@@ -261,7 +274,7 @@ describe('the root identifier as a type', () => {
       { extension: [syllables] },
     ]);
     expect(run(names[0], 'given')).toEqual(['Peter', 'James']);
-    expect(run(names[0], 'Patient.given')).toEqual([]);
+    expect(run(names[0], 'Patient.name')).toEqual([]);
   });
 });
 

@@ -375,20 +375,26 @@ describe('allTrue, anyTrue, allFalse and anyFalse', () => {
     expect(evaluate(input, 'missing.allFalse()')).toEqual([true]);
   });
 
-  it.each([
-    "'true'",
-    '1',
-    '1.0',
-    '@2020',
-    '1.combine(true)',
-    "true.combine('a')",
-    'false.combine(0)',
-  ])(
+  // A variable's type is not known when the expression is compiled; a mixed collection is
+  // accepted by analysis, because one of its items may be a Boolean.
+  it.each(['%text', '%one', '%half', '1.combine(true)', "true.combine('a')", 'false.combine(0)'])(
     'raises eval/type-mismatch for an item of %s that is not a Boolean, whatever the other items',
     (input) => {
       for (const name of ['allTrue', 'anyTrue', 'allFalse', 'anyFalse']) {
+        expect(() =>
+          evaluate(null, `${input}.${name}()`, { variables: { text: 'true', one: 1, half: 1.5 } }),
+        ).toThrow(expect.objectContaining({ code: 'eval/type-mismatch' }));
+      }
+    },
+  );
+
+  // T0024: a literal that is never a Boolean is rejected when the expression is compiled.
+  it.each(["'true'", '1', '1.0', '@2020'])(
+    'rejects %s at compile time, which is never a Boolean',
+    (input) => {
+      for (const name of ['allTrue', 'anyTrue', 'allFalse', 'anyFalse']) {
         expect(() => evaluate(null, `${input}.${name}()`)).toThrow(
-          expect.objectContaining({ code: 'eval/type-mismatch' }),
+          expect.objectContaining({ code: 'semantic/type-mismatch' }),
         );
       }
     },

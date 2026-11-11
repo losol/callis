@@ -29,9 +29,10 @@ import {
 export const traceFunction: FunctionDefinition = defineFunction({
   name: 'trace',
   params: [
-    { kind: 'value', name: 'name' },
+    { kind: 'value', name: 'name', expects: { type: 'String', singleton: true } },
     { kind: 'lambda', name: 'projection', optional: true },
   ],
+  returns: { fromInput: true },
   async: true,
   impl: (call, input, args) => {
     const name = singleton(valueArg(args, 0), 'String', asString) ?? '';

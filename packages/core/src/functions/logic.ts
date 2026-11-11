@@ -19,7 +19,7 @@ export const notFunction: FunctionDefinition = defineValueFunction(
   'not',
   0,
   (input) => fromBoolean(not(singleton(input, 'Boolean', asBoolean))),
-  { returns: { type: 'Boolean', singleton: true } },
+  { input: { type: 'Boolean', singleton: true }, returns: { type: 'Boolean', singleton: true } },
 );
 
 /** The Boolean logic functions of the standard library. */

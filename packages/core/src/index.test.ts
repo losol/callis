@@ -18,6 +18,7 @@ describe('@callis/core public API', () => {
         'Decimal',
         'MAX_DECIMAL_DIGITS',
         'minimalUnitSystem',
+        'analyze',
         'compile',
         'evaluate',
         'parseJson',

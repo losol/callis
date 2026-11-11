@@ -276,6 +276,25 @@ describe('skip() and take()', () => {
     },
   );
 
+  // The types of variables are not known when the expression is compiled, so the functions
+  // check them at runtime.
+  it.each([
+    'skip(%text)',
+    'skip(%half)',
+    'skip(%flag)',
+    'take(%text)',
+    'take(%half)',
+    'take(%flag)',
+    '{}.skip(%text)',
+    '{}.take(%text)',
+    'name.skip(name.first())',
+  ])('raises eval/type-mismatch for a count that is not an Integer: %s', (expression) => {
+    expect(() =>
+      evaluate(names, expression, { variables: { text: '1', half: 1.5, flag: true } }),
+    ).toThrow(expect.objectContaining({ code: 'eval/type-mismatch' }));
+  });
+
+  // T0024: a literal that is not an Integer is rejected when the expression is compiled.
   it.each([
     "skip('1')",
     'skip(1.5)',
@@ -288,10 +307,9 @@ describe('skip() and take()', () => {
     'take(true)',
     "{}.skip('1')",
     "{}.take('1')",
-    'name.skip(name.first())',
-  ])('raises eval/type-mismatch for a count that is not an Integer: %s', (expression) => {
+  ])('rejects a count literal that is not an Integer at compile time: %s', (expression) => {
     expect(() => evaluate(names, expression)).toThrow(
-      expect.objectContaining({ code: 'eval/type-mismatch' }),
+      expect.objectContaining({ code: 'semantic/type-mismatch' }),
     );
   });
 

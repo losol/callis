@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   adaTwice,
+  addedDay,
   allGiven,
   containerReference,
   exactDecimal,
@@ -12,6 +13,7 @@ import {
   firstGiven,
   firstGivenPerName,
   firstTwoGiven,
+  fractionDiagnostics,
   given,
   givenDistinct,
   hasAda,
@@ -33,6 +35,7 @@ import {
   selectedGiven,
   someFalse,
   uniqueGiven,
+  unknownFunction,
   variable,
   withGrace,
   withoutAda,
@@ -77,6 +80,13 @@ describe('public guide examples', () => {
     expect(managedBy).toEqual(['Acme']);
     expect(containerReference).toEqual(['#o1']);
     expect(expressionError()).toContain('syntax/unexpected-token');
+    expect(fractionDiagnostics).toEqual([
+      expect.objectContaining({ severity: 'warning', code: 'semantic/fraction-ignored' }),
+    ]);
+    expect(unknownFunction).toEqual([
+      expect.objectContaining({ severity: 'error', code: 'semantic/unknown-function' }),
+    ]);
+    expect(addedDay).toEqual(['2020-01-02']);
   });
 
   it('keeps every documented TypeScript snippet in the executable example, with its own imports', () => {

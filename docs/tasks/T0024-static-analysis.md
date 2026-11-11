@@ -11,6 +11,15 @@ Part of the [roadmap](../roadmap.md). Phase 1 · wave 5 · size L.
 
 Semantic checks and type inference with a model ([design notes](#design-notes)).
 
+## Split
+
+The implementation grew far beyond a few hundred hand-written lines, so it was split on 2026-11-12 along the three levels of the [design notes](#design-notes), as [CONTRIBUTING](../CONTRIBUTING.md#pull-requests) asks ([#35](https://github.com/losol/callis/issues/35)):
+
+- [T0024a](T0024a-static-analysis-diagnostics.md): levels 1 and 2, the type inference, the diagnostics of `compile()`, the public `analyze()`, the fraction warning and the conformance runner's static check of every test.
+- [T0024b](T0024b-strict-mode.md): level 3, strict mode, including the order-dependent operations of [#72](https://github.com/losol/callis/issues/72), and the public `strict` option.
+
+This file keeps the scope, the design notes and the acceptance criteria they share; each child lists the criteria it delivers. The task is complete, and [#35](https://github.com/losol/callis/issues/35) closes, when both have merged.
+
 ## Scope
 
 - `src/analysis/`: type and cardinality inference over the AST, using the model, the function return types (`returns` in `FunctionDefinition`) and the operator rules.

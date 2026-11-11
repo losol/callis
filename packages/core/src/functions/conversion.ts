@@ -39,7 +39,15 @@ import {
   type FunctionDefinition,
   lambdaArg,
   type ParamSpec,
+  type TypeExpectation,
 } from './define.ts';
+
+/**
+ * The input of a conversion function: one value that converts to a System value. A resource or
+ * a complex value never converts, so static analysis reports it
+ * ([spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#conversion-functions-on-complex-values)).
+ */
+const PRIMITIVE: TypeExpectation = { type: 'primitive', singleton: true };
 
 /** The 32-bit range of `System.Integer` ([N1 §4.1](https://hl7.org/fhirpath/N1/#literals)). */
 const MIN_INTEGER = -(2 ** 31);
@@ -103,10 +111,16 @@ type Conversion = (value: Item, args: readonly Collection[], call: CallContext) 
 export const iifFunction: FunctionDefinition = defineFunction({
   name: 'iif',
   params: [
-    { kind: 'lambda', name: 'criterion' },
-    { kind: 'lambda', name: 'true-result' },
-    { kind: 'lambda', name: 'otherwise-result', optional: true },
+    {
+      kind: 'lambda',
+      name: 'criterion',
+      scope: 'input',
+      expects: { type: 'Boolean', singleton: true },
+    },
+    { kind: 'lambda', name: 'true-result', scope: 'input' },
+    { kind: 'lambda', name: 'otherwise-result', optional: true, scope: 'input' },
   ],
+  input: { singleton: true },
   impl: (_call, input, args) => {
     if (input.length > 1) {
       throw new FhirPathEvaluationError(
@@ -292,7 +306,7 @@ export const convertsToStringFunction: FunctionDefinition = convertsToFunction(
 );
 
 const UNIT_PARAMS: readonly ParamSpec[] = Object.freeze([
-  { kind: 'value', name: 'unit', optional: true },
+  { kind: 'value', name: 'unit', optional: true, expects: { type: 'String', singleton: true } },
 ]);
 
 /**
@@ -366,7 +380,7 @@ function conversionFunction(
       const value = singleValue(input);
       return value === undefined ? EMPTY : fromOptional(convert(value, args, call));
     },
-    { returns: { type, singleton: true } },
+    { input: PRIMITIVE, returns: { type, singleton: true } },
   );
 }
 
@@ -383,7 +397,7 @@ function convertsToFunction(
       const value = singleValue(input);
       return value === undefined ? EMPTY : fromBoolean(convert(value, args, call) !== undefined);
     },
-    { returns: { type: 'Boolean', singleton: true } },
+    { input: PRIMITIVE, returns: { type: 'Boolean', singleton: true } },
   );
 }
 

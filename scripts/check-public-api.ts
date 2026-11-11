@@ -35,7 +35,7 @@ import assert from 'node:assert/strict';
 import * as core from '@callis/core';
 import { ucum } from '@callis/ucum';
 assert.deepEqual(Object.keys(core).sort(), [
-  'Decimal', 'MAX_DECIMAL_DIGITS', 'minimalUnitSystem', 'compile', 'evaluate', 'parseJson', 'JsonNumber',
+  'Decimal', 'MAX_DECIMAL_DIGITS', 'minimalUnitSystem', 'analyze', 'compile', 'evaluate', 'parseJson', 'JsonNumber',
   'FhirPathError', 'FhirPathSyntaxError', 'FhirPathSemanticError', 'FhirPathEvaluationError'
 ].sort());
 const lossless = core.parseJson('{"rows": [{"value": 1.50}]}');
@@ -65,7 +65,7 @@ assert.deepEqual(core.evaluate(null, '(0 | 1 | 2).tail()'), [1, 2]);
 assert.deepEqual(core.evaluate(null, '(0 | 1 | 2).skip(1).take(1)'), [1]);
 assert.deepEqual(core.evaluate(null, '(0 | 1 | 2).skip({})'), []);
 assert.equal(core.evaluate(selected, 'rows.skip(1)')[0], selected.rows[1]);
-assert.throws(() => core.evaluate(null, "(0 | 1).take('1')"), error => error.code === 'eval/type-mismatch');
+assert.throws(() => core.evaluate(null, "(0 | 1).take('1')"), error => error.code === 'semantic/type-mismatch');
 assert.throws(() => core.compile('skip()'), error => error.code === 'semantic/wrong-arity');
 assert.deepEqual(core.evaluate(null, '(1 | 2 | 3).intersect(3 | 2 | 4)'), [2, 3]);
 assert.deepEqual(core.evaluate(null, '1.combine(1).combine(2).exclude(2)'), [1, 1]);
@@ -76,7 +76,11 @@ assert.throws(() => core.compile('combine(1, true)'), error => error.code === 's
 assert.deepEqual(core.evaluate(null, '{}.empty()'), [true]);
 assert.deepEqual(core.evaluate(selected, 'rows.all(value > 0)'), [true]);
 assert.deepEqual(core.evaluate(null, 'true.combine(false).allTrue()'), [false]);
-assert.throws(() => core.evaluate(null, "'a'.anyTrue()"), error => error.code === 'eval/type-mismatch');
+assert.throws(() => core.evaluate(null, "'a'.anyTrue()"), error => error.code === 'semantic/type-mismatch');
+assert.deepEqual(core.analyze("1 + 'a'").diagnostics.map(d => [d.severity, d.code]), [['warning', 'semantic/type-mismatch']]);
+assert.deepEqual(core.analyze("'a'.abs()").diagnostics.map(d => [d.severity, d.code]), [['error', 'semantic/type-mismatch']]);
+assert.deepEqual(core.analyze('@2020-01-01 + 1.5 days').diagnostics.map(d => [d.severity, d.code]), [['warning', 'semantic/fraction-ignored']]);
+assert.deepEqual(core.evaluate(null, '@2020-01-01 + 1.5 days'), ['2020-01-02']);
 assert.deepEqual(core.evaluate(null, '(1 | 2).subsetOf(3 | 2 | 1)'), [true]);
 assert.deepEqual(core.evaluate(null, '(1 | 2).supersetOf(3)'), [false]);
 assert.deepEqual(core.evaluate(null, "'a'.combine('b').combine('a').distinct()"), ['b', 'a']);

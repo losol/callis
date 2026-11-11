@@ -24,6 +24,9 @@ import type { SystemTypeName } from '../types/system-types.ts';
  */
 export type ParamKind = 'value' | 'lambda' | 'type';
 
+/** How a function evaluates a lambda parameter, which decides the focus and `$this` inside it. */
+export type LambdaScope = 'item' | 'input';
+
 /** One parameter of a function. */
 export interface ParamSpec {
   readonly kind: ParamKind;
@@ -33,15 +36,55 @@ export interface ParamSpec {
   readonly optional?: boolean;
   /** Takes any number of arguments, including none. Only the last parameter can be variadic. */
   readonly variadic?: boolean;
+  /**
+   * For static analysis: what a value argument, or the result of a lambda argument, must be. The
+   * implementation still checks at runtime; the analyzer reports what it can see earlier.
+   */
+  readonly expects?: TypeExpectation;
+  /**
+   * For a lambda parameter: whether the function evaluates it for each input item, with the
+   * item as the focus and `$this` ({@link LambdaArg.forItem}, as `where()` and `select()` do), or
+   * once for the whole input, with the input as the focus and `$this`
+   * ({@link LambdaArg.forInput}, as `iif()` does). `item` by default. Static analysis infers the
+   * focus of the lambda from it.
+   */
+  readonly scope?: LambdaScope;
+}
+
+/**
+ * What a function expects of its input or of an argument, for static analysis (T0024). A
+ * function that declares nothing accepts anything there; the analyzer then only checks what the
+ * registry checks, the name and the number of arguments.
+ */
+export interface TypeExpectation {
+  /**
+   * The System types the items may have, or `primitive` for any value that converts to a System
+   * value, as the conversion functions take: a System value, a FHIR primitive or a Quantity.
+   * The analyzer reports a value none of whose possible types fits (`'a'.abs()`). Unset: any
+   * type. A model primitive fits the System type it maps to, and the implicit conversions apply:
+   * an Integer fits `Decimal`, a Date fits `DateTime`, and a number fits `Quantity`.
+   */
+  readonly type?: SystemTypeName | readonly SystemTypeName[] | 'primitive';
+  /**
+   * Whether at most one item is expected, so more raise `eval/singleton-expected`. Strict analysis
+   * (T0024b) reports a value that may repeat ([N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation)).
+   */
+  readonly singleton?: boolean;
 }
 
 /**
  * What a function returns, for static analysis (T0024): the System type of its items when it is
- * fixed, and whether the result has at most one item.
+ * fixed, whether the result has at most one item, and whether its items come from the input.
  */
 export interface TypeHint {
   readonly type?: SystemTypeName;
   readonly singleton?: boolean;
+  /**
+   * True when the items are input items, selected or kept, as for `where()`, `first()` and
+   * `distinct()`, or values of the same types, as for `abs()`: the result has the types of the
+   * input items and, unless it is a singleton, the input's cardinality.
+   */
+  readonly fromInput?: boolean;
 }
 
 /**
@@ -106,7 +149,9 @@ export interface FunctionDefinition {
   /** The name, case-sensitive, as in `where`. */
   readonly name: string;
   readonly params: readonly ParamSpec[];
-  /** For the analyzer. */
+  /** For static analysis: what the input must be. Unset: anything. */
+  readonly input?: TypeExpectation;
+  /** For static analysis: what the function returns. Unset: unknown. */
   readonly returns?: TypeHint;
   /** Whether the function may call host hooks, so its result may be a promise in async mode. */
   readonly async?: boolean;
@@ -146,11 +191,13 @@ export function paramAt(definition: FunctionDefinition, index: number): ParamSpe
 
 /**
  * Checks a function definition and returns it frozen. Use it for every definition, so a mistake
- * shows when the definition is made, not when a call is compiled.
+ * shows when the definition is made, not when a call is compiled. A definition that is already
+ * frozen, parameters included, is returned as it is, so a registry holds the very objects the
+ * library defines and the analyzer can recognize `iif()`, `is()` and `not()` by identity.
  *
  * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for an empty name, an unknown
- *   parameter kind, a required parameter after an optional one, or a variadic parameter that is
- *   not the last.
+ *   parameter kind or lambda scope, a required parameter after an optional one, or a variadic
+ *   parameter that is not the last.
  */
 export function defineFunction(definition: FunctionDefinition): FunctionDefinition {
   const { name, params } = definition;
@@ -165,6 +212,9 @@ export function defineFunction(definition: FunctionDefinition): FunctionDefiniti
     if (param.kind !== 'value' && param.kind !== 'lambda' && param.kind !== 'type') {
       throw invalidDefinition(`parameter ${index + 1} of ${name}() has an unknown kind`);
     }
+    if (param.scope !== undefined && (param.kind !== 'lambda' || !isLambdaScope(param.scope))) {
+      throw invalidDefinition(`parameter ${index + 1} of ${name}() has an invalid scope`);
+    }
     if (param.variadic === true && index !== params.length - 1) {
       throw invalidDefinition(`only the last parameter of ${name}() can be variadic`);
     }
@@ -174,10 +224,17 @@ export function defineFunction(definition: FunctionDefinition): FunctionDefiniti
       throw invalidDefinition(`a required parameter of ${name}() follows an optional one`);
     }
   });
+  if (Object.isFrozen(definition) && Object.isFrozen(params) && params.every(Object.isFrozen)) {
+    return definition;
+  }
   return Object.freeze({
     ...definition,
     params: Object.freeze(params.map((p) => Object.freeze({ ...p }))),
   });
+}
+
+function isLambdaScope(scope: string): scope is LambdaScope {
+  return scope === 'item' || scope === 'input';
 }
 
 function invalidDefinition(problem: string): FhirPathEvaluationError {
@@ -192,12 +249,13 @@ function invalidDefinition(problem: string): FhirPathEvaluationError {
  * collections. Most library functions are value functions.
  *
  * @param params - The parameters, or how many required value parameters there are.
+ * @param options - The analysis hints: what the input must be and what the function returns.
  */
 export function defineValueFunction(
   name: string,
   params: number | readonly ParamSpec[],
   impl: (input: Collection, args: readonly Collection[], call: CallContext) => Collection,
-  options: { readonly returns?: TypeHint } = {},
+  options: { readonly input?: TypeExpectation; readonly returns?: TypeHint } = {},
 ): FunctionDefinition {
   const specs: readonly ParamSpec[] =
     typeof params === 'number' ? Array.from({ length: params }, () => ({ kind: 'value' })) : params;

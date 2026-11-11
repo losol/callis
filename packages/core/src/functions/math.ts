@@ -26,7 +26,7 @@ import { singleton } from '../runtime/singleton.ts';
 import type { Decimal } from '../values/decimal/decimal.ts';
 import { exp, ln, log, power, sqrt } from '../values/decimal/math.ts';
 import { Quantity } from '../values/quantity/quantity.ts';
-import { defineValueFunction, type FunctionDefinition } from './define.ts';
+import { defineValueFunction, type FunctionDefinition, type TypeExpectation } from './define.ts';
 
 /** The largest Integer, 2³¹ − 1 ([N1 §4.1.3](https://hl7.org/fhirpath/N1/#integer)). */
 const INTEGER_MAX = 2147483647;
@@ -45,6 +45,11 @@ function asNumericOrQuantity(item: Item): Numeric | Quantity | undefined {
   const value = toSystemValue(item);
   return value instanceof Quantity ? value : asNumeric(item);
 }
+
+/** The input and the arguments of the math functions: one Integer or Decimal. */
+const NUMBER: TypeExpectation = { type: 'Decimal', singleton: true };
+/** One number, or a Quantity, which keeps its unit. */
+const NUMBER_OR_QUANTITY: TypeExpectation = { type: ['Decimal', 'Quantity'], singleton: true };
 
 /** The single numeric input, or undefined when it is empty. */
 function numericInput(input: Collection): Numeric | undefined {
@@ -66,7 +71,7 @@ function defineDecimalFunction(
       const value = numericInput(input);
       return value === undefined ? EMPTY : fromOptional(kernel(toDecimal(value)));
     },
-    { returns: { type: 'Decimal', singleton: true } },
+    { input: NUMBER, returns: { type: 'Decimal', singleton: true } },
   );
 }
 
@@ -95,7 +100,7 @@ function defineWholeNumberFunction(
       return typeof value === 'number' ? [value] : fromOptional(kernel(value).toInteger());
     },
     // An Integer or a Quantity, so the type is not fixed.
-    { returns: { singleton: true } },
+    { input: NUMBER_OR_QUANTITY, returns: { singleton: true } },
   );
 }
 
@@ -118,7 +123,7 @@ export const absFunction: FunctionDefinition = defineValueFunction(
     }
     return [value instanceof Quantity ? new Quantity(value.value.abs(), value.unit) : value.abs()];
   },
-  { returns: { singleton: true } },
+  { input: NUMBER_OR_QUANTITY, returns: { fromInput: true, singleton: true } },
 );
 
 /**
@@ -162,7 +167,7 @@ export const lnFunction: FunctionDefinition = defineDecimalFunction('ln', ln);
  */
 export const logFunction: FunctionDefinition = defineValueFunction(
   'log',
-  [{ kind: 'value', name: 'base' }],
+  [{ kind: 'value', name: 'base', expects: NUMBER }],
   (input, args) => {
     const value = numericInput(input);
     const base = numericInput(args[0] ?? EMPTY);
@@ -179,7 +184,7 @@ export const logFunction: FunctionDefinition = defineValueFunction(
     }
     return fromOptional(log(number, logBase));
   },
-  { returns: { type: 'Decimal', singleton: true } },
+  { input: NUMBER, returns: { type: 'Decimal', singleton: true } },
 );
 
 /**
@@ -190,7 +195,7 @@ export const logFunction: FunctionDefinition = defineValueFunction(
  */
 export const powerFunction: FunctionDefinition = defineValueFunction(
   'power',
-  [{ kind: 'value', name: 'exponent' }],
+  [{ kind: 'value', name: 'exponent', expects: NUMBER }],
   (input, args) => {
     const value = numericInput(input);
     const exponent = numericInput(args[0] ?? EMPTY);
@@ -199,7 +204,7 @@ export const powerFunction: FunctionDefinition = defineValueFunction(
     }
     return fromOptional(power(toDecimal(value), toDecimal(exponent)));
   },
-  { returns: { type: 'Decimal', singleton: true } },
+  { input: NUMBER, returns: { type: 'Decimal', singleton: true } },
 );
 
 /**
@@ -212,7 +217,14 @@ export const powerFunction: FunctionDefinition = defineValueFunction(
  */
 export const roundFunction: FunctionDefinition = defineValueFunction(
   'round',
-  [{ kind: 'value', name: 'precision', optional: true }],
+  [
+    {
+      kind: 'value',
+      name: 'precision',
+      optional: true,
+      expects: { type: 'Integer', singleton: true },
+    },
+  ],
   (input, args) => {
     const value = singleton(input, 'Decimal', asNumericOrQuantity);
     const precisionArg = args[0];
@@ -230,7 +242,7 @@ export const roundFunction: FunctionDefinition = defineValueFunction(
     return [toDecimal(value).round(precision)];
   },
   // A Decimal or a Quantity, so the type is not fixed.
-  { returns: { singleton: true } },
+  { input: NUMBER_OR_QUANTITY, returns: { singleton: true } },
 );
 
 /**

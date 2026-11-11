@@ -3,7 +3,7 @@
  * documented snippet imports only the names it uses; this file has one import line with all of
  * them, because Biome merges imports from one module.
  */
-import { compile, evaluate, FhirPathError, parseJson } from '@callis/core';
+import { analyze, compile, evaluate, FhirPathError, parseJson } from '@callis/core';
 
 export const patient: Readonly<{
   resourceType: string;
@@ -88,6 +88,11 @@ export const containerReference: unknown[] = evaluate(
   '%rootResource.managingOrganization.reference',
   { rootResource: withContained },
 );
+
+export const fractionDiagnostics: readonly unknown[] =
+  analyze('@2020-01-01 + 1.5 days').diagnostics;
+export const unknownFunction: readonly unknown[] = analyze('nothing()').diagnostics;
+export const addedDay: unknown[] = evaluate(null, '@2020-01-01 + 1.5 days');
 
 /** Keep non-expression errors distinguishable from FHIRPath diagnostics. */
 export function expressionError(): string {

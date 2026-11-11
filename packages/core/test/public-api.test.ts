@@ -1,5 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
+  type AnalysisResult,
+  analyze,
   type CompiledExpression,
   type CompileOptions,
   compile,
@@ -118,21 +120,59 @@ describe('public synchronous model-less API', () => {
     }
   });
 
-  it.each(['model', 'functions', 'hooks', 'strict', 'lenient', 'cache', 'output', 'now', 'limits'])(
-    'rejects deferred %s options rather than silently ignoring them',
-    (key) => {
-      const options = { [key]: undefined };
-      expect(() => compile('1', options as never)).toThrow(
-        expect.objectContaining({ code: 'eval/invalid-argument' }),
-      );
-      expect(() => evaluate(null, '1', options as never)).toThrow(
-        expect.objectContaining({ code: 'eval/invalid-argument' }),
-      );
-      expect(() => compile('1').evaluate(null, options as never)).toThrow(
-        expect.objectContaining({ code: 'eval/invalid-argument' }),
-      );
-    },
-  );
+  it.each([
+    'model',
+    'functions',
+    'hooks',
+    'inputType',
+    'strict',
+    'lenient',
+    'cache',
+    'output',
+    'now',
+    'limits',
+  ])('rejects deferred %s options rather than silently ignoring them', (key) => {
+    const options = { [key]: undefined };
+    expect(() => compile('1', options as never)).toThrow(
+      expect.objectContaining({ code: 'eval/invalid-argument' }),
+    );
+    expect(() => evaluate(null, '1', options as never)).toThrow(
+      expect.objectContaining({ code: 'eval/invalid-argument' }),
+    );
+    expect(() => compile('1').evaluate(null, options as never)).toThrow(
+      expect.objectContaining({ code: 'eval/invalid-argument' }),
+    );
+  });
+
+  // docs/tasks/T0024a-static-analysis-diagnostics.md: analyze().
+  it('analyzes without compiling', () => {
+    expectTypeOf(analyze('1')).toEqualTypeOf<AnalysisResult>();
+    expectTypeOf<keyof AnalysisResult>().toEqualTypeOf<'diagnostics'>();
+    expect(analyze('1').diagnostics).toEqual([]);
+    expect(analyze("1 + 'a'").diagnostics).toEqual([
+      expect.objectContaining({ severity: 'warning', code: 'semantic/type-mismatch' }),
+    ]);
+    expect(analyze('foo()').diagnostics[0]).toMatchObject({
+      severity: 'error',
+      code: 'semantic/unknown-function',
+      span: { line: 1, column: 1, start: 0, end: 5 },
+    });
+    expect(analyze('Patient.').diagnostics[0]?.code).toBe('syntax/unexpected-token');
+    expect(analyze('@2020-01-01 + 1.5 days').diagnostics.map((d) => d.code)).toEqual([
+      'semantic/fraction-ignored',
+    ]);
+    expect(evaluate(null, '@2020-01-01 + 1.5 days')).toEqual(['2020-01-02']);
+    expect(compile("1 + 'a'").expression).toBe("1 + 'a'");
+    expect(() => compile("'a'.abs()")).toThrow(
+      expect.objectContaining({ code: 'semantic/type-mismatch' }),
+    );
+    expect(() => analyze('1', { inputType: 'Patient' } as never)).toThrow(
+      expect.objectContaining({ code: 'eval/invalid-argument' }),
+    );
+    expect(() => analyze(1 as never)).toThrow(
+      expect.objectContaining({ code: 'eval/invalid-argument' }),
+    );
+  });
 
   it.each([null, [], 'options', 1])('rejects malformed options %j', (options) => {
     expect(() => compile('1', options as never)).toThrow(FhirPathEvaluationError);
