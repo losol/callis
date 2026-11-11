@@ -62,6 +62,13 @@ export const SUITE_EXCEPTIONS: readonly SuiteException[] = [
       '3.0.0 counts items whose equality is undetermined as distinct; the suite expects empty',
     note: 'distinct-and-isdistinct',
   },
+  {
+    // Owner decision in #148 (2026-11-11): 3.0.0 over the suite (ADR-0001), which follows N1.
+    suites: ['r4', 'r5'],
+    tests: ['testPolymorphismIsA3'],
+    reason: '3.0.0 makes is on empty input false; the suite expects empty, as N1 says',
+    note: 'is-on-empty-input-is-false',
+  },
 ];
 
 /** The exception for a test, if there is one. */
