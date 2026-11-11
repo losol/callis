@@ -38,6 +38,16 @@ describe('SUITE_EXCEPTIONS', () => {
     expect(findException(SUITE_EXCEPTIONS, 'r5', id)?.note).toBe('distinct-and-isdistinct');
   });
 
+  // https://hl7.org/fhirpath/STU3/en/#is-type-specifier: is on empty input is false, where N1
+  // and the suite give empty (docs/spec-notes.md#is-on-empty-input-is-false).
+  it('excepts testPolymorphismIsA3 in R4 and R5', () => {
+    for (const suite of ['r4', 'r5'] as const) {
+      expect(findException(SUITE_EXCEPTIONS, suite, 'testPolymorphismIsA3')?.note, suite).toBe(
+        'is-on-empty-input-is-false',
+      );
+    }
+  });
+
   // docs/spec-notes.md: the model-aware exceptions T0018 registers (#111), in both suites.
   it.each(['testFHIRPathAsFunction11', 'testFHIRPathAsFunction16', 'testType22'])(
     'excepts %s in R4 and R5',
