@@ -13,6 +13,7 @@
  */
 import type { ModelProvider } from '../model/model-provider.ts';
 import type { ExpressionNode } from '../parser/ast.ts';
+import { isSameType } from '../types/type-test.ts';
 import {
   type AnalysisType,
   excludeTypes,
@@ -42,29 +43,99 @@ export function negateGuard(guard: Guard): Guard {
   return { whenTrue: guard.whenFalse, whenFalse: guard.whenTrue };
 }
 
-/** Both guards hold: everything either says. */
+/**
+ * The most constraints a guard keeps for one path. Combining guards can multiply them (`and`
+ * keeps every constraint of both sides, `or` one per pair), so a long chain of clauses would
+ * otherwise build an exponential number. Beyond the limit a guard is weakened: it keeps more
+ * types, which never rejects an expression, and may miss an error.
+ */
+export const MAX_CONSTRAINTS_PER_KEY = 8;
+
+/** Both guards hold: everything either says, coalesced per path. */
 export function bothGuards(a: readonly Constraint[], b: readonly Constraint[]): Constraint[] {
-  return [...a, ...b];
+  return coalesce([...a, ...b]);
 }
 
 /**
  * One of two guards holds: only what both say about the same expression, as the union of their
- * `include` sets (`X is T1 or X is T2` means `X` is a `T1` or a `T2`). What only one says, and
- * exclusions, give no information.
+ * `include` sets (`X is T1 or X is T2` means `X` is a `T1` or a `T2`), one constraint per pair
+ * of them. What only one says, and exclusions, give no information. When the pairs of a path
+ * would exceed {@link MAX_CONSTRAINTS_PER_KEY}, the path gets one constraint with the union of
+ * every `include` instead, which is weaker.
  */
 export function eitherGuard(a: readonly Constraint[], b: readonly Constraint[]): Constraint[] {
   const result: Constraint[] = [];
-  for (const left of a) {
-    if (left.include === undefined) {
+  for (const key of new Set(a.map((constraint) => constraint.key))) {
+    const left = a.filter(
+      (constraint) => constraint.key === key && constraint.include !== undefined,
+    );
+    const right = b.filter(
+      (constraint) => constraint.key === key && constraint.include !== undefined,
+    );
+    if (left.length === 0 || right.length === 0) {
       continue;
     }
-    for (const right of b) {
-      if (right.key === left.key && right.include !== undefined) {
-        result.push({ key: left.key, include: [...left.include, ...right.include] });
+    const includes = (constraints: readonly Constraint[]): AnalysisType[] =>
+      distinctTypes(constraints.flatMap((constraint) => constraint.include ?? []));
+    if (left.length * right.length > MAX_CONSTRAINTS_PER_KEY) {
+      result.push({ key, include: includes([...left, ...right]) });
+      continue;
+    }
+    for (const one of left) {
+      for (const other of right) {
+        result.push({ key, include: includes([one, other]) });
       }
     }
   }
+  return coalesce(result);
+}
+
+/**
+ * The constraints without repeats, at most {@link MAX_CONSTRAINTS_PER_KEY} per path; the ones
+ * beyond the limit are dropped, which keeps more types.
+ */
+export function coalesce(constraints: readonly Constraint[]): Constraint[] {
+  const result: Constraint[] = [];
+  const counts = new Map<string, number>();
+  for (const constraint of constraints) {
+    const count = counts.get(constraint.key) ?? 0;
+    if (
+      count >= MAX_CONSTRAINTS_PER_KEY ||
+      result.some((kept) => sameConstraint(kept, constraint))
+    ) {
+      continue;
+    }
+    counts.set(constraint.key, count + 1);
+    result.push(constraint);
+  }
   return result;
+}
+
+function distinctTypes(types: readonly AnalysisType[]): AnalysisType[] {
+  const result: AnalysisType[] = [];
+  for (const type of types) {
+    if (!result.some((kept) => isSameType(kept, type))) {
+      result.push(type);
+    }
+  }
+  return result;
+}
+
+function sameConstraint(a: Constraint, b: Constraint): boolean {
+  return a.key === b.key && sameTypes(a.include, b.include) && sameTypes(a.exclude, b.exclude);
+}
+
+function sameTypes(
+  a: readonly AnalysisType[] | undefined,
+  b: readonly AnalysisType[] | undefined,
+): boolean {
+  if (a === undefined || b === undefined) {
+    return a === b;
+  }
+  return (
+    a.every((type) => b.some((other) => isSameType(type, other))) &&
+    b.every((type) => a.some((other) => isSameType(type, other)))
+  );
 }
 
 /**

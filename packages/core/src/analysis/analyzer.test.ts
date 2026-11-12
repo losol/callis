@@ -541,6 +541,42 @@ describe('type guards', () => {
     expect(report(expression, options)).toEqual(['error semantic/type-mismatch']);
   });
 
+  it('bounds the constraints of long chains, and keeps what they say', () => {
+    // and keeps every constraint, or one per pair: 2, 4, 8, … without coalescing.
+    const clause = '($this is Integer and $this is Integer)';
+    const chain = `${Array(30).fill(clause).join(' or ')} implies true`;
+    expect(report(chain)).toEqual([]);
+    expect(evaluate(1, chain)).toEqual([true]);
+    expect(report(`${Array(30).fill(clause).join(' or ')} implies $this.substring(0)`)).toEqual([
+      'error semantic/type-mismatch',
+    ]);
+    const pair = (a: string, b: string) =>
+      `(($this is ${a} and $this is ${a}) or ($this is ${b} and $this is ${b}))`;
+    expect(report(`${pair('dateTime', 'instant')} implies ${check}`, period)).toEqual([]);
+    expect(report(`${pair('Period', 'Timing')} implies ${check}`, periodOrTiming)).toEqual([
+      'error semantic/type-mismatch',
+    ]);
+    // Many distinct clauses: the union of them all, still enough to rule a Period out.
+    const many = [
+      'dateTime',
+      'instant',
+      'string',
+      'code',
+      'boolean',
+      'integer',
+      'decimal',
+      'uri',
+      'id',
+      'date',
+    ]
+      .map((type) => `($this is ${type} and $this is ${type})`)
+      .join(' or ');
+    expect(report(`${many} implies ${check}`, period)).toEqual([]);
+    expect(report(`${many} or $this is Period implies ${check}`, period)).toEqual([
+      'error semantic/type-mismatch',
+    ]);
+  });
+
   it('names paths without collisions between delimited and nested names', () => {
     // One property named a.b, and the path a then b: the guard is on the first only.
     expect(report('(`a.b` is Integer) implies a.b.substring(0).exists()')).toEqual([]);
