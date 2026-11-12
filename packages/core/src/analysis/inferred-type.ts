@@ -195,7 +195,10 @@ export type NarrowingRule = 'is' | 'ofType';
  * The types that remain when the value is known to be one of the targets, as after `as`,
  * `ofType()` or a true `is` guard. A possible type that is a target or a subtype of one stays; a
  * possible supertype of a target (`Element` when the target is `Period`) becomes that target; any
- * other type is dropped. Unknown types narrow to the targets themselves.
+ * other type is dropped. Unknown types narrow to the targets themselves, except for `ofType()`
+ * of a System type with a model: it also keeps the model primitives that convert to that type,
+ * with their elements, which cannot be listed, so the result stays unknown; so does an abstract
+ * type, which may be such a primitive.
  */
 export function narrowTo(
   types: TypeSet,
@@ -203,11 +206,16 @@ export function narrowTo(
   model: ModelProvider | undefined,
   rule: NarrowingRule,
 ): TypeSet {
+  const keepsPrimitives =
+    rule === 'ofType' && model !== undefined && targets.some((target) => isSystemType(target));
   if (types === undefined) {
-    return typeSetOf(targets);
+    return keepsPrimitives ? undefined : typeSetOf(targets);
   }
   const result: AnalysisType[] = [];
   for (const type of types) {
+    if (keepsPrimitives && isOpenType(type, model)) {
+      return undefined;
+    }
     for (const target of targets) {
       if (
         isOfType(type, target, model) ||

@@ -81,7 +81,7 @@ export interface CompiledExpression {
  * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for unsupported options.
  * @example
  * analyze('@2020-01-01 + 1.5 days').diagnostics; // [{ severity: 'warning', code: 'semantic/fraction-ignored', … }]
- * analyze("1 + 'a'").diagnostics[0]?.severity;     // 'error'
+ * analyze("1 + 'a'").diagnostics[0]?.severity;     // 'warning'
  */
 export function analyze(expression: string, options: CompileOptions = {}): AnalysisResult {
   checkExpression(expression);
