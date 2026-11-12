@@ -733,9 +733,19 @@ describe('strict mode', () => {
       '(1 | 2).ofType(System.String) = 1',
       "name.ofType(Period).start = 'x'",
       'name.given.select({}).first().length()',
+      // Equality with an empty operand is empty, whatever the other operand is.
+      '(1 | 2) = {}',
+      '{} = (1 | 2)',
+      '(1 | 2) ~ {}',
+      '{} !~ (1 | 2)',
+      '(1 | 2) != (1 | 2).ofType(System.String)',
+      '(1 | 2).ofType(System.String) ~ name.given',
+      'name.given = {}',
+      '{} = name.given',
     ]) {
       expect(report(expression, strict)).toEqual([]);
     }
+    expect(report('(1 | 2) = 1', strict)).toEqual(['error semantic/singleton-expected']);
   });
 
   it('keeps the unknown-type and fraction warnings', () => {

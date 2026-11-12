@@ -913,7 +913,8 @@ class Analyzer {
   #inferEquality(node: BinaryNode, scope: Scope): Inferred {
     const left = this.infer(node.left, scope);
     const right = this.infer(node.right, scope);
-    if (this.#strict) {
+    // An operand that can have no item makes the result empty, which is safe.
+    if (this.#strict && !isNothing(left) && !isNothing(right)) {
       const single = left.cardinality === 'single' && right.cardinality === 'single';
       if (
         (left.cardinality === 'single' && right.cardinality === 'collection') ||
