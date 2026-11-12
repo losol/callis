@@ -29,7 +29,7 @@ export type TypeSet = readonly AnalysisType[] | undefined;
 
 /**
  * How many items a value may have: at most one, possibly more (a repeating element, a union), or
- * unknown. Strict mode (T0024b) reports `collection` where one item is expected, never `unknown`.
+ * unknown. Strict mode reports `collection` where one item is expected, never `unknown`.
  */
 export type Cardinality = 'single' | 'collection' | 'unknown';
 
@@ -37,17 +37,30 @@ export type Cardinality = 'single' | 'collection' | 'unknown';
 export interface Inferred {
   readonly types: TypeSet;
   readonly cardinality: Cardinality;
+  /**
+   * False when the order of the items is undefined, after `children()` or `descendants()`
+   * ([N1 §3.1](https://hl7.org/fhirpath/N1/#collections)).
+   */
+  readonly ordered: boolean;
 }
 
 /** Nothing is known. */
-export const UNKNOWN: Inferred = Object.freeze({ types: undefined, cardinality: 'unknown' });
+export const UNKNOWN: Inferred = Object.freeze({
+  types: undefined,
+  cardinality: 'unknown',
+  ordered: true,
+});
 
 /** No item is possible: the empty literal, or a branch a type guard rules out. */
-export const NOTHING: Inferred = Object.freeze({ types: Object.freeze([]), cardinality: 'single' });
+export const NOTHING: Inferred = Object.freeze({
+  types: Object.freeze([]),
+  cardinality: 'single',
+  ordered: true,
+});
 
 /** A single value of a System type, such as a literal or the result of `count()`. */
 export function singleOf(name: Exclude<SystemTypeName, 'Any'>): Inferred {
-  return { types: [SYSTEM_TYPES[name]], cardinality: 'single' };
+  return { types: [SYSTEM_TYPES[name]], cardinality: 'single', ordered: true };
 }
 
 /** Whether a value cannot have any item, so nothing about it needs checking. */

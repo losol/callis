@@ -163,6 +163,11 @@ describe('operator types', () => {
     expect(report("name = 'a'")).toEqual([]);
     expect(report('(1 | 2) ~ 1')).toEqual([]);
   });
+
+  it('makes the warnings errors in strict mode', () => {
+    expect(report("1 + 'a'", { strict: true })).toEqual(['error semantic/type-mismatch']);
+    expect(codeOf(() => compile("1 + 'a'", { strict: true }))).toBe('semantic/type-mismatch');
+  });
 });
 
 // https://hl7.org/fhirpath/N1/#functions: the input and the arguments of a function must have
@@ -213,16 +218,21 @@ describe('function types', () => {
     expect(report('name.family.first().substring(2, length() - 5)')).toEqual([]);
   });
 
-  // N1 §4.5: a single item of another type counts as true where a Boolean is expected, which
-  // strict mode reports (T0024b).
-  it('leaves a single Boolean context to singleton evaluation', () => {
+  it('checks the result of a lambda where the function expects a type, in strict mode only', () => {
     expect(report("iif('x', 1, 2)")).toEqual([]);
-    expect(report("name.where('x')")).toEqual([]);
-    expect(report('name.exists(1)')).toEqual([]);
+    expect(report("iif('x', 1, 2)", { strict: true })).toEqual(['error semantic/type-mismatch']);
+    expect(report("name.where('x')", { strict: true })).toEqual(['error semantic/type-mismatch']);
+    expect(report('name.exists(1)', { strict: true })).toEqual(['error semantic/type-mismatch']);
+    expect(report('name.all(given)', { strict: true })).toEqual([]);
+  });
+
+  it('leaves a Boolean context to singleton evaluation unless strict', () => {
     expect(report("'a' and true")).toEqual([]);
+    expect(report("'a' and true", { strict: true })).toEqual(['error semantic/type-mismatch']);
     expect(report('1.not()')).toEqual([]);
+    expect(report('1.not()', { strict: true })).toEqual(['error semantic/type-mismatch']);
     // The Boolean rule is for a single item; a collection of Booleans is checked as such.
-    expect(report("'a'.allTrue()")).toEqual(['error semantic/type-mismatch']);
+    expect(report("'a'.allTrue()", { strict: true })).toEqual(['error semantic/type-mismatch']);
   });
 });
 
@@ -238,7 +248,10 @@ describe('type specifiers', () => {
       ['gender.as(Foo.Patient)', {}],
     ] as const) {
       expect(report(expression, options)).toEqual(['warning semantic/unknown-type']);
-      expect(() => compile(expression, options)).not.toThrow();
+      expect(report(expression, { ...options, strict: true })).toEqual([
+        'warning semantic/unknown-type',
+      ]);
+      expect(() => compile(expression, { ...options, strict: true })).not.toThrow();
       expect(codeOf(() => evaluate({ resourceType: 'Patient' }, expression, options))).toBe(
         'eval/unknown-type',
       );
@@ -660,6 +673,285 @@ describe('type guards', () => {
   });
 });
 
+// https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation
+describe('strict mode', () => {
+  const strict: CompileOptions = { ...patient, strict: true };
+
+  // extension() and resolve() give something for each input item in turn, so their result
+  // repeats when the input does and is as unordered as children() or descendants() when that is
+  // the input, although it is not its items.
+  it('carries the cardinality and the order of the input through extension() and resolve()', () => {
+    const url = "'http://example.org/x'";
+    const contained = {
+      resourceType: 'Patient',
+      contained: [
+        { resourceType: 'Organization', id: 'a' },
+        { resourceType: 'Organization', id: 'b' },
+      ],
+    };
+    const unsafe = "('#a' | '#b').resolve().id.toString()";
+    expect(report(unsafe, strict)).toEqual(['error semantic/singleton-expected']);
+    expect(report(unsafe, patient)).toEqual([]);
+    expect(codeOf(() => evaluate(contained, unsafe, model))).toBe('eval/singleton-expected');
+    const safe = "('#a' | '#b').resolve().first().id.toString()";
+    expect(report(safe, strict)).toEqual([]);
+    expect(evaluate(contained, safe, model)).toEqual(['a']);
+    expect(report('managingOrganization.resolve().id.toString()', strict)).toEqual([]);
+    expect(report(`contained.extension(${url}).value.toString()`, strict)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    for (const expression of [
+      `children().extension(${url}).first()`,
+      `descendants().extension(${url})[0]`,
+      `children().extension(${url}).where(url.exists()).last()`,
+      'children().ofType(Reference).resolve().first()',
+    ]) {
+      expect(report(expression, strict)).toEqual(['error semantic/unordered-collection']);
+      expect(report(expression, patient)).toEqual([]);
+    }
+    for (const expression of [
+      `extension(${url}).first()`,
+      `name.extension(${url}).first()`,
+      `children().extension(${url}).count()`,
+      `children().extension(${url}).single()`,
+      'managingOrganization.resolve().first()',
+    ]) {
+      expect(report(expression, strict)).toEqual([]);
+    }
+  });
+
+  // A union keeps the cardinality it knows: two known characters stay two whatever a variable
+  // adds, in either order; only a single item or nothing with an unknown value is unknown.
+  it('keeps a known collection in a union with an unknown value', () => {
+    const modelless: CompileOptions = { strict: true };
+    for (const expression of [
+      "'ab'.toChars().combine(%v).length()",
+      "%v.combine('ab'.toChars()).length()",
+      "('ab'.toChars() | %v).length()",
+      "(%v | 'ab'.toChars()).length()",
+      "'ab'.toChars().union(%v).length()",
+      "'ab'.toChars().combine(%v) = 'a'",
+      "'a' = %v.combine('ab'.toChars())",
+      '%v.combine(1 | 2) = 1',
+    ]) {
+      expect(report(expression, modelless)).toEqual(['error semantic/singleton-expected']);
+    }
+    const combined = "'ab'.toChars().combine(%v).length()";
+    expect(codeOf(() => evaluate(null, combined, { variables: { v: [] } }))).toBe(
+      'eval/singleton-expected',
+    );
+    for (const expression of [
+      '%v.combine(%w).length()',
+      '(1 | %v).length()',
+      '%v.combine(1) = 1',
+      "('ab'.toChars() | %v).count() = 2",
+      "'ab'.toChars().combine(%v) = 'ab'.toChars()",
+    ]) {
+      expect(report(expression, modelless)).toEqual([]);
+    }
+  });
+
+  // toChars(), children(), descendants() and extension() give a collection whatever their input
+  // has, so a singleton consumer of their result is unsafe; first() makes it safe again. Without
+  // a model too: the hint, not the input's type, says so.
+  it('rejects a singleton use of a built-in that gives a collection', () => {
+    const modelless: CompileOptions = { strict: true };
+    expect(report("'ab'.toChars().length()", modelless)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(codeOf(() => evaluate(null, "'ab'.toChars().length()"))).toBe('eval/singleton-expected');
+    expect(report("'ab'.toChars() = 'a'", modelless)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(report("'ab'.toChars().first().length()", modelless)).toEqual([]);
+    expect(evaluate(null, "'ab'.toChars().first().length()")).toEqual([1]);
+    expect(report("'a'.toChars().single().length()", modelless)).toEqual([]);
+    expect(report("'ab'.toChars() = 'a'.toChars()", modelless)).toEqual([]);
+    expect(report("'ab'.toChars().where($this = 'a') = 'a'", modelless)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(report('children().count() = 1', modelless)).toEqual([]);
+    expect(report('children() = 1', modelless)).toEqual(['error semantic/singleton-expected']);
+    expect(report('descendants().length()', modelless)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(report("extension('http://x').value = 1", strict)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(report("extension('http://x').first().value = 1", strict)).toEqual([]);
+  });
+
+  it.each([
+    "name.given < 'X'",
+    'name.given.substring(1)',
+    "name.given + 'x'",
+    "name.given & 'x'",
+    '-telecom.rank',
+    'name.given.toString()',
+    'name.given.is(string)',
+    'name.given as string',
+    'name.given.iif(true, 1)',
+    'name[telecom.rank]',
+    "name.given in 'a'",
+    "'a' contains name.given",
+    'name.skip(telecom.rank)',
+    'name.where(given.exists() | true)',
+  ])('rejects %s, where a single item is expected', (expression) => {
+    expect(report(expression, strict)).toEqual(['error semantic/singleton-expected']);
+    expect(report(expression, patient)).toEqual([]);
+  });
+
+  it('reports the cardinality and the type of an operand', () => {
+    expect(report('name.given.not()', strict)).toEqual([
+      'error semantic/type-mismatch',
+      'error semantic/singleton-expected',
+    ]);
+    expect(report('name.given and true', strict)).toEqual([
+      'error semantic/type-mismatch',
+      'error semantic/singleton-expected',
+    ]);
+  });
+
+  // The equality example of N1 §11, and the two forms the spec suggests instead.
+  it('reports equality between a single item and a collection, not between two collections', () => {
+    expect(report("name.given = 'Wouter'", strict)).toEqual(['error semantic/singleton-expected']);
+    expect(report("'Wouter' != name.given", strict)).toEqual(['error semantic/singleton-expected']);
+    expect(report('name = name', strict)).toEqual([]);
+    expect(report("name.given.first() = 'Wouter'", strict)).toEqual([]);
+    expect(report("name.exists(given.first() = 'Wouter')", strict)).toEqual([]);
+    expect(report("'Wouter' in name.given", strict)).toEqual([]);
+    // given repeats, so the spec's own where() example is still unsafe by its definition.
+    expect(report("name.where(given = 'Wouter').exists()", strict)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+  });
+
+  it('reports equality between types that are never equal', () => {
+    expect(report("active = 'true'", strict)).toEqual(['error semantic/type-mismatch']);
+    expect(report("1 = 'a'", { strict: true })).toEqual(['error semantic/type-mismatch']);
+    expect(report('birthDate = @1974', strict)).toEqual([]);
+    expect(report('birthDate = @1974-12-25T00:00', strict)).toEqual([]);
+    expect(report("gender = 'male'", strict)).toEqual([]);
+    expect(report('value = 5', observation)).toEqual([]);
+    expect(report("1 = 1 '1'", { strict: true })).toEqual([]);
+    expect(report('name = telecom', strict)).toEqual([]);
+  });
+
+  it('never reports a value whose cardinality or type is unknown', () => {
+    expect(report("name.given < 'X'", { strict: true })).toEqual([]);
+    expect(report("%v = 'a'", { strict: true })).toEqual([]);
+    expect(report('active = true', { ...model, strict: true })).toEqual([]);
+    // A member of one item of unknown type is unknown; the members of a collection of them form
+    // a collection, whatever the type.
+    expect(report('contained.first().status = true', strict)).toEqual([]);
+    expect(report('contained.status = true', strict)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(report('contained.status.first() = true', strict)).toEqual([]);
+  });
+
+  it('knows which results have one item', () => {
+    for (const expression of [
+      'name.count() > 1',
+      'name.given.first().length()',
+      'name.given.single().length()',
+      'name.given.last().length()',
+      'name.given[0].length()',
+      'name.exists() and active',
+      'name.given.distinct().count()',
+      "name.select(given.first() + ' ' + family)",
+      'iif(active, name.first(), name.last()).family.length()',
+      '(name.given.first() | {}).length()',
+      'active.where($this).not()',
+    ]) {
+      expect(report(expression, strict)).toEqual([]);
+    }
+    expect(report('name.given.tail().length()', strict)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(report('name.select(given).length()', strict)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(report("iif(active, name.given, 'x').length()", strict)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(report("(name.given.first() | 'x').length()", strict)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(report('name.given.repeat($this).length()', strict)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+  });
+
+  // https://hl7.org/fhirpath/N1/#collections (#72, testDollarOrderNotAllowed)
+  it.each([
+    'children().skip(1)',
+    'children().take(1)',
+    'children().first()',
+    'children().last()',
+    'children().tail()',
+    'children()[0]',
+    'descendants().first()',
+    'repeat(children()).first()',
+    'repeat(descendants()).first()',
+    'repeat(children()).where(true).first()',
+    'children().select(id).first()',
+    'name.children().where(true).first()',
+    'children().distinct().first()',
+    "children().trace('x').first()",
+    'children().ofType(HumanName).first()',
+    '(children() | name).first()',
+  ])('rejects %s: the order is undefined', (expression) => {
+    expect(report(expression, strict)).toEqual(['error semantic/unordered-collection']);
+    expect(report(expression, patient)).toEqual([]);
+  });
+
+  it('accepts what does not depend on the order', () => {
+    for (const expression of [
+      'children().count()',
+      'children().where($this is HumanName).given',
+      'children().select(id.first())',
+      'repeat(name).first()',
+      'repeat(children()).count()',
+      'children().single()',
+      'children().exists()',
+      'descendants().ofType(string).distinct()',
+      'name.first().children()',
+    ]) {
+      expect(report(expression, strict)).toEqual([]);
+    }
+  });
+
+  // A value that can have no item is empty, so nothing about it is unsafe.
+  it('exempts a value that can have no item', () => {
+    for (const expression of [
+      '(1 | 2).ofType(System.String).length()',
+      '(1 | 2).select({}).length()',
+      '(1 | 2).ofType(System.String) = 1',
+      "name.ofType(Period).start = 'x'",
+      'name.given.select({}).first().length()',
+      // Equality with an empty operand is empty, whatever the other operand is.
+      '(1 | 2) = {}',
+      '{} = (1 | 2)',
+      '(1 | 2) ~ {}',
+      '{} !~ (1 | 2)',
+      '(1 | 2) != (1 | 2).ofType(System.String)',
+      '(1 | 2).ofType(System.String) ~ name.given',
+      'name.given = {}',
+      '{} = name.given',
+    ]) {
+      expect(report(expression, strict)).toEqual([]);
+    }
+    expect(report('(1 | 2) = 1', strict)).toEqual(['error semantic/singleton-expected']);
+  });
+
+  it('keeps the unknown-type and fraction warnings', () => {
+    expect(report('gender.is(string1)', strict)).toEqual(['warning semantic/unknown-type']);
+    expect(report('@2020 + 1.5 years', strict)).toEqual(['warning semantic/fraction-ignored']);
+    expect(evaluate(null, '@2020 + 1.5 years', { strict: true })).toEqual(['2021']);
+  });
+});
+
 // https://hl7.org/fhirpath/STU3/#datetime-arithmetic: "Implementers SHOULD produce a warning
 // when decimal fractions are ignored"; docs/spec-notes.md#fractions-in-datetime-arithmetic
 describe('the fraction warning', () => {
@@ -677,7 +969,9 @@ describe('the fraction warning', () => {
       code: 'semantic/fraction-ignored',
       span: { start: 0 },
     });
+    expect(report(expression, { strict: true })).toEqual(['warning semantic/fraction-ignored']);
     expect(evaluate(null, expression)).toEqual([result]);
+    expect(evaluate(null, expression, { strict: true })).toEqual([result]);
   });
 
   it('warns when the left operand is a date/time by its type, not only a literal', () => {
@@ -724,7 +1018,7 @@ describe('the fraction warning', () => {
 describe('compile()', () => {
   it('throws the first error with every diagnostic attached', () => {
     try {
-      compile('foo() | (@2020 + 1.5 days) | baz()');
+      compile('foo() | (@2020 + 1.5 days) | baz()', { strict: false });
       expect.unreachable();
     } catch (error) {
       expect(error).toMatchObject({

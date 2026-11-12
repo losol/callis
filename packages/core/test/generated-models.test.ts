@@ -1124,8 +1124,16 @@ describe.each(PROVIDERS)(
         expect(report('(Observation.value as Period).unit', { inputType: 'Observation' })).toEqual(
           unknownElement,
         );
-        // testDollarOrderNotAllowed and testIif6 are strict mode (T0024b).
+        expect(report('Patient.children().skip(1)', { ...input, strict: true })).toEqual([
+          'error semantic/unordered-collection',
+        ]);
         expect(report('Patient.children().skip(1)', input)).toEqual([]);
+        expect(
+          report("iif('non boolean criteria', 'true-result', 'false-result')", {
+            ...input,
+            strict: true,
+          }),
+        ).toEqual(['error semantic/type-mismatch']);
         expect(report('$this.toString().length() > 10', { inputType: 'Period' })).toEqual([
           'error semantic/type-mismatch',
         ]);
@@ -1146,9 +1154,24 @@ describe.each(PROVIDERS)(
         expect(report('value.ofType(Quantity) + 7.7 days', { inputType: 'Observation' })).toEqual(
           [],
         );
-        expect(run(patient, 'birthDate + 7.7 days', { inputType: 'Patient' })).toEqual([
-          '1975-01-01',
+        expect(
+          run(patient, 'birthDate + 7.7 days', { inputType: 'Patient', strict: true }),
+        ).toEqual(['1975-01-01']);
+      });
+
+      // N1 §11, with the elements of this version.
+      it('reports the unsafe uses of strict mode on repeating elements', () => {
+        const strict: CompileOptions = { inputType: 'Patient', strict: true };
+        expect(report("Patient.name.given = 'Wouter'", strict)).toEqual([
+          'error semantic/singleton-expected',
         ]);
+        expect(report("Patient.name.given.first() = 'Wouter'", strict)).toEqual([]);
+        expect(report('Patient.active = true', strict)).toEqual([]);
+        expect(report("Patient.name.given + ' ' + Patient.name.family", strict)).toEqual([
+          'error semantic/singleton-expected',
+          'error semantic/singleton-expected',
+        ]);
+        expect(report("Patient.name.select(given.first() + ' ' + family)", strict)).toEqual([]);
       });
     });
   },

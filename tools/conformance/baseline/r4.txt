@@ -189,6 +189,7 @@ testDivide6
 testDivide7
 testDollarOrderAllowed
 testDollarOrderAllowedA
+testDollarOrderNotAllowed
 testDollarThis1
 testDollarThis2
 testEmpty
@@ -388,6 +389,7 @@ testIif2
 testIif3
 testIif4
 testIif5
+testIif6
 testIif7
 testIif8
 testIif9

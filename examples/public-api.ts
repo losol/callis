@@ -92,7 +92,18 @@ export const containerReference: unknown[] = evaluate(
 export const fractionDiagnostics: readonly unknown[] =
   analyze('@2020-01-01 + 1.5 days').diagnostics;
 export const unknownFunction: readonly unknown[] = analyze('nothing()').diagnostics;
-export const addedDay: unknown[] = evaluate(null, '@2020-01-01 + 1.5 days');
+export const addedDay: unknown[] = evaluate(null, '@2020-01-01 + 1.5 days', { strict: true });
+
+/** The code of the error that strict mode raises, or '' when the expression compiles. */
+export function strictCode(expression: string): string {
+  try {
+    compile(expression, { strict: true });
+    return '';
+  } catch (error) {
+    if (error instanceof FhirPathError) return error.code;
+    throw error;
+  }
+}
 
 /** Keep non-expression errors distinguishable from FHIRPath diagnostics. */
 export function expressionError(): string {

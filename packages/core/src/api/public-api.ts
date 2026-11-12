@@ -16,6 +16,18 @@ export type { AnalysisResult } from './compile.ts';
 export interface CompileOptions {
   /** Pure synchronous unit provider; defaults to the minimal built-in unit system. */
   readonly units?: UnitSystem;
+  /**
+   * Strict evaluation ([N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation)):
+   * static analysis also rejects, as `FhirPathSemanticError`, a value that may repeat where an
+   * operator or function takes a single item (`semantic/singleton-expected`), a value that is
+   * not a Boolean where one is expected (`semantic/type-mismatch`), equality between a single
+   * item and a collection, and `first()`, `last()`, `tail()`, `skip()`, `take()` or the indexer
+   * on `children()` or `descendants()`, whose order is undefined
+   * (`semantic/unordered-collection`). Without a model, analysis knows the types of literals,
+   * operators and functions, not of the input's elements. It changes what compiles, never what
+   * an expression evaluates to. Off by default.
+   */
+  readonly strict?: boolean;
 }
 
 /** Options read independently for each synchronous evaluation. */
@@ -83,7 +95,8 @@ export function analyze(expression: string, options: CompileOptions = {}): Analy
  * @throws {@link FhirPathSyntaxError} for invalid syntax.
  * @throws {@link FhirPathSemanticError} for what static analysis rejects, with every diagnostic
  *   in `diagnostics`: an unknown function, a wrong number of arguments, a type argument that is
- *   not a type name, and an input or argument of a type the function never accepts (`'a'.abs()`).
+ *   not a type name, operands or arguments of a type the operator or function never accepts
+ *   (`1 + 'a'`), and in strict mode the unsafe uses of N1 §11.
  * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for unsupported options.
  * @example
  * const names = compile('Patient.name.given');
@@ -123,7 +136,7 @@ export function evaluate(
   );
 }
 
-const COMPILE_OPTION_KEYS: readonly string[] = ['units'];
+const COMPILE_OPTION_KEYS: readonly string[] = ['units', 'strict'];
 
 const EVALUATE_OPTION_KEYS: readonly string[] = [
   'variables',
@@ -155,8 +168,13 @@ function own<T extends object, K extends keyof T>(options: T, key: K): T[K] | un
 }
 
 function compileOptions(options: CompileOptions): InternalCompileOptions {
+  const strict = own(options, 'strict');
+  if (strict !== undefined && typeof strict !== 'boolean') {
+    throw invalid('Expected strict to be a boolean');
+  }
+  const strictOption = strict === undefined ? {} : { strict };
   const units = own(options, 'units');
-  if (units === undefined) return {};
+  if (units === undefined) return strictOption;
   if (
     typeof units !== 'object' ||
     units === null ||
@@ -180,7 +198,7 @@ function compileOptions(options: CompileOptions): InternalCompileOptions {
           compare: (a, from, b, to) => requireSync(units.compare?.(a, from, b, to)),
         }),
   };
-  return { units: synchronousUnits };
+  return { ...strictOption, units: synchronousUnits };
 }
 
 function evaluateOptions(options: EvaluateOptions): InternalEvaluateOptions {

@@ -128,6 +128,16 @@ export function isComparable(a: ValueKind, b: ValueKind): boolean {
   return false;
 }
 
+/**
+ * Whether `=` and `~` can relate two kinds at all ([N1 §6.1](https://hl7.org/fhirpath/N1/#equality)):
+ * the same kind, a number with a number or a Quantity, and a Date with a DateTime. Values of
+ * other kinds are never equal, which strict mode reports as a type mismatch
+ * ([N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation)).
+ */
+export function isEquatable(a: ValueKind, b: ValueKind): boolean {
+  return a === b || isComparable(a, b);
+}
+
 /** Whether some pair of possible kinds is accepted by `accepts`. */
 export function somePair(
   left: readonly ValueKind[],

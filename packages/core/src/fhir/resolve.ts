@@ -64,6 +64,7 @@ export const resolveFunction: FunctionDefinition = defineFunction({
   name: 'resolve',
   params: [],
   async: true,
+  returns: { perItem: true },
   impl: (call, input) => {
     const ctx = call.ctx;
     return andThen(

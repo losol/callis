@@ -34,6 +34,7 @@ import {
   quantityJson,
   selectedGiven,
   someFalse,
+  strictCode,
   uniqueGiven,
   unknownFunction,
   variable,
@@ -87,6 +88,9 @@ describe('public guide examples', () => {
       expect.objectContaining({ severity: 'error', code: 'semantic/unknown-function' }),
     ]);
     expect(addedDay).toEqual(['2020-01-02']);
+    expect(strictCode('(1 | 2) < 3')).toBe('semantic/singleton-expected');
+    expect(strictCode('children().first()')).toBe('semantic/unordered-collection');
+    expect(strictCode('name.given < 3')).toBe('');
   });
 
   it('keeps every documented TypeScript snippet in the executable example, with its own imports', () => {

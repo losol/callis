@@ -9,7 +9,14 @@
  */
 import { type Collection, EMPTY, type Item } from '../runtime/collection.ts';
 import { navigateChildren } from '../runtime/navigation.ts';
-import { defineValueFunction, type FunctionDefinition } from './define.ts';
+import { defineValueFunction, type FunctionDefinition, type TypeHint } from './define.ts';
+
+/**
+ * The order of the result is undefined, so strict analysis reports `first()`, `last()`,
+ * `tail()`, `skip()`, `take()` and the indexer on it
+ * ([N1 §3.1](https://hl7.org/fhirpath/N1/#collections)).
+ */
+const UNORDERED: TypeHint = { collection: true, ordered: false };
 
 /**
  * `children()`: the immediate child nodes of every input item, in order. Items that are not
@@ -21,6 +28,7 @@ export const childrenFunction: FunctionDefinition = defineValueFunction(
   'children',
   0,
   (input, _args, call) => navigateChildren(input, call.ctx),
+  { returns: UNORDERED },
 );
 
 /**
@@ -57,6 +65,7 @@ export const descendantsFunction: FunctionDefinition = defineValueFunction(
     }
     return items.length === 0 ? EMPTY : items;
   },
+  { returns: UNORDERED },
 );
 
 /** The tree navigation functions of the standard library. */

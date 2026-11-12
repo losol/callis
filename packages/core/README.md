@@ -109,9 +109,9 @@ String functions work on one String: `indexOf`, `substring`, `startsWith`, `ends
 
 The FHIR additions work on plain JSON too: `extension(url)`, `hasValue()`, `getValue()`, `resolve()` for contained resources and Bundle entries, and the variables `%resource`, `%rootResource`, `%sct`, `%loinc`, `` %`vs-[name]` `` and `` %`ext-[name]` ``. The `resource` and `rootResource` evaluation options set `%resource` and `%rootResource`, which are the input by default. `memberOf()`, `subsumes()`, `subsumedBy()`, `conformsTo()` and `htmlChecks()` return empty until the engine's host hooks reach the public API (T0038). The [guide](https://github.com/losol/callis/blob/main/docs/guide.md) has examples and the limits without a model.
 
-## Static analysis
+## Static analysis and strict mode
 
-`analyze(expression)` reports the problems of an expression without compiling it: the errors `compile()` throws, with a stable code and a source span, plus warnings, such as a date/time arithmetic that ignores the fraction of a quantity.
+`analyze(expression)` reports the problems of an expression without compiling it: the errors `compile()` throws, with a stable code and a source span, plus warnings, such as a date/time arithmetic that ignores the fraction of a quantity. `strict: true` compiles with the strict evaluation of N1 §11, which also rejects a value that may repeat where a single item is expected and an order-dependent operation on `children()` or `descendants()`.
 
 ```ts
 import { analyze } from '@callis/core';
@@ -120,7 +120,7 @@ export const fractionDiagnostics: readonly unknown[] = analyze('@2020-01-01 + 1.
 export const unknownFunction: readonly unknown[] = analyze('nothing()').diagnostics;
 ```
 
-The first is one warning, `semantic/fraction-ignored` (the expression adds one day); the second is one error, `semantic/unknown-function`. The [guide](https://github.com/losol/callis/blob/main/docs/guide.md#static-analysis) describes the diagnostics.
+The first is one warning, `semantic/fraction-ignored` (the expression adds one day); the second is one error, `semantic/unknown-function`. The [guide](https://github.com/losol/callis/blob/main/docs/guide.md#static-analysis-and-strict-mode) describes the diagnostics and the strict option.
 
 ## Lossless JSON input
 

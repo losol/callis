@@ -277,7 +277,7 @@ export const lengthFunction: FunctionDefinition = defineStringFunction(
 export const toCharsFunction: FunctionDefinition = defineStringFunction(
   'toChars',
   [],
-  { type: 'String' },
+  { type: 'String', collection: true },
   (text) => characters(text),
 );
 

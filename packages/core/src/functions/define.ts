@@ -67,24 +67,51 @@ export interface TypeExpectation {
   readonly type?: SystemTypeName | readonly SystemTypeName[] | 'primitive';
   /**
    * Whether at most one item is expected, so more raise `eval/singleton-expected`. Strict analysis
-   * (T0024b) reports a value that may repeat ([N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation)).
+   * reports a value that may repeat ([N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation)).
    */
   readonly singleton?: boolean;
+  /**
+   * Whether the result depends on the order of the items, as it does for `first()` and `skip()`.
+   * Strict analysis reports an input whose order is undefined, from `children()` or
+   * `descendants()` ([N1 §3.1](https://hl7.org/fhirpath/N1/#collections)).
+   */
+  readonly ordered?: boolean;
 }
 
 /**
  * What a function returns, for static analysis (T0024): the System type of its items when it is
- * fixed, whether the result has at most one item, and whether its items come from the input.
+ * fixed, whether the result has at most one item, whether its order is defined, and whether its
+ * items come from the input.
  */
 export interface TypeHint {
   readonly type?: SystemTypeName;
   readonly singleton?: boolean;
   /**
+   * True when the result may have more than one item whatever the input has, as for `toChars()`
+   * and `children()`, so that strict mode rejects it where one item is needed
+   * ([N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation)). Without it,
+   * `singleton` or `fromInput`, the cardinality of the result is unknown, which strict mode
+   * lets pass.
+   */
+  readonly collection?: boolean;
+  /**
+   * False when the order of the result is undefined, as for `children()` and `descendants()`
+   * ([N1 §3.1](https://hl7.org/fhirpath/N1/#collections)). True by default.
+   */
+  readonly ordered?: boolean;
+  /**
+   * True when the function gives zero or more items for each input item in turn without
+   * returning the items themselves, as `resolve()` and `extension()` do. The result then repeats
+   * when the input does, or whatever the input has with `collection`, and follows the input's
+   * order, as the result of a `fromInput` function does; its types are not the input's.
+   */
+  readonly perItem?: boolean;
+  /**
    * True when the items are input items, selected or kept, as for `where()`, `first()` and
    * `distinct()`: the result has the types of the input items and, unless it is a singleton, the
-   * input's cardinality. `'value'` when the items are the System values of the input items, as
-   * for `abs()`, which converts a model node first: a FHIR `positiveInt` gives an Integer and
-   * an `Age` a Quantity.
+   * input's order and cardinality. `'value'` when the items are the System values of the input
+   * items, as for `abs()`, which converts a model node first: a FHIR `positiveInt` gives an
+   * Integer and an `Age` a Quantity.
    */
   readonly fromInput?: boolean | 'value';
 }
