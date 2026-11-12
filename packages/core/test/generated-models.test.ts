@@ -1076,6 +1076,21 @@ describe.each(PROVIDERS)(
         ]);
       });
 
+      // ofType() of a System type keeps the FHIR primitives that convert to it, with their
+      // elements, so on an input of unknown type nothing is known about the result.
+      it('keeps the primitives that ofType() of a System type keeps', () => {
+        const expression = 'descendants().ofType(System.String).extension.url';
+        expect(report(expression, {})).toEqual([]);
+        expect(report(expression, { inputType: 'Patient' })).toEqual([]);
+        expect(run(patient, expression, { inputType: 'Patient' })).toEqual([syllables.url]);
+        expect(
+          report('name.given.ofType(System.String).extension.url', { inputType: 'Patient' }),
+        ).toEqual([]);
+        expect(report('descendants().ofType(HumanName).nothing', { inputType: 'Patient' })).toEqual(
+          unknownElement,
+        );
+      });
+
       it('accepts the input types of this version', () => {
         const alert: CompileOptions = { inputType: 'DeviceAlert' };
         const unknownType = ['error semantic/unknown-type'];

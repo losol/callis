@@ -272,6 +272,19 @@ describe('type specifiers', () => {
     // A FHIR primitive matches the System type it converts to in ofType(), and keeps its type.
     expect(report('name.given.ofType(System.String).length()', patient)).toEqual([]);
     expect(report('name.given.ofType(System.String).extension', patient)).toEqual([]);
+    // On an input of unknown or abstract type, which primitives ofType() keeps cannot be told.
+    expect(report('descendants().ofType(System.String).extension.url', patient)).toEqual([]);
+    expect(report('descendants().ofType(System.String).foo', patient)).toEqual([]);
+    expect(report('children().ofType(Element).ofType(System.Boolean).extension', patient)).toEqual(
+      [],
+    );
+    expect(report('descendants().ofType(Period).unit', patient)).toEqual([
+      'error semantic/unknown-element',
+    ]);
+    expect(report('descendants().ofType(System.String).extension')).toEqual([]);
+    expect(report("(1 | 'a').ofType(System.String).extension", model)).toEqual([
+      'error semantic/unknown-element',
+    ]);
     // as keeps a FHIR primitive only for its own type, so this is empty and raises nothing.
     expect(report('(name.given.first() as System.String).extension', patient)).toEqual([]);
     expect(report("('a' as System.String).extension", patient)).toEqual([
