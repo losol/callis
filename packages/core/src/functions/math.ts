@@ -123,7 +123,7 @@ export const absFunction: FunctionDefinition = defineValueFunction(
     }
     return [value instanceof Quantity ? new Quantity(value.value.abs(), value.unit) : value.abs()];
   },
-  { input: NUMBER_OR_QUANTITY, returns: { fromInput: true, singleton: true } },
+  { input: NUMBER_OR_QUANTITY, returns: { fromInput: 'value', singleton: true } },
 );
 
 /**

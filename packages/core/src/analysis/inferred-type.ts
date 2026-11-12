@@ -114,6 +114,31 @@ export function systemNameOf(
 }
 
 /**
+ * The types of the System values of items of `types`, for an operation that converts each
+ * model node to its System value before it works, as unary `-` and `abs()` do: a System type
+ * stays, a model type becomes the System type its values map to (a FHIR `positiveInt` an
+ * Integer, an `Age` a Quantity), and a type without one, such as a resource, gives no value
+ * the operation accepts. Unknown when a type is open, because its subtypes may convert to
+ * anything.
+ */
+export function valueTypesOf(types: TypeSet, model: ModelProvider | undefined): TypeSet {
+  if (types === undefined) {
+    return undefined;
+  }
+  const values: AnalysisType[] = [];
+  for (const type of types) {
+    if (isOpenType(type, model)) {
+      return undefined;
+    }
+    const name = systemNameOf(type, model);
+    if (name !== undefined) {
+      values.push(SYSTEM_TYPES[name]);
+    }
+  }
+  return typeSetOf(values);
+}
+
+/**
  * Whether a type stands for any of its subtypes without saying which: an abstract model type
  * without a System value, such as `Element` or `Resource`. A value of that type may be a
  * primitive (a FHIR `boolean` is an `Element`), so nothing is known about how it converts. A

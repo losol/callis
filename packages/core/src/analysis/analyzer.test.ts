@@ -320,6 +320,44 @@ describe('with a model', () => {
     expect(report('(1 | 2).foo', model)).toEqual(['error semantic/unknown-element']);
   });
 
+  // Unary polarity and abs() convert a node to its System value first
+  // ([N1 §6.6](https://hl7.org/fhirpath/N1/#math)): -Patient.telecom.rank is a System.Integer,
+  // not a positiveInt, so a guard on the System type rules the other branch out, and a guard on
+  // the model type never holds.
+  it('infers the System value that unary polarity and abs() convert a node to', () => {
+    const input = { resourceType: 'Patient', telecom: [{ rank: 1 }] };
+    const values = [
+      '(-Patient.telecom.rank)',
+      '(+Patient.telecom.rank)',
+      'Patient.telecom.rank.abs()',
+    ];
+    for (const value of values) {
+      const guarded = `${value}.iif($this is System.Integer, true, $this.substring(0).exists())`;
+      expect(report(guarded, patient)).toEqual([]);
+      expect(evaluate(input, guarded, model)).toEqual([true]);
+      const never = `${value}.iif($this is positiveInt, $this.substring(0), true)`;
+      expect(report(never, patient)).toEqual([]);
+      expect(evaluate(input, never, model)).toEqual([true]);
+      expect(report(`${value}.substring(0)`, patient)).toEqual(['error semantic/type-mismatch']);
+    }
+    // A choice keeps the types the operation accepts; an open type may convert to anything.
+    expect(report('(-Patient.multipleBirth).substring(0)', patient)).toEqual([
+      'error semantic/type-mismatch',
+    ]);
+    expect(report('(-Patient.contained).substring(0)', patient)).toEqual([]);
+    expect(report('Patient.contained.abs().substring(0)', patient)).toEqual([]);
+    expect(report('(-value).substring(0)')).toEqual([]);
+    // A Quantity becomes a System.Quantity, which has no elements, as at evaluation.
+    expect(report('(-Observation.value.ofType(Quantity)).unit', observation)).toEqual([
+      'error semantic/unknown-element',
+    ]);
+    expect(report("Observation.value.ofType(Quantity).abs() + 1 'mg'", observation)).toEqual([]);
+    const literals =
+      "(-(1 'mg')) is System.Quantity and (-1.5) is Decimal and (1).abs() is Integer";
+    expect(report(literals)).toEqual([]);
+    expect(evaluate(null, literals)).toEqual([true]);
+  });
+
   // testPolymorphismAsA: without a model, Quantity is System.Quantity, which has no elements,
   // but the expression is written for a model, where it has.
   it('says nothing about elements without a model', () => {
