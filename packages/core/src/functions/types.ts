@@ -16,6 +16,7 @@ import { defineFunction, type FunctionDefinition, typeArg } from './define.ts';
 export const isFunction: FunctionDefinition = defineFunction({
   name: 'is',
   params: [{ kind: 'type', name: 'type' }],
+  input: { singleton: true },
   returns: { type: 'Boolean', singleton: true },
   impl: (call, input, args) => fromBoolean(isType(input, typeArg(args, 0), call.ctx)),
 });
@@ -28,6 +29,7 @@ export const isFunction: FunctionDefinition = defineFunction({
 export const asFunction: FunctionDefinition = defineFunction({
   name: 'as',
   params: [{ kind: 'type', name: 'type' }],
+  input: { singleton: true },
   returns: { singleton: true },
   impl: (call, input, args) => asType(input, typeArg(args, 0), call.ctx),
 });

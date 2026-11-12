@@ -1,8 +1,9 @@
 /**
  * The adapter that `pnpm conformance` and `pnpm test:conformance` use: the engine's internal
  * `compile()`/`evaluate()` (T0008) with the generated FHIR model of each suite file and the
- * lossless JSON parser (T0018). T0038 switches it to the public API. See
- * `tools/conformance/README.md` for the contract.
+ * lossless JSON parser (T0018), and with static analysis of every expression against the type of
+ * its input (T0024), as the HL7 Java runner checks every test. T0038 switches it to the public
+ * API. See `tools/conformance/README.md` for the contract.
  *
  * This is the only file of the runner that imports the engine. It imports engine sources directly,
  * because the internal API is not part of the published package. It evaluates with the full UCUM
@@ -96,16 +97,47 @@ const HOOKS: Readonly<Record<SuiteId, EvaluationHooks>> = {
   r5: fakeHooks(r5),
 };
 
+/** The hooks the adapter evaluates a suite's tests with, for tests that evaluate as it does. */
+export function hooksFor(suite: SuiteId): EvaluationHooks {
+  return HOOKS[suite];
+}
+
 /**
  * The options of every compile() for a test: UCUM units for the suite's quantities, the model of
  * the suite's FHIR version, and the choice-type suffix only for `mode="lenient/polymorphics"`
  * ([ADR-0012](../../../docs/adr/0012-evaluation-defaults.md)).
  */
-function compileOptionsFor(options: EvaluationOptions): CompileOptions {
+export function compileOptionsFor(options: EvaluationOptions): CompileOptions {
   return {
     units: ucum,
     model: MODELS[options.fhirVersion],
     lenient: { choiceSuffix: options.lenientChoiceSuffix },
+  };
+}
+
+/**
+ * The options for the test's expression itself: the ones above, and the type of the focus for
+ * static analysis, as the HL7 Java runner checks every test ([T0024](../../../docs/tasks/T0024-static-analysis.md)): the test's `contextType`
+ * when it has one, else the model type of the node the `context` selected, else the resource
+ * type of the input. The context expression itself is compiled without them.
+ */
+export function expressionOptionsFor(
+  options: EvaluationOptions,
+  focus: unknown,
+  hasContext: boolean,
+): CompileOptions {
+  const model = MODELS[options.fhirVersion];
+  let inputType: string | readonly string[] | undefined;
+  if (options.contextTypes.length > 0) {
+    inputType = options.contextTypes;
+  } else if (hasContext) {
+    inputType = focus instanceof ModelNode ? focus.type?.name : undefined;
+  } else if (typeof focus === 'object' && focus !== null && !Array.isArray(focus)) {
+    inputType = model.getRootType(focus)?.name;
+  }
+  return {
+    ...compileOptionsFor(options),
+    ...(inputType === undefined ? {} : { inputType }),
   };
 }
 
@@ -167,7 +199,10 @@ export const engineAdapter: EvaluatorAdapter = {
       // resources of the whole input (docs/tasks/T0020-fhir-functions.md).
       focus = selected[0];
     }
-    return compile(expression, compileOptions).evaluateAsync(focus, { output: 'typed', hooks });
+    return compile(
+      expression,
+      expressionOptionsFor(options, focus, options.context !== undefined),
+    ).evaluateAsync(focus, { output: 'typed', hooks });
   },
   describeValue(value: unknown): ResultItem {
     return describeItem(value as Item);

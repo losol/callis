@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { r4 } from '../../fhir-r4/src/index.ts';
 import { r5 } from '../../fhir-r5/src/index.ts';
 import { r6 } from '../../fhir-r6/src/index.ts';
-import { evaluate } from '../src/api/compile.ts';
+import { type EvaluateOptions, evaluate } from '../src/api/compile.ts';
 import { parseJson } from '../src/model/lossless-json.ts';
 import type { ModelProvider } from '../src/model/model-provider.ts';
 import { DateValue } from '../src/values/datetime/date.ts';
@@ -59,8 +59,8 @@ const PROVIDERS: ReadonlyArray<readonly [string, ModelProvider]> = [
 ];
 
 describe.each(PROVIDERS)('conversion functions with the generated %s provider', (_label, model) => {
-  const run = (input: unknown, expression: string): unknown[] =>
-    evaluate(input, expression, { model });
+  const run = (input: unknown, expression: string, options: EvaluateOptions = {}): unknown[] =>
+    evaluate(input, expression, { model, ...options });
   const typed = (input: unknown, expression: string): unknown[] =>
     evaluate(input, expression, { model, output: 'typed' });
 
@@ -92,10 +92,21 @@ describe.each(PROVIDERS)('conversion functions with the generated %s provider', 
     expect(run(patient, "Patient.name.given[1].iif(true, 'yes')")).toEqual(['yes']);
   });
 
+  // T0024: with the model, converting a complex value is rejected when the expression is
+  // compiled (isEffectOnLogic3Base); a value typed only at runtime does not convert.
   it('does not convert a complex value', () => {
-    expect(run(patient, 'Patient.name.toString()')).toEqual([]);
-    expect(run(patient, 'Patient.name.convertsToString()')).toEqual([false]);
-    expect(run(patient, 'Patient.toString()')).toEqual([]);
+    for (const expression of [
+      'Patient.name.toString()',
+      'Patient.name.convertsToString()',
+      'Patient.toString()',
+    ]) {
+      expect(() => run(patient, expression)).toThrow(
+        expect.objectContaining({ code: 'semantic/type-mismatch' }),
+      );
+    }
+    const variables = { name: patient.name[0] };
+    expect(run(patient, '%name.toString()', { variables })).toEqual([]);
+    expect(run(patient, '%name.convertsToString()', { variables })).toEqual([false]);
   });
 
   // docs/spec-notes.md#tostring-of-a-fhir-quantity

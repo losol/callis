@@ -1,16 +1,21 @@
 /**
  * Public API of `@callis/core`.
  *
- * Synchronous model-less evaluation, plain result values, errors, lossless JSON input, and the
- * contracts used by model and unit-provider packages. Internal modules are imported directly,
- * never through here.
+ * Synchronous model-less evaluation and analysis, plain result values, errors, lossless JSON
+ * input, and the contracts used by model and unit-provider packages. Internal modules are
+ * imported directly, never through here.
  *
  * @packageDocumentation
  */
 
 export type { PlainQuantity } from './api/output.ts';
-export type { CompiledExpression, CompileOptions, EvaluateOptions } from './api/public-api.ts';
-export { compile, evaluate } from './api/public-api.ts';
+export type {
+  AnalysisResult,
+  CompiledExpression,
+  CompileOptions,
+  EvaluateOptions,
+} from './api/public-api.ts';
+export { analyze, compile, evaluate } from './api/public-api.ts';
 export type { Diagnostic } from './errors/diagnostic.ts';
 export type {
   ErrorCode,

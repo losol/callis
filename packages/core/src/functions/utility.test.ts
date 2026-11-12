@@ -122,10 +122,15 @@ describe('trace(name [, projection])', () => {
 
   it.each([
     ["trace('a' | 'b')", 'eval/singleton-expected'],
-    ['trace(1)', 'eval/type-mismatch'],
-    ['trace(true)', 'eval/type-mismatch'],
+    ['trace(%one)', 'eval/type-mismatch'],
+    ['trace(%flag)', 'eval/type-mismatch'],
+    // T0024: a name literal that is not a String is rejected when the expression is compiled.
+    ['trace(1)', 'semantic/type-mismatch'],
+    ['trace(true)', 'semantic/type-mismatch'],
   ])('raises an error for the name in %s', (expression, code) => {
-    expect(codeOf(() => evaluate(patient, expression))).toBe(code);
+    expect(codeOf(() => evaluate(patient, expression, { variables: { one: 1, flag: true } }))).toBe(
+      code,
+    );
   });
 
   it('evaluates the projection without a hook too, so a hook never changes an error', () => {

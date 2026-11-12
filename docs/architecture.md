@@ -229,7 +229,7 @@ Tests live next to their sources (`*.test.ts`). Cross-module integration tests g
 - `fhir` → `runtime`, `values`, `model`, and from `functions` only `functions/define.ts`, the function-definition contract.
 - In `functions`, only `registry.ts` may import `fhir`: it is the composition root that registers every built-in function, the FHIR ones from `fhir/functions.ts` included. `define.ts` does not import `fhir`, so the two modules import each other without forming a cycle of file imports. The owner decided this, and `functions` → `types`, on 2026-11-11 ([#193](https://github.com/losol/callis/issues/193)).
 - `compiler` → `parser` (AST types), `runtime`, `functions`
-- `analysis` → `parser`, `types`, `model`, `functions`
+- `analysis` → `parser`, `types`, `model`, `values`, `functions`, and from `runtime` only what it shares with the compiler for the same answers at compile time and at run time: the type-target resolution of `type-target.ts` and the choice-suffix lookup of `navigation.ts`. It never evaluates anything ([T0024](tasks/T0024-static-analysis.md)).
 - `api` → everything; `index.ts` → `api` plus public types
 
 ## Testing strategy

@@ -37,6 +37,7 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
     'Element',
     {
       kind: 'complex',
+      isAbstract: true,
       elements: [element('id', ['string']), element('extension', ['Extension'], { isArray: true })],
     },
   ],
@@ -104,6 +105,17 @@ const DEFINITIONS: ReadonlyArray<readonly [string, TypeDefinition]> = [
       kind: 'complex',
       base: 'Element',
       elements: [element('start', ['dateTime']), element('end', ['dateTime'])],
+    },
+  ],
+  [
+    'Timing',
+    {
+      kind: 'complex',
+      base: 'BackboneElement',
+      elements: [
+        element('event', ['dateTime'], { isArray: true }),
+        element('code', ['CodeableConcept']),
+      ],
     },
   ],
   [

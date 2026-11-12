@@ -26,7 +26,8 @@ import {
  */
 export const whereFunction: FunctionDefinition = defineFunction({
   name: 'where',
-  params: [{ kind: 'lambda', name: 'criteria' }],
+  params: [{ kind: 'lambda', name: 'criteria', expects: { type: 'Boolean', singleton: true } }],
+  returns: { fromInput: true },
   impl: (_call, input, args) => {
     const criteria = lambdaArg(args, 0);
     if (criteria === undefined) return EMPTY;

@@ -214,8 +214,9 @@ describe('ceiling, floor, round and truncate of a Quantity', () => {
     expect(caught(() => run("(5.5 'mg').round(-1)"))).toMatchObject({
       code: 'eval/invalid-argument',
     });
+    // T0024: a precision literal that is not an Integer is rejected at compile time.
     expect(caught(() => run("(5.5 'mg').round(1.5)"))).toMatchObject({
-      code: 'eval/type-mismatch',
+      code: 'semantic/type-mismatch',
     });
   });
 
@@ -413,6 +414,13 @@ describe('singleton evaluation and types', () => {
     'name.sqrt()',
     'name.truncate()',
     'flag.abs()',
+  ])('%s raises eval/type-mismatch', (expression) => {
+    expect(caught(() => run(expression, input))).toMatchObject({ code: 'eval/type-mismatch' });
+  });
+
+  // T0024: a literal of a type the function never accepts is rejected when the expression is
+  // compiled; the data of the cases above is only typed when it is evaluated.
+  it.each([
     '@2020.floor()',
     // A Quantity is accepted only by abs(), ceiling(), floor(), round() and truncate().
     "(5 'mg').exp()",
@@ -423,8 +431,10 @@ describe('singleton evaluation and types', () => {
     "2.power(5 'mg')",
     "2.5.round(1 'mg')", // the precision is an Integer, not a Quantity
     '2.5.round(1.5)', // the precision is an Integer
-  ])('%s raises eval/type-mismatch', (expression) => {
-    expect(caught(() => run(expression, input))).toMatchObject({ code: 'eval/type-mismatch' });
+  ])('%s raises semantic/type-mismatch at compile time', (expression) => {
+    expect(caught(() => run(expression, input))).toMatchObject({
+      code: 'semantic/type-mismatch',
+    });
   });
 
   it('reads numbers from input data, as Integers or Decimals', () => {

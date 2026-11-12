@@ -20,7 +20,7 @@ export const firstFunction: FunctionDefinition = defineValueFunction(
   'first',
   0,
   (input) => fromOptional(input[0]),
-  { returns: { singleton: true } },
+  { returns: { fromInput: true, singleton: true } },
 );
 
 /**
@@ -39,7 +39,7 @@ export const singleFunction: FunctionDefinition = defineValueFunction(
     }
     return input;
   },
-  { returns: { singleton: true } },
+  { returns: { fromInput: true, singleton: true } },
 );
 
 /**
@@ -50,18 +50,23 @@ export const lastFunction: FunctionDefinition = defineValueFunction(
   'last',
   0,
   (input) => fromOptional(input.at(-1)),
-  { returns: { singleton: true } },
+  { returns: { fromInput: true, singleton: true } },
 );
 
 /**
  * `tail()`: all but the first input item, in input order; empty for input of at most one item.
  * @see https://hl7.org/fhirpath/N1/#tail-collection
  */
-export const tailFunction: FunctionDefinition = defineValueFunction('tail', 0, (input) =>
-  input.length > 1 ? input.slice(1) : EMPTY,
+export const tailFunction: FunctionDefinition = defineValueFunction(
+  'tail',
+  0,
+  (input) => (input.length > 1 ? input.slice(1) : EMPTY),
+  { returns: { fromInput: true } },
 );
 
-const NUM: readonly ParamSpec[] = Object.freeze([{ kind: 'value', name: 'num' }]);
+const NUM: readonly ParamSpec[] = Object.freeze([
+  { kind: 'value', name: 'num', expects: { type: 'Integer', singleton: true } },
+]);
 const OTHER: readonly ParamSpec[] = Object.freeze([{ kind: 'value', name: 'other' }]);
 
 /**
@@ -70,16 +75,21 @@ const OTHER: readonly ParamSpec[] = Object.freeze([{ kind: 'value', name: 'other
  * ([spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#skip-and-take-with-an-empty-count)).
  * @see https://hl7.org/fhirpath/N1/#skipnum-integer-collection
  */
-export const skipFunction: FunctionDefinition = defineValueFunction('skip', NUM, (input, args) => {
-  const count = countOf(args);
-  if (count === undefined) {
-    return EMPTY;
-  }
-  if (count <= 0) {
-    return input;
-  }
-  return count >= input.length ? EMPTY : input.slice(count);
-});
+export const skipFunction: FunctionDefinition = defineValueFunction(
+  'skip',
+  NUM,
+  (input, args) => {
+    const count = countOf(args);
+    if (count === undefined) {
+      return EMPTY;
+    }
+    if (count <= 0) {
+      return input;
+    }
+    return count >= input.length ? EMPTY : input.slice(count);
+  },
+  { returns: { fromInput: true } },
+);
 
 /**
  * `take(num)`: the first `num` input items, in input order, or all of them when there are fewer. A
@@ -87,13 +97,18 @@ export const skipFunction: FunctionDefinition = defineValueFunction('skip', NUM,
  * ([spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#skip-and-take-with-an-empty-count)).
  * @see https://hl7.org/fhirpath/N1/#takenum-integer-collection
  */
-export const takeFunction: FunctionDefinition = defineValueFunction('take', NUM, (input, args) => {
-  const count = countOf(args);
-  if (count === undefined || count <= 0) {
-    return EMPTY;
-  }
-  return count >= input.length ? input : input.slice(0, count);
-});
+export const takeFunction: FunctionDefinition = defineValueFunction(
+  'take',
+  NUM,
+  (input, args) => {
+    const count = countOf(args);
+    if (count === undefined || count <= 0) {
+      return EMPTY;
+    }
+    return count >= input.length ? input : input.slice(0, count);
+  },
+  { returns: { fromInput: true } },
+);
 
 /**
  * `intersect(other)`: the input items that equal (`=`) an item of `other`, without duplicates, in
@@ -117,6 +132,7 @@ export const intersectFunction: FunctionDefinition = defineValueFunction(
     }
     return result.length === 0 ? EMPTY : result;
   },
+  { returns: { fromInput: true } },
 );
 
 /**
@@ -136,6 +152,7 @@ export const excludeFunction: FunctionDefinition = defineValueFunction(
     const result = input.filter((item) => !includesEqual(other, item, call.ctx));
     return result.length === input.length ? input : result;
   },
+  { returns: { fromInput: true } },
 );
 
 /** The implemented subsetting functions of the standard library. */

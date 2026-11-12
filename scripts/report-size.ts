@@ -9,7 +9,9 @@ import { listPackages } from './packages.ts';
 
 /** Gzip budgets in bytes. Packages without a budget are only reported. */
 const BUDGETS: Readonly<Record<string, number>> = {
-  '@callis/core': 40 * 1024,
+  // Raised from 40 kB with the static analyzer (T0024a), which added about 7 kB to a bundle
+  // that was already at the budget.
+  '@callis/core': 50 * 1024,
   '@callis/fhir-r4': 60 * 1024,
   '@callis/fhir-r5': 60 * 1024,
   '@callis/fhir-r6': 60 * 1024,

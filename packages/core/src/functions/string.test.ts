@@ -18,9 +18,16 @@ const patient = Object.freeze({
 });
 
 /** The result of the expression on the model-less patient. */
-function run(expression: string, input: unknown = patient): unknown[] {
-  return evaluate(input, expression);
+function run(
+  expression: string,
+  input: unknown = patient,
+  variables?: Record<string, unknown>,
+): unknown[] {
+  return evaluate(input, expression, variables === undefined ? {} : { variables });
 }
+
+/** Values whose types analysis cannot see, so that the functions check them at runtime. */
+const VARIABLES = { one: 1, flag: true, text: '1', half: 1.5 };
 
 const FIRE = '\u{1F525}'; // 🔥, one character that JavaScript stores as two code units
 
@@ -366,11 +373,21 @@ describe('errors', () => {
   });
 
   it.each(calls)('%s raises eval/type-mismatch for an item that is not a String', (call) => {
-    expect(() => run(`(1).${call}`)).toThrow(
+    expect(() => run(`%one.${call}`, patient, VARIABLES)).toThrow(
       expect.objectContaining({ code: 'eval/type-mismatch' }),
     );
-    expect(() => run(`true.${call}`)).toThrow(
+    expect(() => run(`%flag.${call}`, patient, VARIABLES)).toThrow(
       expect.objectContaining({ code: 'eval/type-mismatch' }),
+    );
+  });
+
+  // T0024: a literal that is not a String is rejected when the expression is compiled.
+  it.each(calls)('%s rejects a literal that is not a String at compile time', (call) => {
+    expect(() => run(`(1).${call}`)).toThrow(
+      expect.objectContaining({ code: 'semantic/type-mismatch' }),
+    );
+    expect(() => run(`true.${call}`)).toThrow(
+      expect.objectContaining({ code: 'semantic/type-mismatch' }),
     );
   });
 
@@ -385,27 +402,46 @@ describe('errors', () => {
   });
 
   it.each([
-    ["'abc'.indexOf(1)", 'eval/type-mismatch'],
-    ["'abc'.startsWith(true)", 'eval/type-mismatch'],
-    ["'abc'.replace('a', 1)", 'eval/type-mismatch'],
-    ["'abc'.matches(1)", 'eval/type-mismatch'],
-    ["'abc'.substring('1')", 'eval/type-mismatch'],
-    ["'abc'.substring(1.5)", 'eval/type-mismatch'], // nothing converts to Integer implicitly
-    ["'abc'.substring(1, '1')", 'eval/type-mismatch'],
+    ["'abc'.indexOf(%one)", 'eval/type-mismatch'],
+    ["'abc'.startsWith(%flag)", 'eval/type-mismatch'],
+    ["'abc'.replace('a', %one)", 'eval/type-mismatch'],
+    ["'abc'.matches(%one)", 'eval/type-mismatch'],
+    ["'abc'.substring(%text)", 'eval/type-mismatch'],
+    ["'abc'.substring(%half)", 'eval/type-mismatch'], // nothing converts to Integer implicitly
+    ["'abc'.substring(1, %text)", 'eval/type-mismatch'],
     ["'abc'.indexOf('a' | 'b')", 'eval/singleton-expected'],
     ["'abc'.substring(0 | 1)", 'eval/singleton-expected'],
     ["'abc'.substring(0, 1 | 2)", 'eval/singleton-expected'],
     ["'abc'.replace('a' | 'b', 'c')", 'eval/singleton-expected'],
     // The data does not decide whether an argument is checked.
-    ['{}.indexOf(1)', 'eval/type-mismatch'],
-    ["{}.substring('1')", 'eval/type-mismatch'],
-    ["{}.replace('a', 1)", 'eval/type-mismatch'],
-    // testSubstring10a, testStartsWith12a: an argument is evaluated where the call is written,
-    // so length() is the length of the root, which is not a string.
+    ['{}.indexOf(%one)', 'eval/type-mismatch'],
+    ['{}.substring(%text)', 'eval/type-mismatch'],
+    ["{}.replace('a', %one)", 'eval/type-mismatch'],
+    // testSubstring10a: an argument is evaluated where the call is written, so length() is the
+    // length of the root, which is not a string.
     ['name.family.first().substring(2, length() - 5)', 'eval/type-mismatch'],
-    ["'987654321'.startsWith(length())", 'eval/type-mismatch'],
   ])('%s raises %s', (expression, code) => {
-    expect(() => run(expression)).toThrow(expect.objectContaining({ code }));
+    expect(() => run(expression, patient, VARIABLES)).toThrow(expect.objectContaining({ code }));
+  });
+
+  // T0024: the same with literals, and with length(), which is always an Integer, is found when
+  // the expression is compiled (testStartsWith12a expects a semantic error).
+  it.each([
+    "'abc'.indexOf(1)",
+    "'abc'.startsWith(true)",
+    "'abc'.replace('a', 1)",
+    "'abc'.matches(1)",
+    "'abc'.substring('1')",
+    "'abc'.substring(1.5)",
+    "'abc'.substring(1, '1')",
+    '{}.indexOf(1)',
+    "{}.substring('1')",
+    "{}.replace('a', 1)",
+    "'987654321'.startsWith(length())",
+  ])('%s raises semantic/type-mismatch at compile time', (expression) => {
+    expect(() => run(expression)).toThrow(
+      expect.objectContaining({ code: 'semantic/type-mismatch' }),
+    );
   });
 
   it.each([

@@ -109,6 +109,19 @@ String functions work on one String: `indexOf`, `substring`, `startsWith`, `ends
 
 The FHIR additions work on plain JSON too: `extension(url)`, `hasValue()`, `getValue()`, `resolve()` for contained resources and Bundle entries, and the variables `%resource`, `%rootResource`, `%sct`, `%loinc`, `` %`vs-[name]` `` and `` %`ext-[name]` ``. The `resource` and `rootResource` evaluation options set `%resource` and `%rootResource`, which are the input by default. `memberOf()`, `subsumes()`, `subsumedBy()`, `conformsTo()` and `htmlChecks()` return empty until the engine's host hooks reach the public API (T0038). The [guide](https://github.com/losol/callis/blob/main/docs/guide.md) has examples and the limits without a model.
 
+## Static analysis
+
+`analyze(expression)` reports the problems of an expression without compiling it: the errors `compile()` throws, with a stable code and a source span, plus warnings, such as a date/time arithmetic that ignores the fraction of a quantity.
+
+```ts
+import { analyze } from '@callis/core';
+
+export const fractionDiagnostics: readonly unknown[] = analyze('@2020-01-01 + 1.5 days').diagnostics;
+export const unknownFunction: readonly unknown[] = analyze('nothing()').diagnostics;
+```
+
+The first is one warning, `semantic/fraction-ignored` (the expression adds one day); the second is one error, `semantic/unknown-function`. The [guide](https://github.com/losol/callis/blob/main/docs/guide.md#static-analysis) describes the diagnostics.
+
 ## Lossless JSON input
 
 `JSON.parse` turns `1.50` into `1.5`, and FHIRPath can see the difference. `parseJson(text)` keeps every number as written, as a `JsonNumber`, and evaluation treats it as the Integer or Decimal it denotes:

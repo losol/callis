@@ -4,8 +4,15 @@
  * validation, the compile cache and the final output adapters
  * ([T0025: public API sketch](https://github.com/losol/callis/blob/main/docs/tasks/T0025-public-api-release.md#public-api-sketch)).
  */
+import { analyzeExpression } from '../analysis/analyzer.ts';
 import { compileExpression } from '../compiler/compile.ts';
-import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
+import type { Diagnostic } from '../errors/diagnostic.ts';
+import type { SemanticErrorCode } from '../errors/error-codes.ts';
+import {
+  FhirPathEvaluationError,
+  FhirPathSemanticError,
+  FhirPathSyntaxError,
+} from '../errors/fhirpath-error.ts';
 import { fhirEquivalence } from '../fhir/equivalence.ts';
 import { createFhirEnvironment } from '../fhir/variables.ts';
 import { createRegistry, type FunctionRegistry } from '../functions/registry.ts';
@@ -58,8 +65,28 @@ export interface CompileOptions {
   readonly units?: UnitSystem;
   /** The functions calls resolve to; the standard library and the FHIR functions by default. */
   readonly functions?: FunctionRegistry;
+  /**
+   * The type of the input, by its name in the model (`'Patient'`), or the types it may have
+   * (`['Period', 'Timing']`), for model-aware analysis: an element the type does not have and a
+   * leading type name that does not match are then reported when the expression is compiled
+   * ([T0024](https://github.com/losol/callis/blob/main/docs/tasks/T0024-static-analysis.md)).
+   * Needs `model`. Without it the input's type is unknown, and analysis checks what the
+   * expression itself makes known, such as the elements of `Patient.name` after a leading
+   * `Patient`.
+   */
+  readonly inputType?: string | readonly string[];
   /** Compatibility relaxations; none by default. */
   readonly lenient?: LenientOptions;
+}
+
+/** What {@link analyze} found. */
+export interface AnalysisResult {
+  /**
+   * The problems, in source order. Errors are what {@link compile} throws; warnings
+   * (`semantic/unknown-type`, `semantic/fraction-ignored`) leave the expression valid. A syntax
+   * error is a diagnostic here, with its `syntax/…` code.
+   */
+  readonly diagnostics: readonly Diagnostic[];
 }
 
 /** Options for one evaluation. */
@@ -160,14 +187,86 @@ export interface CompiledExpression {
 const DEFAULT_REGISTRY: FunctionRegistry = createRegistry();
 
 /**
- * Compiles an expression once, for any number of evaluations.
+ * Analyzes an expression without compiling it, for tooling: every problem that {@link compile}
+ * would throw, plus the warnings, as diagnostics. It throws only for invalid options.
+ *
+ * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for `inputType` without a
+ *   model.
+ */
+export function analyze(expression: string, options: CompileOptions = {}): AnalysisResult {
+  checkInputType(options);
+  let ast: ExpressionNode;
+  try {
+    ast = parse(expression);
+  } catch (error) {
+    if (error instanceof FhirPathSyntaxError) {
+      return {
+        diagnostics: [
+          {
+            severity: 'error',
+            code: error.code,
+            message: error.message,
+            ...(error.span === undefined ? {} : { span: error.span }),
+          },
+        ],
+      };
+    }
+    throw error;
+  }
+  return { diagnostics: analyzeAst(ast, expression, options) };
+}
+
+/**
+ * Compiles an expression once, for any number of evaluations. Static analysis runs first, with
+ * the model and the input type
+ * ([T0024](https://github.com/losol/callis/blob/main/docs/tasks/T0024-static-analysis.md)).
  *
  * @throws {@link FhirPathSyntaxError} for invalid syntax.
- * @throws {@link FhirPathSemanticError} for an unknown function, a wrong number of arguments or a
- *   type argument that is not a type name.
+ * @throws {@link FhirPathSemanticError} for what analysis reports as an error, with every
+ *   diagnostic attached: an unknown function, a wrong number of arguments, a type argument that
+ *   is not a type name, an element the input type does not have and an input or argument of a
+ *   type the function never accepts. Unknown types, operands of a type the operator never
+ *   accepts and invalid literal values are not compile errors; they raise when evaluated.
+ * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for `inputType` without a
+ *   model.
  */
 export function compile(expression: string, options: CompileOptions = {}): CompiledExpression {
+  checkInputType(options);
   const ast = parse(expression);
+  const diagnostics = analyzeAst(ast, expression, options);
+  const error = diagnostics.find(isSemanticError);
+  if (error !== undefined) {
+    throw new FhirPathSemanticError(error.code, error.message, {
+      ...(error.span === undefined ? {} : { span: error.span }),
+      expression,
+      diagnostics,
+    });
+  }
+  return build(ast, expression, options);
+}
+
+/**
+ * Compiles without static analysis: only the parser and the compiler's own checks run, and what
+ * analysis would have reported is found at evaluation, if at all. For tools that compare the
+ * analysis with the evaluation, such as the conformance runner's soundness test; not public API.
+ *
+ * @throws {@link FhirPathSyntaxError} when the expression does not parse.
+ * @throws {@link FhirPathSemanticError} for what the compiler itself rejects.
+ * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for `inputType` without a model.
+ */
+export function compileUnchecked(
+  expression: string,
+  options: CompileOptions = {},
+): CompiledExpression {
+  checkInputType(options);
+  return build(parse(expression), expression, options);
+}
+
+function build(
+  ast: ExpressionNode,
+  expression: string,
+  options: CompileOptions,
+): CompiledExpression {
   const model = options.model;
   const units = options.units ?? minimalUnitSystem;
   const root = compileExpression(ast, {
@@ -210,6 +309,40 @@ export function evaluateAsync(
 ): Promise<unknown[]> {
   // Compile errors become rejections, like evaluation errors.
   return Promise.resolve().then(() => compile(expression, options).evaluateAsync(input, options));
+}
+
+/** Runs the analyzer with the compile options. */
+function analyzeAst(
+  ast: ExpressionNode,
+  expression: string,
+  options: CompileOptions,
+): readonly Diagnostic[] {
+  return analyzeExpression(ast, {
+    expression,
+    registry: options.functions ?? DEFAULT_REGISTRY,
+    model: options.model,
+    inputType: options.inputType,
+    lenientChoiceSuffix: options.lenient?.choiceSuffix === true,
+  }).diagnostics;
+}
+
+/** An error that stops compilation. Analysis reports errors with semantic codes only. */
+function isSemanticError(
+  diagnostic: Diagnostic,
+): diagnostic is Diagnostic & { readonly code: SemanticErrorCode } {
+  return diagnostic.severity === 'error' && diagnostic.code.startsWith('semantic/');
+}
+
+/**
+ * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for `inputType` without a model.
+ */
+function checkInputType(options: CompileOptions): void {
+  if (options.inputType !== undefined && options.model === undefined) {
+    throw new FhirPathEvaluationError(
+      'eval/invalid-argument',
+      'The inputType option needs a model',
+    );
+  }
 }
 
 interface Environment {

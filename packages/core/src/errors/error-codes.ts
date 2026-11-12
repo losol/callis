@@ -15,13 +15,20 @@ export type SyntaxErrorCode =
   | 'syntax/invalid-escape'
   | 'syntax/invalid-date-literal';
 
-/** Raised by compile-time checks, before evaluation starts. */
+/**
+ * Raised by compile-time checks, before evaluation starts, and reported by static analysis
+ * (T0024). `semantic/unknown-type` and `semantic/fraction-ignored` are warnings: they never stop
+ * compilation.
+ */
 export type SemanticErrorCode =
   | 'semantic/unknown-function'
   | 'semantic/wrong-arity'
   | 'semantic/unknown-element'
   | 'semantic/unknown-type'
-  | 'semantic/invalid-argument';
+  | 'semantic/invalid-argument'
+  | 'semantic/type-mismatch'
+  | 'semantic/undefined-variable'
+  | 'semantic/fraction-ignored';
 
 /** Raised while an expression is evaluated. */
 export type EvaluationErrorCode =

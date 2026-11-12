@@ -140,7 +140,8 @@ class Registry implements FunctionRegistry {
   }
 }
 
-function describeArity(min: number, max: number): string {
+/** An arity for people: `2 arguments`, `1 to 2 arguments` or `at least 1 argument`. */
+export function describeArity(min: number, max: number): string {
   const count = (n: number): string => `${n} argument${n === 1 ? '' : 's'}`;
   if (max === Number.POSITIVE_INFINITY) {
     return `at least ${count(min)}`;

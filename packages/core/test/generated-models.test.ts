@@ -11,7 +11,9 @@ import { r4 } from '../../fhir-r4/src/index.ts';
 import { r5 } from '../../fhir-r5/src/index.ts';
 import { r6 } from '../../fhir-r6/src/index.ts';
 import {
+  analyze,
   type CompileOptions,
+  compile,
   type EvaluateOptions,
   evaluate,
   evaluateAsync,
@@ -159,6 +161,8 @@ interface Expectations {
   readonly deviceAlert: boolean;
   /** Whether `Observation.triggeredBy` is an element (R5 and R6). */
   readonly triggeredBy: boolean;
+  /** Whether `Observation.instantiates[x]` is an element (R5 only; the R6 draft removed it). */
+  readonly instantiates: boolean;
 }
 
 const PROVIDERS: ReadonlyArray<readonly [string, ModelProvider, Expectations]> = [
@@ -171,6 +175,7 @@ const PROVIDERS: ReadonlyArray<readonly [string, ModelProvider, Expectations]> =
       valueAttachment: false,
       deviceAlert: false,
       triggeredBy: false,
+      instantiates: false,
     },
   ],
   [
@@ -182,6 +187,7 @@ const PROVIDERS: ReadonlyArray<readonly [string, ModelProvider, Expectations]> =
       valueAttachment: true,
       deviceAlert: false,
       triggeredBy: true,
+      instantiates: true,
     },
   ],
   [
@@ -193,6 +199,7 @@ const PROVIDERS: ReadonlyArray<readonly [string, ModelProvider, Expectations]> =
       valueAttachment: true,
       deviceAlert: true,
       triggeredBy: true,
+      instantiates: false,
     },
   ],
 ];
@@ -261,8 +268,13 @@ describe.each(PROVIDERS)(
         ]);
         expect(run(patient, 'Patient.contained[0].status')).toEqual(['final']);
         expect(run(patient, 'Patient.contained[1].x')).toEqual([]);
-        expect(run(patient, 'Patient.resourceType')).toEqual([]);
-        expect(run(patient, 'Patient.unknownElement')).toEqual([]);
+        // T0024: resourceType and an unknown element are semantic errors when the type is known.
+        expect(codeOf(() => run(patient, 'Patient.resourceType'))).toBe('semantic/unknown-element');
+        expect(codeOf(() => run(patient, 'Patient.unknownElement'))).toBe(
+          'semantic/unknown-element',
+        );
+        expect(run(patient, '%context.resourceType')).toEqual([]);
+        expect(run(patient, '%context.unknownElement')).toEqual([]);
       });
 
       it('reads the root identifier as a type with inheritance, and primitive names as paths', () => {
@@ -280,7 +292,10 @@ describe.each(PROVIDERS)(
         expect(run(observation, 'Observation.value is Quantity')).toEqual([true]);
         expect(run(observation, 'Observation.value.unit')).toEqual(['lbs']);
         expect(run(observation, 'Observation.value.as(Quantity).unit')).toEqual(['lbs']);
-        expect(run(observation, 'Observation.valueQuantity')).toEqual([]);
+        expect(codeOf(() => run(observation, 'Observation.valueQuantity'))).toBe(
+          'semantic/unknown-element',
+        );
+        expect(run(observation, '%context.valueQuantity')).toEqual([]);
         expect(
           run(observation, 'Observation.valueQuantity.unit', { lenient: { choiceSuffix: true } }),
         ).toEqual(['lbs']);
@@ -303,15 +318,27 @@ describe.each(PROVIDERS)(
         expect(run(reference, 'Observation.value is Reference')).toEqual(
           expected.valueReference ? [true] : [false],
         );
-        expect(run(reference, 'Observation.value.reference')).toEqual(
-          expected.valueReference ? ['Patient/1'] : [],
-        );
+        // Where the model does not allow the type, the element is unknown to analysis (T0024).
+        if (expected.valueReference) {
+          expect(run(reference, 'Observation.value.reference')).toEqual(['Patient/1']);
+        } else {
+          expect(codeOf(() => run(reference, 'Observation.value.reference'))).toBe(
+            'semantic/unknown-element',
+          );
+        }
         expect(run(attachment, 'Observation.value.exists()')).toEqual([expected.valueAttachment]);
-        expect(run(attachment, 'Observation.value.contentType')).toEqual(
-          expected.valueAttachment ? ['text/plain'] : [],
-        );
+        if (expected.valueAttachment) {
+          expect(run(attachment, 'Observation.value.contentType')).toEqual(['text/plain']);
+        } else {
+          expect(codeOf(() => run(attachment, 'Observation.value.contentType'))).toBe(
+            'semantic/unknown-element',
+          );
+        }
         // The allowed types are the model's, so the JSON key alone never makes a value.
-        expect(run(reference, 'Observation.valueReference')).toEqual([]);
+        expect(codeOf(() => run(reference, 'Observation.valueReference'))).toBe(
+          'semantic/unknown-element',
+        );
+        expect(run(reference, '%context.valueReference')).toEqual([]);
       });
     });
 
@@ -555,7 +582,11 @@ describe.each(PROVIDERS)(
         expect(run(extended, 'Patient.active.exists()')).toEqual([true]);
         expect(run(extended, 'Patient.active.allFalse()')).toEqual([true]);
         expect(run(extended, 'Patient.active.anyTrue()')).toEqual([false]);
-        expect(codeOf(() => run(patient, 'Patient.gender.allTrue()'))).toBe('eval/type-mismatch');
+        // T0024: a code is never a Boolean, which analysis reports with the model.
+        expect(codeOf(() => run(patient, 'Patient.gender.allTrue()'))).toBe(
+          'semantic/type-mismatch',
+        );
+        expect(codeOf(() => run(patient, '%context.gender.allTrue()'))).toBe('eval/type-mismatch');
       });
 
       // docs/spec-notes.md#distinct-and-isdistinct: an element without a value is never equal to
@@ -996,6 +1027,128 @@ describe.each(PROVIDERS)(
             'eval/type-mismatch',
           );
         }
+      });
+    });
+
+    // Static analysis with this version's types (T0024). The analyzer has no version-specific
+    // code: what is an element, a type or a choice type comes from the provider.
+    describe('static analysis', () => {
+      const report = (expression: string, options: CompileOptions): string[] =>
+        analyze(expression, { model, ...options }).diagnostics.map(
+          (diagnostic) => `${diagnostic.severity} ${diagnostic.code}`,
+        );
+      const unknownElement = ['error semantic/unknown-element'];
+
+      it('knows the elements of this version', () => {
+        const input: CompileOptions = { inputType: 'Observation' };
+        expect(report('Observation.triggeredBy', input)).toEqual(
+          expected.triggeredBy ? [] : unknownElement,
+        );
+        expect(report('triggeredBy.type', input)).toEqual(
+          expected.triggeredBy ? [] : unknownElement,
+        );
+        expect(report('Observation.instantiates', input)).toEqual(
+          expected.instantiates ? [] : unknownElement,
+        );
+        expect(report('Observation.value.reference', input)).toEqual(
+          expected.valueReference ? [] : unknownElement,
+        );
+        expect(report('Observation.value.contentType', input)).toEqual(
+          expected.valueAttachment ? [] : unknownElement,
+        );
+        expect(report('Observation.value.unit', input)).toEqual([]);
+      });
+
+      // N1 §5.2.4: the projection of repeat() is applied to every item it gives.
+      it('follows the recursive items of a Questionnaire through repeat()', () => {
+        const input: CompileOptions = { inputType: 'Questionnaire' };
+        expect(report('Questionnaire.repeat(item).linkId', input)).toEqual([]);
+        expect(
+          report('Questionnaire.repeat(item).answerOption.value.ofType(string)', input),
+        ).toEqual([]);
+        expect(report('Questionnaire.repeat(item).nothing', input)).toEqual(unknownElement);
+        expect(run(questionnaire, 'Questionnaire.repeat(item).linkId', input)).toEqual([
+          '1',
+          '2',
+          '1.1',
+          '1.2',
+          '1.1.1',
+        ]);
+      });
+
+      // ofType() of a System type keeps the FHIR primitives that convert to it, with their
+      // elements, so on an input of unknown type nothing is known about the result.
+      it('keeps the primitives that ofType() of a System type keeps', () => {
+        const expression = 'descendants().ofType(System.String).extension.url';
+        expect(report(expression, {})).toEqual([]);
+        expect(report(expression, { inputType: 'Patient' })).toEqual([]);
+        expect(run(patient, expression, { inputType: 'Patient' })).toEqual([syllables.url]);
+        expect(
+          report('name.given.ofType(System.String).extension.url', { inputType: 'Patient' }),
+        ).toEqual([]);
+        expect(report('descendants().ofType(HumanName).nothing', { inputType: 'Patient' })).toEqual(
+          unknownElement,
+        );
+      });
+
+      it('accepts the input types of this version', () => {
+        const alert: CompileOptions = { inputType: 'DeviceAlert' };
+        const unknownType = ['error semantic/unknown-type'];
+        expect(report('status', alert)).toEqual(expected.deviceAlert ? [] : unknownType);
+        expect(report('DeviceAlert.label.length()', alert)).toEqual(
+          expected.deviceAlert ? [] : unknownType,
+        );
+        expect(codeOf(() => compile('DeviceAlert.label', { model, ...alert }))).toBe(
+          expected.deviceAlert ? undefined : 'semantic/unknown-type',
+        );
+        // Without an input type, the leading identifier names the type, which R6 alone has.
+        expect(report('DeviceAlert.label', {})).toEqual(expected.deviceAlert ? [] : []);
+        expect(report('DeviceAlert.nothing', {})).toEqual(
+          expected.deviceAlert ? unknownElement : [],
+        );
+      });
+
+      // testSimpleFail, testSimpleWithWrongContext, testPolymorphismB, testPolymorphismAsB,
+      // testDollarOrderNotAllowed, testIif6 and isEffectOnLogic3Base, with the generated models.
+      it("reports the suite's semantic errors", () => {
+        const input: CompileOptions = { inputType: 'Patient' };
+        expect(report('name.given1', input)).toEqual(unknownElement);
+        expect(report('Encounter.name.given', input)).toEqual(['error semantic/type-mismatch']);
+        expect(
+          analyze('Observation.valueQuantity.unit', { model, inputType: 'Observation' })
+            .diagnostics[0],
+        ).toMatchObject({
+          code: 'semantic/unknown-element',
+          hint: 'value.ofType(Quantity)',
+        });
+        expect(report('(Observation.value as Period).unit', { inputType: 'Observation' })).toEqual(
+          unknownElement,
+        );
+        // testDollarOrderNotAllowed and testIif6 are strict mode (T0024b).
+        expect(report('Patient.children().skip(1)', input)).toEqual([]);
+        expect(report('$this.toString().length() > 10', { inputType: 'Period' })).toEqual([
+          'error semantic/type-mismatch',
+        ]);
+        expect(report('$this.toString().length() > 10', { inputType: 'dateTime' })).toEqual([]);
+        expect(
+          report('$this is Period or $this.toString().length() >= 10', {
+            inputType: ['Period', 'dateTime'],
+          }),
+        ).toEqual([]);
+      });
+
+      it('warns about a fraction that a typed element ignores, and evaluates as before', () => {
+        expect(report('birthDate + 7.7 days', { inputType: 'Patient' })).toEqual([
+          'warning semantic/fraction-ignored',
+        ]);
+        // A choice element may be a Period, so the analyzer cannot tell; a Quantity is not a date.
+        expect(report('effective + 7.7 days', { inputType: 'Observation' })).toEqual([]);
+        expect(report('value.ofType(Quantity) + 7.7 days', { inputType: 'Observation' })).toEqual(
+          [],
+        );
+        expect(run(patient, 'birthDate + 7.7 days', { inputType: 'Patient' })).toEqual([
+          '1975-01-01',
+        ]);
       });
     });
   },

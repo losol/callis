@@ -123,7 +123,7 @@ describe.each(MODELS)('resolve() %s', (_label, options) => {
       'o1',
     ]);
     expect(run(patient, '(1 | true).resolve()', options)).toEqual([]);
-    expect(run(patient, 'Patient.missing.resolve()', options)).toEqual([]);
+    expect(run(patient, 'Patient.text.resolve()', options)).toEqual([]);
     expect(run({ reference: '#o1' }, 'resolve()', options)).toEqual([]);
   });
 

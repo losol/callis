@@ -150,7 +150,11 @@ describe('extension(url)', () => {
     expect(codeOf(() => run(patient, "Patient.extension('a' | 'b')"))).toBe(
       'eval/singleton-expected',
     );
-    expect(codeOf(() => run(patient, '{}.extension(1)'))).toBe('eval/type-mismatch');
+    expect(codeOf(() => run(patient, '{}.extension(%one)', { variables: { one: 1 } }))).toBe(
+      'eval/type-mismatch',
+    );
+    // T0024: a URL literal that is not a String is rejected when the expression is compiled.
+    expect(codeOf(() => run(patient, '{}.extension(1)'))).toBe('semantic/type-mismatch');
   });
 });
 
@@ -166,7 +170,7 @@ describe('hasValue() and getValue()', () => {
     ['Patient.birthDate', true],
     ['Patient.gender', true],
     // Empty input and more than one item
-    ['Patient.missing', false],
+    ['Patient.contained', false],
     ['Patient.name.given', false],
     ['Patient.extension', false],
   ])('%s.hasValue() is %s with the model', (path, expected) => {
@@ -237,8 +241,17 @@ describe('functions that need a host hook', () => {
   });
 
   it('still evaluates and checks its arguments', () => {
-    expect(codeOf(() => run(patient, "conformsTo('a'.substring('x'))"))).toBe('eval/type-mismatch');
-    expect(codeOf(() => run(patient, 'conformsTo(1)'))).toBe('eval/type-mismatch');
+    expect(
+      codeOf(() => run(patient, "conformsTo('a'.substring(%text))", { variables: { text: 'x' } })),
+    ).toBe('eval/type-mismatch');
+    expect(codeOf(() => run(patient, 'conformsTo(%one)', { variables: { one: 1 } }))).toBe(
+      'eval/type-mismatch',
+    );
+    // T0024: the literals are rejected when the expression is compiled.
+    expect(codeOf(() => run(patient, "conformsTo('a'.substring('x'))"))).toBe(
+      'semantic/type-mismatch',
+    );
+    expect(codeOf(() => run(patient, 'conformsTo(1)'))).toBe('semantic/type-mismatch');
     expect(codeOf(() => run(patient, "Patient.gender.memberOf('a' | 'b')"))).toBe(
       'eval/singleton-expected',
     );
@@ -320,7 +333,7 @@ describe.each(MODES)(
     it('is empty without a call for empty or several items, an uncoded item or no value set', async () => {
       const { calls, options } = provider(true);
       for (const expression of [
-        `Observation.missing.memberOf('${VS}')`,
+        `Observation.issued.memberOf('${VS}')`,
         `Observation.code.coding.memberOf('${VS}')`,
         `Observation.memberOf('${VS}')`,
         `Observation.value.memberOf('${VS}')`,
@@ -525,7 +538,7 @@ describe.each(MODES)('conformsTo(structure) with a conformsTo hook, %s', (_label
   it('is empty without a call for empty or several items and an empty structure', async () => {
     const { calls, options } = hook(() => true);
     await expect(
-      run(patient, `Patient.missing.conformsTo('${PROFILE}')`, options),
+      run(patient, `Patient.contained.conformsTo('${PROFILE}')`, options),
     ).resolves.toEqual([]);
     await expect(
       run(patient, `Patient.extension.conformsTo('${PROFILE}')`, options),
@@ -623,7 +636,7 @@ describe.each(MODES)('htmlChecks() with an htmlChecks hook, %s', (_label, run, i
       'Patient.active.htmlChecks()',
       'Patient.name.htmlChecks()',
       'Patient.birthDate.htmlChecks()',
-      'Patient.missing.htmlChecks()',
+      'Patient.contained.htmlChecks()',
       'Patient.extension.htmlChecks()',
       '(1).htmlChecks()',
     ]) {

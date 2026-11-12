@@ -18,6 +18,7 @@ import {
   defineFunction,
   defineValueFunction,
   type FunctionDefinition,
+  type TypeExpectation,
   type TypeHint,
   valueArg,
 } from '../functions/define.ts';
@@ -35,6 +36,9 @@ import { Decimal } from '../values/decimal/decimal.ts';
 import { codedValueOf, codingsOf, hookContext, htmlOf, isSameCoding, jsonOf } from './hooks.ts';
 import { resolveFunction } from './resolve.ts';
 
+/** A URL argument: one String. */
+const URL: TypeExpectation = { type: 'String', singleton: true };
+
 /**
  * `extension(url)`: the extensions of the input items whose `url` is the given URL, a shortcut for
  * `extension.where(url = url)`. Works on resources, complex values and, with a model, on FHIR
@@ -47,7 +51,7 @@ import { resolveFunction } from './resolve.ts';
  */
 export const extensionFunction: FunctionDefinition = defineValueFunction(
   'extension',
-  [{ kind: 'value', name: 'url' }],
+  [{ kind: 'value', name: 'url', expects: URL }],
   (input, [url = EMPTY], call) => {
     const wanted = singleton(url, 'String', asString);
     if (wanted === undefined || wanted === '' || input.length === 0) {
@@ -111,7 +115,7 @@ const BOOLEAN: TypeHint = { type: 'Boolean', singleton: true };
  */
 export const memberOfFunction: FunctionDefinition = defineFunction({
   name: 'memberOf',
-  params: [{ kind: 'value', name: 'valueset' }],
+  params: [{ kind: 'value', name: 'valueset', expects: URL }],
   returns: BOOLEAN,
   async: true,
   impl: (call, input, args) => {
@@ -236,7 +240,7 @@ function relate(
  */
 export const conformsToFunction: FunctionDefinition = defineFunction({
   name: 'conformsTo',
-  params: [{ kind: 'value', name: 'structure' }],
+  params: [{ kind: 'value', name: 'structure', expects: URL }],
   returns: BOOLEAN,
   async: true,
   impl: (call, input, args) => {

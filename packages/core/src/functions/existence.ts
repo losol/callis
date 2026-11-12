@@ -26,6 +26,12 @@ const BOOLEAN: { readonly returns: TypeHint } = Object.freeze({
   returns: Object.freeze({ type: 'Boolean', singleton: true }),
 });
 const OTHER: readonly ParamSpec[] = Object.freeze([{ kind: 'value', name: 'other' }]);
+/** A criterion: evaluated per item, and a Boolean by singleton evaluation. */
+const CRITERIA: ParamSpec = {
+  kind: 'lambda',
+  name: 'criteria',
+  expects: { type: 'Boolean', singleton: true },
+};
 
 /**
  * `empty()`: true when the input has no items, false otherwise.
@@ -45,7 +51,7 @@ export const emptyFunction: FunctionDefinition = defineValueFunction(
  */
 export const existsFunction: FunctionDefinition = defineFunction({
   name: 'exists',
-  params: [{ kind: 'lambda', name: 'criteria', optional: true }],
+  params: [{ ...CRITERIA, optional: true }],
   ...BOOLEAN,
   impl: (_call, input, args) => {
     const criteria = lambdaArg(args, 0);
@@ -64,7 +70,7 @@ export const existsFunction: FunctionDefinition = defineFunction({
  */
 export const allFunction: FunctionDefinition = defineFunction({
   name: 'all',
-  params: [{ kind: 'lambda', name: 'criteria' }],
+  params: [CRITERIA],
   ...BOOLEAN,
   impl: (_call, input, args) => {
     // The registry checked the arity, so the criterion is there.
@@ -166,6 +172,7 @@ export const distinctFunction: FunctionDefinition = defineValueFunction(
     const repeated = laterRepeats(input, call.ctx);
     return repeated.includes(true) ? input.filter((_item, index) => !repeated[index]) : input;
   },
+  { returns: { fromInput: true } },
 );
 
 /**
@@ -239,12 +246,10 @@ function booleanFunction(
   name: string,
   test: (values: readonly boolean[]) => boolean,
 ): FunctionDefinition {
-  return defineValueFunction(
-    name,
-    0,
-    (input) => fromBoolean(test(booleansOf(input, name))),
-    BOOLEAN,
-  );
+  return defineValueFunction(name, 0, (input) => fromBoolean(test(booleansOf(input, name))), {
+    input: { type: 'Boolean' },
+    ...BOOLEAN,
+  });
 }
 
 /**

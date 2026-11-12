@@ -342,7 +342,8 @@ function appendTypedMember(
     appendTypedElement(items, source, element, name, node, model);
     return;
   }
-  // TODO(T0024): an unknown element is a semantic error with analysis, and an error in strict mode.
+  // An element the type does not have is a semantic error when analysis knows the type (T0024);
+  // here it is empty. A strict-mode error for a type known only at runtime is #216.
   if (lenientChoiceSuffix) {
     const choice = findChoiceBySuffix(model, type, name);
     if (choice !== undefined) {
@@ -386,10 +387,11 @@ function appendTypedElement(
 }
 
 /**
- * With `lenientChoiceSuffix`: the choice element and type that the JSON key `name` stands for,
- * such as `value` and `Quantity` for `valueQuantity`.
+ * The choice element and type that the JSON key `name` stands for, such as `value` and `Quantity`
+ * for `valueQuantity`, or undefined when `name` is not such a key. Navigation uses it with
+ * `lenientChoiceSuffix`; the analyzer uses it to suggest `value.ofType(Quantity)`.
  */
-function findChoiceBySuffix(
+export function findChoiceBySuffix(
   model: ModelProvider,
   type: ModelTypeInfo,
   name: string,
