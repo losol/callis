@@ -1,5 +1,27 @@
 # @callis/ucum
 
+## 0.1.2
+
+### Patch Changes
+
+- f408d5e: The package's `homepage` link on npm now opens its page on the documentation site, for example <https://callis.losol.no/packages/core/>, instead of its directory on GitHub.
+- Updated dependencies [c7addb8]
+- Updated dependencies [0fea378]
+- Updated dependencies [0c82a86]
+- Updated dependencies [e1b034d]
+- Updated dependencies [0cbee45]
+- Updated dependencies [582aff4]
+- Updated dependencies [6a7d079]
+- Updated dependencies [3186680]
+- Updated dependencies [643512a]
+- Updated dependencies [2b5fd1a]
+- Updated dependencies [f408d5e]
+- Updated dependencies [b4e3717]
+- Updated dependencies [5468cc1]
+- Updated dependencies [27ea77f]
+- Updated dependencies [ef00a4b]
+  - @callis/core@0.3.0
+
 ## 0.1.1
 
 ### Patch Changes
