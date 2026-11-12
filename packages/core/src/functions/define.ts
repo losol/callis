@@ -81,10 +81,12 @@ export interface TypeHint {
   readonly singleton?: boolean;
   /**
    * True when the items are input items, selected or kept, as for `where()`, `first()` and
-   * `distinct()`, or values of the same types, as for `abs()`: the result has the types of the
-   * input items and, unless it is a singleton, the input's cardinality.
+   * `distinct()`: the result has the types of the input items and, unless it is a singleton, the
+   * input's cardinality. `'value'` when the items are the System values of the input items, as
+   * for `abs()`, which converts a model node first: a FHIR `positiveInt` gives an Integer and
+   * an `Age` a Quantity.
    */
-  readonly fromInput?: boolean;
+  readonly fromInput?: boolean | 'value';
 }
 
 /**

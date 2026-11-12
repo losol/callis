@@ -68,6 +68,7 @@ import {
   type Cardinality,
   describeExpectation,
   describeTypes,
+  fitsExpectation,
   hasKnownTypes,
   type Inferred,
   isNothing,
@@ -80,6 +81,7 @@ import {
   typeSetOf,
   UNKNOWN,
   unionTypes,
+  valueTypesOf,
   withArticle,
 } from './inferred-type.ts';
 import {
@@ -705,15 +707,17 @@ class Analyzer {
     if (hint === undefined) {
       return UNKNOWN;
     }
-    const fromInput = hint.fromInput === true;
+    const fromInput = hint.fromInput !== undefined && hint.fromInput !== false;
     const singleton = hint.singleton === true;
     return {
       types:
         hint.type !== undefined
           ? typeSetOf([SYSTEM_TYPES[hint.type]])
-          : fromInput
-            ? input.types
-            : undefined,
+          : hint.fromInput === 'value'
+            ? this.#convertedTypes(input, definition.input)
+            : fromInput
+              ? input.types
+              : undefined,
       cardinality: singleton ? 'single' : fromInput ? input.cardinality : 'unknown',
     };
   }
@@ -746,11 +750,29 @@ class Analyzer {
     return { types: target.types, cardinality: 'single' };
   }
 
-  /** `+x` and `-x` ([N1 §6.6](https://hl7.org/fhirpath/N1/#math)) take a number or a Quantity. */
+  /**
+   * `+x` and `-x` ([N1 §6.6](https://hl7.org/fhirpath/N1/#math)) take a number or a Quantity,
+   * and give its System value: `-Patient.telecom.rank` is an Integer, not a `positiveInt`.
+   */
   #inferUnary(node: UnaryNode, scope: Scope): Inferred {
     const operand = this.infer(node.operand, scope);
     this.#checkExpectation(operand, POLARITY, node, `the operand of unary ${node.op}`, true);
-    return { types: operand.types, cardinality: 'single' };
+    return { types: this.#convertedTypes(operand, POLARITY), cardinality: 'single' };
+  }
+
+  /**
+   * The types of the System values an operation gets from an operand it converts first, and
+   * accepts: the operand's types as values ({@link valueTypesOf}), without those the operation
+   * rejects, which yield an error instead of a value.
+   */
+  #convertedTypes(operand: Inferred, expectation: TypeExpectation | undefined): TypeSet {
+    const model = this.#options.model;
+    const types = valueTypesOf(operand.types, model);
+    const expected = expectation?.type;
+    if (types === undefined || expected === undefined) {
+      return types;
+    }
+    return types.filter((type) => fitsExpectation(type, expected, model));
   }
 
   #inferBinary(node: BinaryNode, scope: Scope): Inferred {
