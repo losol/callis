@@ -1259,10 +1259,12 @@ function unionOf(left: Inferred, right: Inferred): Inferred {
   if (isNothing(right)) {
     return left;
   }
+  // Two single items are a collection; a known collection stays one whatever the other operand
+  // adds; only a single item or nothing known with an unknown value is unknown.
   return {
     types: unionTypes(left.types, right.types),
     cardinality:
-      left.cardinality === 'unknown' || right.cardinality === 'unknown' ? 'unknown' : 'collection',
+      widest(left.cardinality, right.cardinality) === 'unknown' ? 'unknown' : 'collection',
     ordered: left.ordered && right.ordered,
   };
 }

@@ -677,6 +677,37 @@ describe('type guards', () => {
 describe('strict mode', () => {
   const strict: CompileOptions = { ...patient, strict: true };
 
+  // A union keeps the cardinality it knows: two known characters stay two whatever a variable
+  // adds, in either order; only a single item or nothing with an unknown value is unknown.
+  it('keeps a known collection in a union with an unknown value', () => {
+    const modelless: CompileOptions = { strict: true };
+    for (const expression of [
+      "'ab'.toChars().combine(%v).length()",
+      "%v.combine('ab'.toChars()).length()",
+      "('ab'.toChars() | %v).length()",
+      "(%v | 'ab'.toChars()).length()",
+      "'ab'.toChars().union(%v).length()",
+      "'ab'.toChars().combine(%v) = 'a'",
+      "'a' = %v.combine('ab'.toChars())",
+      '%v.combine(1 | 2) = 1',
+    ]) {
+      expect(report(expression, modelless)).toEqual(['error semantic/singleton-expected']);
+    }
+    const combined = "'ab'.toChars().combine(%v).length()";
+    expect(codeOf(() => evaluate(null, combined, { variables: { v: [] } }))).toBe(
+      'eval/singleton-expected',
+    );
+    for (const expression of [
+      '%v.combine(%w).length()',
+      '(1 | %v).length()',
+      '%v.combine(1) = 1',
+      "('ab'.toChars() | %v).count() = 2",
+      "'ab'.toChars().combine(%v) = 'ab'.toChars()",
+    ]) {
+      expect(report(expression, modelless)).toEqual([]);
+    }
+  });
+
   // toChars(), children(), descendants() and extension() give a collection whatever their input
   // has, so a singleton consumer of their result is unsafe; first() makes it safe again. Without
   // a model too: the hint, not the input's type, says so.
