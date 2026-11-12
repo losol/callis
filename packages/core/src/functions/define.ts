@@ -96,12 +96,16 @@ export interface TypeHint {
   readonly collection?: boolean;
   /**
    * False when the order of the result is undefined, as for `children()` and `descendants()`
-   * ([N1 §3.1](https://hl7.org/fhirpath/N1/#collections)). `'input'` when the result follows the
-   * order of the input without being its items, as for `extension()` and `resolve()`, which give
-   * something for each input item in turn: the result is ordered when the input is, as the items
-   * of a `fromInput` function are. True by default.
+   * ([N1 §3.1](https://hl7.org/fhirpath/N1/#collections)). True by default.
    */
-  readonly ordered?: boolean | 'input';
+  readonly ordered?: boolean;
+  /**
+   * True when the function gives zero or more items for each input item in turn without
+   * returning the items themselves, as `resolve()` and `extension()` do. The result then repeats
+   * when the input does, or whatever the input has with `collection`, and follows the input's
+   * order, as the result of a `fromInput` function does; its types are not the input's.
+   */
+  readonly perItem?: boolean;
   /**
    * True when the items are input items, selected or kept, as for `where()`, `first()` and
    * `distinct()`: the result has the types of the input items and, unless it is a singleton, the

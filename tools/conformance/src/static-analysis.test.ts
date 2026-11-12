@@ -9,8 +9,9 @@
  * models and input types is measured by the conformance run itself.
  */
 import { describe, expect, it } from 'vitest';
-import { analyze } from '../../../packages/core/src/api/compile.ts';
+import { analyze, compileUnchecked } from '../../../packages/core/src/api/compile.ts';
 import { FhirPathEvaluationError } from '../../../packages/core/src/errors/fhirpath-error.ts';
+import { r4 } from '../../../packages/fhir-r4/src/index.ts';
 import { classifyTest } from './classify.ts';
 import { loadSuite } from './fixtures.ts';
 import { allTests, SUITE_IDS } from './suite.ts';
@@ -101,4 +102,54 @@ describe.each(SUITE_IDS)('strict analysis of the %s suite with its model and inp
     expect(unsafe).toEqual([]);
     expect(accepted).toBeGreaterThan(700);
   }, 120_000);
+});
+
+describe('strict analysis of a known collection through a function that maps each item', () => {
+  // The rule behind the return hints: a function that gives zero or more items for each input
+  // item repeats when its input does, so strict mode rejects a singleton use of its result, and
+  // the evaluation confirms it on an input with two items.
+  const extension = [{ url: 'http://example.org/x', valueString: 'x' }];
+  const patient = {
+    resourceType: 'Patient',
+    contained: [
+      { resourceType: 'Organization', id: 'a', extension },
+      { resourceType: 'Organization', id: 'b', extension },
+    ],
+  };
+  const options = { model: r4, inputType: 'Patient' };
+  const strict = { ...options, strict: true };
+  const errorsOf = (expression: string, mode: typeof options) =>
+    analyze(expression, mode)
+      .diagnostics.filter((d) => d.severity === 'error')
+      .map((d) => d.code);
+  const codeOf = async (expression: string): Promise<string | undefined> => {
+    try {
+      await compileUnchecked(expression, options).evaluateAsync(patient);
+      return undefined;
+    } catch (error) {
+      return error instanceof FhirPathEvaluationError ? error.code : String(error);
+    }
+  };
+
+  it.each([
+    "('#a' | '#b').resolve().id.toString()",
+    'contained.where(id.exists()).id.toString()',
+    'contained.select(id).toString()',
+    'contained.ofType(Organization).id.toString()',
+    'contained.descendants().toString()',
+    "contained.extension('http://example.org/x').value.toString()",
+  ])('rejects %s, which fails at evaluation', async (expression) => {
+    expect(errorsOf(expression, strict)).toEqual(['semantic/singleton-expected']);
+    expect(errorsOf(expression, options)).toEqual([]);
+    expect(await codeOf(expression)).toBe('eval/singleton-expected');
+  });
+
+  it.each([
+    "('#a' | '#b').resolve().first().id.toString()",
+    'contained.first().id.toString()',
+    "contained.extension('http://example.org/x').first().value.toString()",
+  ])('accepts %s, which evaluates', async (expression) => {
+    expect(errorsOf(expression, strict)).toEqual([]);
+    expect(await codeOf(expression)).toBeUndefined();
+  });
 });

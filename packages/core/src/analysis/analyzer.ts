@@ -731,6 +731,9 @@ class Analyzer {
       return UNKNOWN;
     }
     const fromInput = hint.fromInput !== undefined && hint.fromInput !== false;
+    // The result of a function that gives something for each input item repeats when the input
+    // does and follows its order, whether or not the items are the input's.
+    const perItem = fromInput || hint.perItem === true;
     const singleton = hint.singleton === true;
     return {
       types:
@@ -745,17 +748,10 @@ class Analyzer {
         ? 'single'
         : hint.collection === true
           ? 'collection'
-          : fromInput
+          : perItem
             ? input.cardinality
             : 'unknown',
-      ordered:
-        hint.ordered === false
-          ? false
-          : hint.ordered === 'input'
-            ? input.ordered
-            : singleton || !fromInput
-              ? true
-              : input.ordered,
+      ordered: hint.ordered === false ? false : singleton || !perItem ? true : input.ordered,
     };
   }
 

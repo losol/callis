@@ -677,10 +677,29 @@ describe('type guards', () => {
 describe('strict mode', () => {
   const strict: CompileOptions = { ...patient, strict: true };
 
-  // extension() and resolve() give something for each input item in turn, so their result is as
-  // unordered as children() or descendants() when that is the input, although it is not its items.
-  it('keeps the order of the input through extension() and resolve()', () => {
+  // extension() and resolve() give something for each input item in turn, so their result
+  // repeats when the input does and is as unordered as children() or descendants() when that is
+  // the input, although it is not its items.
+  it('carries the cardinality and the order of the input through extension() and resolve()', () => {
     const url = "'http://example.org/x'";
+    const contained = {
+      resourceType: 'Patient',
+      contained: [
+        { resourceType: 'Organization', id: 'a' },
+        { resourceType: 'Organization', id: 'b' },
+      ],
+    };
+    const unsafe = "('#a' | '#b').resolve().id.toString()";
+    expect(report(unsafe, strict)).toEqual(['error semantic/singleton-expected']);
+    expect(report(unsafe, patient)).toEqual([]);
+    expect(codeOf(() => evaluate(contained, unsafe, model))).toBe('eval/singleton-expected');
+    const safe = "('#a' | '#b').resolve().first().id.toString()";
+    expect(report(safe, strict)).toEqual([]);
+    expect(evaluate(contained, safe, model)).toEqual(['a']);
+    expect(report('managingOrganization.resolve().id.toString()', strict)).toEqual([]);
+    expect(report(`contained.extension(${url}).value.toString()`, strict)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
     for (const expression of [
       `children().extension(${url}).first()`,
       `descendants().extension(${url})[0]`,
