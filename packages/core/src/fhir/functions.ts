@@ -65,7 +65,7 @@ export const extensionFunction: FunctionDefinition = defineValueFunction(
     }
     return items.length === 0 ? EMPTY : items;
   },
-  { returns: { collection: true } },
+  { returns: { collection: true, ordered: 'input' } },
 );
 
 /**

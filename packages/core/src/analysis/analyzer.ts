@@ -748,7 +748,14 @@ class Analyzer {
           : fromInput
             ? input.cardinality
             : 'unknown',
-      ordered: hint.ordered === false ? false : singleton || !fromInput ? true : input.ordered,
+      ordered:
+        hint.ordered === false
+          ? false
+          : hint.ordered === 'input'
+            ? input.ordered
+            : singleton || !fromInput
+              ? true
+              : input.ordered,
     };
   }
 

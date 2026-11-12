@@ -677,6 +677,30 @@ describe('type guards', () => {
 describe('strict mode', () => {
   const strict: CompileOptions = { ...patient, strict: true };
 
+  // extension() and resolve() give something for each input item in turn, so their result is as
+  // unordered as children() or descendants() when that is the input, although it is not its items.
+  it('keeps the order of the input through extension() and resolve()', () => {
+    const url = "'http://example.org/x'";
+    for (const expression of [
+      `children().extension(${url}).first()`,
+      `descendants().extension(${url})[0]`,
+      `children().extension(${url}).where(url.exists()).last()`,
+      'children().ofType(Reference).resolve().first()',
+    ]) {
+      expect(report(expression, strict)).toEqual(['error semantic/unordered-collection']);
+      expect(report(expression, patient)).toEqual([]);
+    }
+    for (const expression of [
+      `extension(${url}).first()`,
+      `name.extension(${url}).first()`,
+      `children().extension(${url}).count()`,
+      `children().extension(${url}).single()`,
+      'managingOrganization.resolve().first()',
+    ]) {
+      expect(report(expression, strict)).toEqual([]);
+    }
+  });
+
   // A union keeps the cardinality it knows: two known characters stay two whatever a variable
   // adds, in either order; only a single item or nothing with an unknown value is unknown.
   it('keeps a known collection in a union with an unknown value', () => {
