@@ -467,6 +467,18 @@ describe('repeat()', () => {
     ]);
   });
 
+  it('nests, and gives up the types of deep nests instead of multiplying the work', () => {
+    expect(report('repeat(repeat(name | given)).foo', patient)).toEqual([
+      'error semantic/unknown-element',
+    ]);
+    expect(report('repeat(repeat(name | given)).family', patient)).toEqual([]);
+    // Each repeat() analyzes its projection once per pass; 30 nested would be 2^30 visits.
+    const nested = `iif(false, 1.${'repeat('.repeat(30)}$this${')'.repeat(30)}, 0)`;
+    expect(report(nested)).toEqual([]);
+    expect(evaluate(null, nested)).toEqual([0]);
+    expect(report(`name.${'repeat('.repeat(30)}given${')'.repeat(30)}.nope`, patient)).toEqual([]);
+  });
+
   it('knows nothing when the input or the walk is unknown', () => {
     expect(report('repeat(name).foo')).toEqual([]);
     expect(report('repeat(%v).foo', patient)).toEqual([]);
