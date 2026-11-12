@@ -393,8 +393,11 @@ class Analyzer {
    */
   #navigate(input: Inferred, name: string, node: AstNode): Inferred {
     const model = this.#model;
+    // Every item of a collection may have the member, so the members form one whatever the
+    // types are; of one item of unknown type, nothing is known.
+    const cardinality = input.cardinality === 'collection' ? 'collection' : 'unknown';
     if (input.types === undefined || model === undefined) {
-      return { types: undefined, cardinality: 'unknown', ordered: input.ordered };
+      return { types: undefined, cardinality, ordered: input.ordered };
     }
     const found: (AnalysisType | undefined)[] = [];
     const missing: AnalysisType[] = [];
@@ -434,7 +437,7 @@ class Analyzer {
     }
     return {
       types: unknown ? undefined : typeSetOf(found),
-      cardinality: repeats ? 'collection' : unknown ? 'unknown' : input.cardinality,
+      cardinality: repeats ? 'collection' : unknown ? cardinality : input.cardinality,
       ordered: input.ordered,
     };
   }
@@ -738,7 +741,13 @@ class Analyzer {
             : fromInput
               ? input.types
               : undefined,
-      cardinality: singleton ? 'single' : fromInput ? input.cardinality : 'unknown',
+      cardinality: singleton
+        ? 'single'
+        : hint.collection === true
+          ? 'collection'
+          : fromInput
+            ? input.cardinality
+            : 'unknown',
       ordered: hint.ordered === false ? false : singleton || !fromInput ? true : input.ordered,
     };
   }

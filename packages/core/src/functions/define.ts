@@ -87,6 +87,14 @@ export interface TypeHint {
   readonly type?: SystemTypeName;
   readonly singleton?: boolean;
   /**
+   * True when the result may have more than one item whatever the input has, as for `toChars()`
+   * and `children()`, so that strict mode rejects it where one item is needed
+   * ([N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation)). Without it,
+   * `singleton` or `fromInput`, the cardinality of the result is unknown, which strict mode
+   * lets pass.
+   */
+  readonly collection?: boolean;
+  /**
    * False when the order of the result is undefined, as for `children()` and `descendants()`
    * ([N1 §3.1](https://hl7.org/fhirpath/N1/#collections)). True by default.
    */

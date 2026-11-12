@@ -4,11 +4,13 @@
  * see the input's types. With the suite's models and inputs, the analysis is sound: an expression
  * that evaluates on its input gets no error from lenient analysis. The suite's `invalid="semantic"`
  * tests are the exception the suite asks for: the Java runner rejects them statically although
- * some of them would evaluate, so they are left out. The analysis with the suite's models and
- * input types is measured by the conformance run itself.
+ * some of them would evaluate, so they are left out. And strict mode is safe: an expression it
+ * accepts does not fail at evaluation for want of a single item. The analysis with the suite's
+ * models and input types is measured by the conformance run itself.
  */
 import { describe, expect, it } from 'vitest';
 import { analyze } from '../../../packages/core/src/api/compile.ts';
+import { FhirPathEvaluationError } from '../../../packages/core/src/errors/fhirpath-error.ts';
 import { classifyTest } from './classify.ts';
 import { loadSuite } from './fixtures.ts';
 import { allTests, SUITE_IDS } from './suite.ts';
@@ -62,5 +64,41 @@ describe.each(SUITE_IDS)('analysis of the %s suite with its model and inputs', (
     }
     expect(unsound).toEqual([]);
     expect(evaluated).toBeGreaterThan(700);
+  }, 120_000);
+});
+
+describe.each(SUITE_IDS)('strict analysis of the %s suite with its model and inputs', (id) => {
+  const read = inputReader(id);
+  // single() raises the singleton error by its contract when its input has more than one item
+  // ([N1 §5.2.6](https://hl7.org/fhirpath/N1/#single-collection)): that error is the result the
+  // expression asks for, not an unsafe use, so those tests are left out.
+  const tests = allTests(loadSuite(id)).filter((test) => !/\bsingle\s*\(/.test(test.expression));
+
+  // N1 §11: what strict mode accepts must not fail at evaluation for the reason strict mode
+  // exists, an operation that needs one item and gets more.
+  it('accepts no expression whose evaluation needs a singleton it does not get', async () => {
+    const unsafe: string[] = [];
+    let accepted = 0;
+    for (const test of tests) {
+      const prepared = await prepareTest(id, test, read(test));
+      if (prepared === undefined) {
+        continue;
+      }
+      const strict = { ...prepared.options, strict: true };
+      if (analyze(test.expression, strict).diagnostics.some((d) => d.severity === 'error')) {
+        continue;
+      }
+      accepted++;
+      const outcome = await evaluateUnchecked(test, prepared);
+      if (
+        !outcome.ok &&
+        outcome.error instanceof FhirPathEvaluationError &&
+        outcome.error.code === 'eval/singleton-expected'
+      ) {
+        unsafe.push(`${test.id}: ${outcome.error.message}`);
+      }
+    }
+    expect(unsafe).toEqual([]);
+    expect(accepted).toBeGreaterThan(700);
   }, 120_000);
 });

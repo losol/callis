@@ -16,7 +16,7 @@ import { defineValueFunction, type FunctionDefinition, type TypeHint } from './d
  * `tail()`, `skip()`, `take()` and the indexer on it
  * ([N1 §3.1](https://hl7.org/fhirpath/N1/#collections)).
  */
-const UNORDERED: TypeHint = { ordered: false };
+const UNORDERED: TypeHint = { collection: true, ordered: false };
 
 /**
  * `children()`: the immediate child nodes of every input item, in order. Items that are not

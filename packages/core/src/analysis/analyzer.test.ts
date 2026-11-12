@@ -677,6 +677,36 @@ describe('type guards', () => {
 describe('strict mode', () => {
   const strict: CompileOptions = { ...patient, strict: true };
 
+  // toChars(), children(), descendants() and extension() give a collection whatever their input
+  // has, so a singleton consumer of their result is unsafe; first() makes it safe again. Without
+  // a model too: the hint, not the input's type, says so.
+  it('rejects a singleton use of a built-in that gives a collection', () => {
+    const modelless: CompileOptions = { strict: true };
+    expect(report("'ab'.toChars().length()", modelless)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(codeOf(() => evaluate(null, "'ab'.toChars().length()"))).toBe('eval/singleton-expected');
+    expect(report("'ab'.toChars() = 'a'", modelless)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(report("'ab'.toChars().first().length()", modelless)).toEqual([]);
+    expect(evaluate(null, "'ab'.toChars().first().length()")).toEqual([1]);
+    expect(report("'a'.toChars().single().length()", modelless)).toEqual([]);
+    expect(report("'ab'.toChars() = 'a'.toChars()", modelless)).toEqual([]);
+    expect(report("'ab'.toChars().where($this = 'a') = 'a'", modelless)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(report('children().count() = 1', modelless)).toEqual([]);
+    expect(report('children() = 1', modelless)).toEqual(['error semantic/singleton-expected']);
+    expect(report('descendants().length()', modelless)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(report("extension('http://x').value = 1", strict)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(report("extension('http://x').first().value = 1", strict)).toEqual([]);
+  });
+
   it.each([
     "name.given < 'X'",
     'name.given.substring(1)',
@@ -737,7 +767,13 @@ describe('strict mode', () => {
     expect(report("name.given < 'X'", { strict: true })).toEqual([]);
     expect(report("%v = 'a'", { strict: true })).toEqual([]);
     expect(report('active = true', { ...model, strict: true })).toEqual([]);
-    expect(report('contained.status = true', strict)).toEqual([]);
+    // A member of one item of unknown type is unknown; the members of a collection of them form
+    // a collection, whatever the type.
+    expect(report('contained.first().status = true', strict)).toEqual([]);
+    expect(report('contained.status = true', strict)).toEqual([
+      'error semantic/singleton-expected',
+    ]);
+    expect(report('contained.status.first() = true', strict)).toEqual([]);
   });
 
   it('knows which results have one item', () => {
