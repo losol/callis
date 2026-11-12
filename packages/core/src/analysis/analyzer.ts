@@ -210,6 +210,19 @@ const POLARITY: TypeExpectation = { type: ['Decimal', 'Quantity'], singleton: tr
  * adds a type or ends the walk, so a model's types bound it; a walk still going is unknown.
  */
 const MAX_REPEAT_STEPS = 32;
+/**
+ * The node visits that the silent passes of every `repeat()` of one analysis may make together.
+ * Each `repeat()` analyzes its projection once more per pass, and a `repeat()` inside another
+ * is analyzed by each of its passes, so nested calls multiply the work; past the budget, a
+ * projection's focus is unknown, which never rejects an expression, and the reporting passes
+ * alone remain, one per `repeat()`.
+ */
+const SILENT_VISIT_BUDGET = 20_000;
+
+/** The silent visits left to one analysis, shared by its analyzers. */
+interface VisitBudget {
+  remaining: number;
+}
 
 class Analyzer {
   readonly #registry: FunctionRegistry;
@@ -218,9 +231,20 @@ class Analyzer {
   readonly #input: Inferred;
   readonly #diagnostics: DiagnosticList;
   readonly #options: AnalysisOptions;
+  readonly #budget: VisitBudget;
+  /** Whether this analyzer only finds types, for `#reachableTypes()`, and reports nothing. */
+  readonly #silent: boolean;
 
-  constructor(options: AnalysisOptions, input: Inferred, diagnostics: DiagnosticList) {
+  constructor(
+    options: AnalysisOptions,
+    input: Inferred,
+    diagnostics: DiagnosticList,
+    budget: VisitBudget = { remaining: SILENT_VISIT_BUDGET },
+    silent = false,
+  ) {
     this.#options = options;
+    this.#budget = budget;
+    this.#silent = silent;
     this.#registry = options.registry;
     this.#model = options.model;
     this.#lenientChoiceSuffix = options.lenientChoiceSuffix;
@@ -234,6 +258,9 @@ class Analyzer {
    * {@link NOTHING} whatever was inferred about its cardinality.
    */
   infer(node: ExpressionNode, scope: Scope): Inferred {
+    if (this.#silent) {
+      this.#budget.remaining--;
+    }
     const inferred = this.#inferNode(node, scope);
     const key = pathKey(node);
     return nothingOr(key === undefined ? inferred : narrowByKey(scope, key, inferred, this.#model));
@@ -562,8 +589,9 @@ class Analyzer {
   /**
    * The types the focus of a `repeat()` projection may have: the input types, plus what the
    * projection gives on them, and so on until no new type comes. Unknown when the input types
-   * are unknown, when the projection gives an unknown type, or when the walk does not settle. An
-   * analyzer of its own takes the diagnostics of these passes, which the final pass reports.
+   * are unknown, when the projection gives an unknown type, when the walk does not settle, or
+   * when the analysis has spent its {@link SILENT_VISIT_BUDGET}. An analyzer of its own takes the
+   * diagnostics of these passes, which the final pass reports.
    */
   #reachableTypes(projection: ExpressionNode, input: Inferred, scope: Scope): TypeSet {
     let types = input.types;
@@ -574,8 +602,13 @@ class Analyzer {
       this.#options,
       this.#input,
       new DiagnosticList(this.#options.expression),
+      this.#budget,
+      true,
     );
     for (let step = 0; step < MAX_REPEAT_STEPS; step++) {
+      if (this.#budget.remaining <= 0) {
+        return undefined;
+      }
       const focus: Inferred = { types, cardinality: 'single' };
       const result = silent.infer(projection, lambdaScope(scope, focus, false));
       const next = unionTypes(types, result.types);
