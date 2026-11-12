@@ -97,12 +97,17 @@ const HOOKS: Readonly<Record<SuiteId, EvaluationHooks>> = {
   r5: fakeHooks(r5),
 };
 
+/** The hooks the adapter evaluates a suite's tests with, for tests that evaluate as it does. */
+export function hooksFor(suite: SuiteId): EvaluationHooks {
+  return HOOKS[suite];
+}
+
 /**
  * The options of every compile() for a test: UCUM units for the suite's quantities, the model of
  * the suite's FHIR version, and the choice-type suffix only for `mode="lenient/polymorphics"`
  * ([ADR-0012](../../../docs/adr/0012-evaluation-defaults.md)).
  */
-function compileOptionsFor(options: EvaluationOptions): CompileOptions {
+export function compileOptionsFor(options: EvaluationOptions): CompileOptions {
   return {
     units: ucum,
     model: MODELS[options.fhirVersion],
@@ -116,7 +121,7 @@ function compileOptionsFor(options: EvaluationOptions): CompileOptions {
  * when it has one, else the model type of the node the `context` selected, else the resource
  * type of the input. The context expression itself is compiled without them.
  */
-function expressionOptionsFor(
+export function expressionOptionsFor(
   options: EvaluationOptions,
   focus: unknown,
   hasContext: boolean,

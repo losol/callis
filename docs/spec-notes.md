@@ -718,7 +718,7 @@ Implemented in `packages/core/src/fhir/` ([T0020](tasks/T0020-fhir-functions.md)
 
 ## Static analysis
 
-Implemented in `packages/core/src/analysis/` ([T0024](tasks/T0024-static-analysis.md)). Every check fires only when every possible type is wrong and never for a value whose type is unknown, so analysis without a model rejects no valid expression of the suite (`tools/conformance/src/static-analysis.test.ts`).
+Implemented in `packages/core/src/analysis/` ([T0024](tasks/T0024-static-analysis.md)). Every check fires only when every possible type is wrong and never for a value whose type is unknown, so analysis without a model rejects no valid expression of the suite, and with the suite's models and inputs it reports no error for an expression that evaluates (`tools/conformance/src/static-analysis.test.ts`, which evaluates every test without analysis through `compileUnchecked()` and then analyzes it; the `invalid="semantic"` tests are the suite's own exceptions).
 
 ### Function types are checked statically, operator types when evaluated
 

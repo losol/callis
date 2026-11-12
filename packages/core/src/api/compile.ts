@@ -233,8 +233,6 @@ export function analyze(expression: string, options: CompileOptions = {}): Analy
 export function compile(expression: string, options: CompileOptions = {}): CompiledExpression {
   checkInputType(options);
   const ast = parse(expression);
-  const model = options.model;
-  const units = options.units ?? minimalUnitSystem;
   const diagnostics = analyzeAst(ast, expression, options);
   const error = diagnostics.find(isSemanticError);
   if (error !== undefined) {
@@ -244,6 +242,33 @@ export function compile(expression: string, options: CompileOptions = {}): Compi
       diagnostics,
     });
   }
+  return build(ast, expression, options);
+}
+
+/**
+ * Compiles without static analysis: only the parser and the compiler's own checks run, and what
+ * analysis would have reported is found at evaluation, if at all. For tools that compare the
+ * analysis with the evaluation, such as the conformance runner's soundness test; not public API.
+ *
+ * @throws {@link FhirPathSyntaxError} when the expression does not parse.
+ * @throws {@link FhirPathSemanticError} for what the compiler itself rejects.
+ * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for `inputType` without a model.
+ */
+export function compileUnchecked(
+  expression: string,
+  options: CompileOptions = {},
+): CompiledExpression {
+  checkInputType(options);
+  return build(parse(expression), expression, options);
+}
+
+function build(
+  ast: ExpressionNode,
+  expression: string,
+  options: CompileOptions,
+): CompiledExpression {
+  const model = options.model;
+  const units = options.units ?? minimalUnitSystem;
   const root = compileExpression(ast, {
     registry: options.functions ?? DEFAULT_REGISTRY,
     model,
