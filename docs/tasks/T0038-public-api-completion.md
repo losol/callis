@@ -12,6 +12,21 @@ Part of the [roadmap](../roadmap.md). Phase 1 · wave 7 · size L.
 
 Complete the public API as the remaining phase-1 capabilities land, through later 0.x releases. This preserves the full API design deferred from T0025; it is neither a prerequisite for the first 0.1.0 nor a definition of 1.0. Read [T0025](T0025-public-api-release.md) for the initial surface and [T0037](T0037-first-release-readiness.md) for release readiness.
 
+## Split
+
+The task touches every public entry point, the conformance runner and the user documentation, far beyond a few hundred hand-written lines for one PR. It was split on 2026-11-12 along the groups of options and outputs in the [public API sketch](#public-api-sketch), as [CONTRIBUTING](../../CONTRIBUTING.md#pull-requests) asks ([#116](https://github.com/losol/callis/issues/116)):
+
+- [T0038a](T0038a-public-model-options.md): the `model`, `inputType` and `lenient` compile options, with the model validation of [#60](https://github.com/losol/callis/issues/60).
+- [T0038b](T0038b-public-async-hooks-limits.md): `evaluateAsync()` and the `hooks`, `signal`, `concurrency`, `now` and `limits` evaluation options, including `limits.maxCollectionSize`.
+- [T0038c](T0038c-public-parser-cache.md): `parse()`, AST input, the compiled `ast` and the compile cache.
+- [T0038d](T0038d-public-typed-output.md): `output: 'typed'`, its overloads and the public typed values.
+- [T0038e](T0038e-public-conformance-adapter.md): the conformance runner's adapter on the public API.
+- [T0038f](T0038f-phase-1-documentation.md): the README quick start, the guide, the API reference decision, the examples and the per-phase support documentation.
+
+Each child adds its own exports, type tests, packed-consumer checks, guide sections and changeset; T0038f completes the documentation as a whole. This file keeps the scope, the design notes and the acceptance criteria they share; each child lists the criteria it delivers. The task is complete, and [#116](https://github.com/losol/callis/issues/116) closes, when all six have merged. The phase-2 tasks that depend on T0038 wait for all six.
+
+The sketch's `functions` option, a custom function registry, is in no child: it needs a public contract for function definitions, which is the owner's decision ([#222](https://github.com/losol/callis/issues/222)). Until then the public API rejects it as an unsupported option.
+
 ## Scope
 
 The narrowed T0011/T0012 deliver only exists/count/where. Full phase-1 completion still requires T0041/T0042; their omitted functions and limits are not silently dropped or pulled into 0.2.
