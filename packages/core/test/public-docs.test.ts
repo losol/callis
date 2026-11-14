@@ -208,6 +208,24 @@ describe('checking the documented snippets', () => {
     ]);
   });
 
+  it('reports a name that the block imports from another package than the example', () => {
+    const withModel = `${example}\nimport { r4 } from '@callis/fhir-r4';\nexport const model: unknown = r4;`;
+    expect(
+      checkPage(
+        [
+          "import { r4 } from '@callis/fhir-r5';\nexport const model: unknown = r4;",
+          "import { evaluate } from '@callis/fhir-r4';\nexport const one: unknown[] = evaluate(null, '1');",
+        ],
+        withModel,
+      ).map(({ block, kind, name }) => [block, kind, name]),
+    ).toEqual([
+      [1, 'not-in-example-import', 'r4'],
+      [1, 'missing-import', 'r4'],
+      [2, 'not-in-example-import', 'evaluate'],
+      [2, 'missing-import', 'evaluate'],
+    ]);
+  });
+
   it('reports an import from another module', () => {
     expect(
       problemsOf(
@@ -268,8 +286,8 @@ interface SnippetProblem {
    * - `not-in-example`: the code after the imports is not part of the example.
    * - `unsupported-import`: an import after other code, or one that is not `import { a, b } from`.
    * - `other-module`: an import from a module that is not one of the {@link DOCUMENTED_MODULES}.
-   * - `not-in-example-import`: a name that the example does not import, so nothing checks that
-   *   the package exports it.
+   * - `not-in-example-import`: a name that the example does not import from the same package, so
+   *   nothing checks that the package exports it.
    * - `unused-import`: a name that the block imports but does not use.
    * - `missing-import`: a name from the example's import that the block uses, but that neither it
    *   nor an earlier block on the page imports.
@@ -289,7 +307,7 @@ const PROBLEM_TEXT: Readonly<Record<SnippetProblem['kind'], string>> = {
   'not-in-example': 'its code is not part of examples/public-api.ts',
   'unsupported-import': 'put `import { a, b } from …` first in the block, without renaming',
   'other-module': 'documented snippets import only from @callis/core and its provider packages',
-  'not-in-example-import': 'examples/public-api.ts does not import it',
+  'not-in-example-import': 'examples/public-api.ts does not import it from this package',
   'unused-import': 'the block imports it but does not use it',
   'missing-import': 'the block uses it, but neither it nor an earlier block on the page imports it',
 };
@@ -304,12 +322,21 @@ const LEADING_IMPORT = /^\s*import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*(['"])([^'
 
 /** Checks the `ts` blocks of one page, in order, against the executable example. */
 function checkPage(blocks: readonly string[], example: string): SnippetProblem[] {
-  const exampleNames = new Set(
-    [...example.matchAll(/^import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*'([^']*)';?$/gm)]
-      .filter((match) => DOCUMENTED_MODULES.has(match[2] ?? ''))
-      .flatMap((match) => importedNames(match[1] ?? ''))
-      .filter((name) => name !== undefined),
-  );
+  // The names the example imports, by package, so a block that imports a name from another
+  // package than the example does is reported.
+  const exampleImports = new Map<string, Set<string>>();
+  for (const match of example.matchAll(
+    /^import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*'([^']*)';?$/gm,
+  )) {
+    const source = match[2] ?? '';
+    if (!DOCUMENTED_MODULES.has(source)) continue;
+    const names = exampleImports.get(source) ?? new Set<string>();
+    for (const name of importedNames(match[1] ?? '')) {
+      if (name !== undefined) names.add(name);
+    }
+    exampleImports.set(source, names);
+  }
+  const exampleNames = new Set([...exampleImports.values()].flatMap((names) => [...names]));
   const imported = new Set<string>();
   const problems: SnippetProblem[] = [];
   for (const [index, code] of blocks.entries()) {
@@ -326,7 +353,7 @@ function checkPage(blocks: readonly string[], example: string): SnippetProblem[]
       for (const name of importedNames(match[1] ?? '')) {
         if (name === undefined) {
           problems.push({ block, kind: 'unsupported-import' });
-        } else if (!exampleNames.has(name)) {
+        } else if (!exampleImports.get(source)?.has(name)) {
           problems.push({ block, kind: 'not-in-example-import', name });
         } else {
           blockImports.add(name);
