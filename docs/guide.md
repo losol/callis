@@ -1,6 +1,6 @@
 # Using the minimal public API
 
-Callis provides synchronous, model-less evaluation of JSON. The initial API is intentionally small; it is not full phase-1 FHIRPath conformance. See the [conformance reports](https://callis.losol.no/conformance/r5) for measured support and the [roadmap](roadmap.md) for remaining work. No release is implied by the examples below.
+Callis provides synchronous evaluation of JSON, without a model or with a FHIR model. The initial API is intentionally small; it is not full phase-1 FHIRPath conformance. See the [conformance reports](https://callis.losol.no/conformance/r5) for measured support and the [roadmap](roadmap.md) for remaining work. No release is implied by the examples below.
 
 ## Evaluate or compile
 
@@ -91,7 +91,7 @@ export const fractionDiagnostics: readonly unknown[] = analyze('@2020-01-01 + 1.
 export const unknownFunction: readonly unknown[] = analyze('nothing()').diagnostics;
 ```
 
-The first gives one warning, `semantic/fraction-ignored`: date/time arithmetic ignores the fraction of `1.5 days`, so the expression adds one day, as [FHIRPath 3.0.0](https://hl7.org/fhirpath/STU3/#datetime-arithmetic) says and as before. The second gives one error, `semantic/unknown-function`. Analysis knows the types of literals, operators and functions, and reports what can never work: an operator whose operands it never accepts (`1 + 'a'`) is a warning, because evaluation raises `eval/type-mismatch` there; an input or argument of a type a function never accepts (`'a'.abs()`, `skip('1')`) is an error; a type that does not resolve in `is`, `as` or `ofType()` is a warning, and evaluation raises `eval/unknown-type` as before. Without a model it knows nothing about the elements of the input, so `name.given1` reports nothing; the model-aware checks (an unknown element, a choice element written with its type suffix, a leading type name that does not match the input) run inside the engine and reach the public API with the `model` option of the expanded API ([T0038](tasks/T0038-public-api-completion.md)).
+The first gives one warning, `semantic/fraction-ignored`: date/time arithmetic ignores the fraction of `1.5 days`, so the expression adds one day, as [FHIRPath 3.0.0](https://hl7.org/fhirpath/STU3/#datetime-arithmetic) says and as before. The second gives one error, `semantic/unknown-function`. Analysis knows the types of literals, operators and functions, and reports what can never work: an operator whose operands it never accepts (`1 + 'a'`) is a warning, because evaluation raises `eval/type-mismatch` there; an input or argument of a type a function never accepts (`'a'.abs()`, `skip('1')`) is an error; a type that does not resolve in `is`, `as` or `ofType()` is a warning, and evaluation raises `eval/unknown-type` as before. Without a model it knows nothing about the elements of the input, so `name.given1` reports nothing; with the `model` and `inputType` options it also checks the elements ([FHIR models](#fhir-models)).
 
 `strict: true`, a compile option, is the strict evaluation of [N1 §11](https://hl7.org/fhirpath/N1/#type-safety-and-strict-evaluation): analysis also rejects a value that may repeat where an operator or function takes a single item, equality between a single item and a collection, a value that is not a Boolean where one is expected, the operator warnings above, and `first()`, `last()`, `tail()`, `skip()`, `take()` or the indexer on `children()` or `descendants()`, whose order is undefined. It changes what compiles, never what an expression evaluates to, and a warning stays a warning.
 
@@ -113,6 +113,73 @@ export function strictCode(expression: string): string {
 ```
 
 `addedDay` is `['2020-01-02']`. `strictCode('(1 | 2) < 3')` is `semantic/singleton-expected`, `strictCode('children().first()')` is `semantic/unordered-collection`, and `strictCode('name.given < 3')` is `''`: without a model, how many items `name.given` has is unknown, and strict mode never guesses.
+
+## FHIR models
+
+Without a model, Callis navigates JSON by its keys. With one, navigation is type-directed, as the [FHIR use of FHIRPath](https://hl7.org/fhir/R5/fhirpath.html#types) requires: a choice element is reached by its name without the type suffix (`Patient.deceased`, not `deceasedBoolean`), a FHIR primitive keeps the extensions in its `_name` object, FHIR primitives compare as System values, and `is`, `as` and `ofType()` know the model's types and their inheritance. Pass the model as a compile option: `r4` from `@callis/fhir-r4`, `r5` from `@callis/fhir-r5` or `r6` from `@callis/fhir-r6`. Each package takes `@callis/core` as a peer dependency.
+
+```ts
+import { analyze, evaluate } from '@callis/core';
+import { r4 } from '@callis/fhir-r4';
+
+export const fhirPatient: Readonly<Record<string, unknown>> = {
+  resourceType: 'Patient',
+  birthDate: '1974-12-25',
+  _birthDate: {
+    extension: [
+      {
+        url: 'http://hl7.org/fhir/StructureDefinition/patient-birthTime',
+        valueDateTime: '1974-12-25T14:35:45-05:00',
+      },
+    ],
+  },
+  deceasedBoolean: false,
+};
+export const deceased: unknown[] = evaluate(fhirPatient, 'Patient.deceased', { model: r4 });
+export const birthTime: unknown[] = evaluate(fhirPatient, 'Patient.birthDate.extension.value', {
+  model: r4,
+});
+export const elementDiagnostics: readonly unknown[] = analyze('name.given1', {
+  model: r4,
+  inputType: 'Patient',
+}).diagnostics;
+```
+
+These give `[false]` (`[]` without the model, since the JSON key is `deceasedBoolean`), `['1974-12-25T14:35:45-05:00']`, and one error, `semantic/unknown-element`, which `compile()` and `evaluate()` throw as `FhirPathSemanticError`.
+
+| Option | Where | Meaning |
+| --- | --- | --- |
+| `model?: ModelProvider` | compile / one-off evaluate | The data model. Any object that implements `ModelProvider` works; its `namespace` must not be empty or `System`, which would hide the System types. |
+| `inputType?: string \| readonly string[]` | compile / analyze / one-off evaluate | The type of the input by its name in the model, such as `'Patient'`, or the types it may have. Needs `model`. |
+| `lenient?: { choiceSuffix?: boolean }` | compile / analyze / one-off evaluate | Compatibility relaxations; none by default. |
+
+With `inputType`, analysis reports when the expression is compiled: an element the type does not have (`name.given1`), a leading type name that does not match (`Encounter.status` on a Patient), and a choice element written with its type suffix, with the hint `value.ofType(Quantity)`. A name the model does not define, such as `'DeviceAlert'` in R4, is a `semantic/unknown-type` error. With several types, an element is reported only when none of them has it. In strict mode, the model also tells analysis which elements may repeat, so `Patient.name.given = 'Peter'` is `semantic/singleton-expected`. Without `inputType`, analysis checks what the expression itself makes known, such as the elements after a leading `Patient`.
+
+Choice elements follow the specification by default ([ADR-0012](adr/0012-evaluation-defaults.md)): `Observation.valueQuantity` is a semantic error where analysis knows the type and empty where it does not, and the specification's form is `Observation.value.ofType(Quantity)`. `lenient: { choiceSuffix: true }` accepts the suffixed name, as other engines do. Any other key in `lenient` raises `eval/invalid-argument`.
+
+```ts
+import { evaluate } from '@callis/core';
+import { r4 } from '@callis/fhir-r4';
+import { r6 } from '@callis/fhir-r6';
+
+export const weight: Readonly<Record<string, unknown>> = {
+  resourceType: 'Observation',
+  valueQuantity: { value: 185, unit: 'lbs', system: 'http://unitsofmeasure.org', code: '[lb_av]' },
+};
+export const suffixedUnit: unknown[] = evaluate(weight, 'Observation.valueQuantity.unit', {
+  model: r4,
+  lenient: { choiceSuffix: true },
+});
+export const alertLabel: unknown[] = evaluate(
+  { resourceType: 'DeviceAlert', label: 'SpO2 low' },
+  'label',
+  { model: r6, inputType: 'DeviceAlert' },
+);
+```
+
+These give `['lbs']` and `['SpO2 low']`. Results stay plain: a FHIR primitive comes out as its JSON value, and one that has only extensions as its `_name` object.
+
+**Versions.** The engine has no version-specific code; R4, R5 and R6 differ only in the providers' data. R4 (4.0.1) and R5 (5.0.0) are measured with the HL7 test suites ([R4 report](https://callis.losol.no/conformance/r4), [R5 report](https://callis.losol.no/conformance/r5)). R6 is best effort: `r6` is built from the draft [`6.0.0-snapshot1`](https://hl7.org/fhir/6.0.0-snapshot1/fhirpath.html), not final R6, and the engine's own tests evaluate with it. There is no official R6 FHIRPath suite, so there is no R6 conformance result. Known gaps of R6 in Callis: the Type Factory (`%factory`), General Service API (`%server`) and Terminology Service API (`%terminologies`), which the draft moved to an HL7 incubator guide and which wait for that guide to be published ([T0032](tasks/T0032-fhir-phase2.md) adds the R4 and R5 ones), and the new `weight()` function, which waits for final R6; `%profile` can be passed as a variable. The [roadmap](roadmap.md#fhir-versions) lists every difference between the draft and R5 and how each is handled.
 
 ## Current support and deferred API
 
@@ -208,9 +275,9 @@ export const containerReference: unknown[] = evaluate(
 );
 ```
 
-These give `['Acme']` and `['#o1']`. `%resource` and `%rootResource` are the input unless the `resource` and `rootResource` options say otherwise, as in the second example, which evaluates a contained resource on its own. `hasValue()` is true for a single item with a primitive value and false otherwise. Without a model, `extension()` finds the extensions of resources and complex values, but not those of a primitive, which sit in its `_name` object; the model option of the expanded API (T0038) reads those. `memberOf()`, `subsumes()`, `subsumedBy()`, `conformsTo()` and `htmlChecks()` compile, but return empty in the public API, which has no hooks yet; the engine's host hooks ([T0021](tasks/T0021-hooks-async.md)) reach it with the expanded API (T0038). The interpretations behind these are in the [spec notes](spec-notes.md#fhir-functions).
+These give `['Acme']` and `['#o1']`. `%resource` and `%rootResource` are the input unless the `resource` and `rootResource` options say otherwise, as in the second example, which evaluates a contained resource on its own. `hasValue()` is true for a single item with a primitive value and false otherwise. Without a model, `extension()` finds the extensions of resources and complex values, but not those of a primitive, which sit in its `_name` object; with the `model` option it finds those too ([FHIR models](#fhir-models)). `memberOf()`, `subsumes()`, `subsumedBy()`, `conformsTo()` and `htmlChecks()` compile, but return empty in the public API, which has no hooks yet; the engine's host hooks ([T0021](tasks/T0021-hooks-async.md)) reach it with the expanded API (T0038). The interpretations behind these are in the [spec notes](spec-notes.md#fhir-functions).
 
-The public surface has no parser, AST input/property, typed output mode, async evaluation, hooks, model option, custom function registry, lenient option or cache; the analyzer and the strict option are described above. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages. The engine evaluates with a model internally since [T0018](tasks/T0018-model-aware-evaluation.md): choice elements, FHIR primitives with their `_name` extensions, FHIR values as System values and the root identifier as a type with inheritance, which the conformance runner measures with the R4 and R5 providers; the engine's tests also run it against the R6 provider. The public `model` and `lenient` options arrive with the expanded API (T0038); a model provider export does not imply them yet.
+The public surface has no parser, AST input/property, typed output mode, async evaluation, hooks, custom function registry ([#222](https://github.com/losol/callis/issues/222)) or cache; the analyzer, the strict option and the model options are described above. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages. The remaining options arrive with the [T0038](tasks/T0038-public-api-completion.md#split) tasks.
 
 The examples are executed by the public documentation tests. Handwritten TSDoc and this small guide describe the initial API; a generated API reference is deferred with the expanded API.
 
@@ -237,6 +304,6 @@ The handwritten API guide and TSDoc are the reference decision for this small re
 
 ## R6 model metadata
 
-Callis supports FHIR R4, R5 and R6, with R6 as best effort. [T0039](tasks/T0039-fhir-r6-model.md) and [T0040](tasks/T0040-fhir-r6-validation.md) delivered a real R6 provider, `@callis/fhir-r6`, from the pinned HL7 `6.0.0-snapshot1` September 2026 draft source, and it shipped in the [five-package first release](../RELEASING.md#five-package-first-release). This is draft model metadata, not final R6 stability, a supported public model evaluation option, FHIR validation or an R6 conformance result. The current public evaluator remains model-less; the engine's model-aware evaluation (T0018) reaches the public API with T0038. The engine's own tests run model-aware evaluation against the R6 provider alongside R4 and R5, which is engine-tested provider support for the draft snapshot, not an R6 conformance result: there is no official R6 suite, and the existing R4/R5 conformance reports measure their named suites only.
+Callis supports FHIR R4, R5 and R6, with R6 as best effort. [T0039](tasks/T0039-fhir-r6-model.md) and [T0040](tasks/T0040-fhir-r6-validation.md) delivered a real R6 provider, `@callis/fhir-r6`, from the pinned HL7 `6.0.0-snapshot1` September 2026 draft source, and it shipped in the [five-package first release](../RELEASING.md#five-package-first-release). This is draft model metadata, not final R6 stability, FHIR validation or an R6 conformance result. It is passed to the public API as the `model` option like `r4` and `r5` ([FHIR models](#fhir-models)). The engine's own tests run model-aware evaluation against the R6 provider alongside R4 and R5, which is engine-tested provider support for the draft snapshot, not an R6 conformance result: there is no official R6 suite, and the existing R4/R5 conformance reports measure their named suites only.
 
-R4, R5 and R6 use the same named-provider API (`r4`, `r5`, `r6`), with `getType(name)` and `getElement(type, name)` for metadata lookup. These are not generated resource classes or a new evaluator API. Where the R6 draft's FHIRPath page differs from R5, and which later tasks handle those differences, is listed under [FHIR versions](roadmap.md#fhir-versions) in the roadmap.
+R4, R5 and R6 use the same named-provider API (`r4`, `r5`, `r6`), with `getType(name)` and `getElement(type, name)` for metadata lookup. These are not generated resource classes; the evaluator takes any of them through the same `model` option. Where the R6 draft's FHIRPath page differs from R5, and which later tasks handle those differences, is listed under [FHIR versions](roadmap.md#fhir-versions) in the roadmap.

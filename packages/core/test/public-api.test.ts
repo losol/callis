@@ -120,28 +120,22 @@ describe('public synchronous model-less API', () => {
     }
   });
 
-  it.each([
-    'model',
-    'functions',
-    'hooks',
-    'inputType',
-    'lenient',
-    'cache',
-    'output',
-    'now',
-    'limits',
-  ])('rejects deferred %s options rather than silently ignoring them', (key) => {
-    const options = { [key]: undefined };
-    expect(() => compile('1', options as never)).toThrow(
-      expect.objectContaining({ code: 'eval/invalid-argument' }),
-    );
-    expect(() => evaluate(null, '1', options as never)).toThrow(
-      expect.objectContaining({ code: 'eval/invalid-argument' }),
-    );
-    expect(() => compile('1').evaluate(null, options as never)).toThrow(
-      expect.objectContaining({ code: 'eval/invalid-argument' }),
-    );
-  });
+  // The model options are in public-model-options.test.ts; functions waits for #222.
+  it.each(['functions', 'hooks', 'cache', 'output', 'now', 'limits'])(
+    'rejects deferred %s options rather than silently ignoring them',
+    (key) => {
+      const options = { [key]: undefined };
+      expect(() => compile('1', options as never)).toThrow(
+        expect.objectContaining({ code: 'eval/invalid-argument' }),
+      );
+      expect(() => evaluate(null, '1', options as never)).toThrow(
+        expect.objectContaining({ code: 'eval/invalid-argument' }),
+      );
+      expect(() => compile('1').evaluate(null, options as never)).toThrow(
+        expect.objectContaining({ code: 'eval/invalid-argument' }),
+      );
+    },
+  );
 
   // docs/tasks/T0024-static-analysis.md: analyze() and the strict option.
   it('analyzes without compiling, and compiles strictly on request', () => {
@@ -251,7 +245,9 @@ describe('public synchronous model-less API', () => {
   it('keeps public types narrow without exposing deferred internal contracts', () => {
     expectTypeOf(compile('1')).toEqualTypeOf<CompiledExpression>();
     expectTypeOf(evaluate(null, '1')).toEqualTypeOf<unknown[]>();
-    expectTypeOf<keyof CompileOptions>().toEqualTypeOf<'units' | 'strict'>();
+    expectTypeOf<keyof CompileOptions>().toEqualTypeOf<
+      'model' | 'inputType' | 'lenient' | 'units' | 'strict'
+    >();
     expectTypeOf<keyof EvaluateOptions>().toEqualTypeOf<
       'variables' | 'resource' | 'rootResource' | 'timezoneOffset' | 'decimalOutput'
     >();

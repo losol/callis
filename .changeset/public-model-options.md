@@ -1,0 +1,5 @@
+---
+'@callis/core': minor
+---
+
+Add the `model`, `inputType` and `lenient` options to the public `analyze()`, `compile()` and `evaluate()`. With `model: r4` (or `r5`, `r6` from the `@callis/fhir-*` packages, or any other `ModelProvider`), navigation follows the FHIR model: `Patient.deceased` finds `deceasedBoolean`, a FHIR primitive keeps the extensions in its `_name` object, FHIR primitives compare as System values, and `is`, `as` and `ofType()` know the model's types. `inputType: 'Patient'` (or several type names) makes analysis check element names against the model when the expression is compiled, so `name.given1` is `semantic/unknown-element`, and in strict mode it knows which elements may repeat. `lenient: { choiceSuffix: true }` accepts a choice element written with its type suffix, such as `Observation.valueQuantity`. A model whose `namespace` is empty or `System`, `inputType` without a model, and an unknown key in `lenient` raise `eval/invalid-argument`. The new `LenientOptions` type is exported. Evaluation without these options is unchanged.

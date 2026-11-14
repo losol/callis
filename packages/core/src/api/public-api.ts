@@ -1,5 +1,9 @@
-/** The small synchronous, model-less facade. Internal consumers use api/compile.ts directly. */
+/**
+ * The synchronous public facade: it validates the options and passes them to the internal API.
+ * Internal consumers use api/compile.ts directly.
+ */
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
+import type { ModelProvider } from '../model/model-provider.ts';
 import { requireSync } from '../runtime/maybe-promise.ts';
 import type { UnitSystem } from '../values/quantity/unit-system.ts';
 import {
@@ -8,12 +12,38 @@ import {
   compile as compileInternal,
   type CompileOptions as InternalCompileOptions,
   type EvaluateOptions as InternalEvaluateOptions,
+  type LenientOptions,
 } from './compile.ts';
 
-export type { AnalysisResult } from './compile.ts';
+export type { AnalysisResult, LenientOptions } from './compile.ts';
 
 /** Options fixed for the lifetime of a compiled expression. */
 export interface CompileOptions {
+  /**
+   * The data model, such as `r4` from `@callis/fhir-r4`, `r5` or `r6`. With a model, navigation
+   * is type-directed: a choice element is reached by its name (`Observation.value`), a FHIR
+   * primitive keeps its extensions, FHIR primitives compare as System values, and `is`, `as` and
+   * `ofType()` know the model's types and their inheritance. Without one, plain JSON is navigated
+   * by its keys. Its `namespace` must not be empty or `System`.
+   * @see https://hl7.org/fhirpath/N1/#models
+   * @see https://hl7.org/fhir/R5/fhirpath.html#types
+   */
+  readonly model?: ModelProvider;
+  /**
+   * The type of the input by its name in the model (`'Patient'`), or the types it may have
+   * (`['Period', 'Timing']`), for model-aware analysis: an element the type does not have, a
+   * leading type name that does not match, and in strict mode an element that may repeat where
+   * one item is expected, are reported when the expression is compiled. A name the model does not
+   * define is a `semantic/unknown-type` error. Needs `model`.
+   */
+  readonly inputType?: string | readonly string[];
+  /**
+   * Compatibility relaxations of the spec's rules; none by default. `choiceSuffix: true` accepts
+   * a choice element written with its type suffix (`Observation.valueQuantity`), as other engines
+   * do, where the spec's form is `Observation.value.ofType(Quantity)`.
+   * @see https://github.com/losol/callis/blob/main/docs/adr/0012-evaluation-defaults.md
+   */
+  readonly lenient?: LenientOptions;
   /** Pure synchronous unit provider; defaults to the minimal built-in unit system. */
   readonly units?: UnitSystem;
   /**
@@ -24,8 +54,9 @@ export interface CompileOptions {
    * item and a collection, and `first()`, `last()`, `tail()`, `skip()`, `take()` or the indexer
    * on `children()` or `descendants()`, whose order is undefined
    * (`semantic/unordered-collection`). Without a model, analysis knows the types of literals,
-   * operators and functions, not of the input's elements. It changes what compiles, never what
-   * an expression evaluates to. Off by default.
+   * operators and functions, not of the input's elements; with `model` it also knows which
+   * elements may repeat, wherever it knows their type (from `inputType` or a leading type name).
+   * It changes what compiles, never what an expression evaluates to. Off by default.
    */
   readonly strict?: boolean;
 }
@@ -73,11 +104,11 @@ export interface CompiledExpression {
 }
 
 /**
- * Analyzes model-less FHIRPath without compiling it, for editors and other tooling: every
- * problem that {@link compile} throws, plus warnings, as diagnostics in source order. A syntax
- * error is a diagnostic too, with its `syntax/…` code. Errors are what `compile()` rejects;
- * warnings (`semantic/unknown-type` for a type that does not resolve, `semantic/fraction-ignored`
- * when date/time arithmetic ignores part of a quantity) leave the expression valid.
+ * Analyzes FHIRPath without compiling it, for editors and other tooling: every problem that
+ * {@link compile} throws, plus warnings, as diagnostics in source order. A syntax error is a
+ * diagnostic too, with its `syntax/…` code. Errors are what `compile()` rejects; warnings
+ * (`semantic/unknown-type` for a type that does not resolve, `semantic/fraction-ignored` when
+ * date/time arithmetic ignores part of a quantity) leave the expression valid.
  * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for unsupported options.
  * @example
  * analyze('@2020-01-01 + 1.5 days').diagnostics; // [{ severity: 'warning', code: 'semantic/fraction-ignored', … }]
@@ -90,13 +121,14 @@ export function analyze(expression: string, options: CompileOptions = {}): Analy
 }
 
 /**
- * Compiles model-less FHIRPath for repeated synchronous evaluation.
+ * Compiles FHIRPath for repeated synchronous evaluation, on plain JSON or with a `model`.
  * Only the currently implemented operators and built-in functions are available.
  * @throws {@link FhirPathSyntaxError} for invalid syntax.
  * @throws {@link FhirPathSemanticError} for what static analysis rejects, with every diagnostic
  *   in `diagnostics`: an unknown function, a wrong number of arguments, a type argument that is
  *   not a type name, operands or arguments of a type the operator or function never accepts
- *   (`1 + 'a'`), and in strict mode the unsafe uses of N1 §11.
+ *   (`1 + 'a'`), with `model` and `inputType` an element the input type does not have or an
+ *   input type the model does not define, and in strict mode the unsafe uses of N1 §11.
  * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for unsupported options.
  * @example
  * const names = compile('Patient.name.given');
@@ -116,7 +148,7 @@ export function compile(expression: string, options: CompileOptions = {}): Compi
 }
 
 /**
- * Compiles and evaluates model-less FHIRPath synchronously, without a compile cache.
+ * Compiles and evaluates FHIRPath synchronously, without a compile cache.
  * Dates/times are FHIR strings; quantities have `{ value, unit, system?, code? }` shape.
  * Use `decimalOutput: 'string'` for exact Decimal text suitable for JSON serialization.
  * Errors propagate synchronously, including errors from a supplied unit provider.
@@ -136,7 +168,7 @@ export function evaluate(
   );
 }
 
-const COMPILE_OPTION_KEYS: readonly string[] = ['units', 'strict'];
+const COMPILE_OPTION_KEYS: readonly string[] = ['model', 'inputType', 'lenient', 'units', 'strict'];
 
 const EVALUATE_OPTION_KEYS: readonly string[] = [
   'variables',
@@ -146,19 +178,39 @@ const EVALUATE_OPTION_KEYS: readonly string[] = [
   'decimalOutput',
 ];
 
+const LENIENT_OPTION_KEYS: readonly string[] = ['choiceSuffix'];
+
+/** The methods of the `ModelProvider` contract. */
+const MODEL_METHODS = [
+  'getType',
+  'getRootType',
+  'getElement',
+  'getElements',
+  'isSubtypeOf',
+  'getSystemType',
+] as const;
+
 function checkExpression(expression: unknown): asserts expression is string {
   if (typeof expression !== 'string') {
     throw invalid('Expected the expression to be a string');
   }
 }
 
-function checkOptions(options: unknown, allowed: readonly string[]): asserts options is object {
+/**
+ * Checks that `options` is a plain options object with only the allowed own keys. `name` is the
+ * option that holds a nested options object, such as `lenient`.
+ */
+function checkOptions(
+  options: unknown,
+  allowed: readonly string[],
+  name?: string,
+): asserts options is object {
   if (typeof options !== 'object' || options === null || Array.isArray(options)) {
-    throw invalid('Expected options to be an object');
+    throw invalid(`Expected ${name ?? 'options'} to be an object`);
   }
   for (const key of Reflect.ownKeys(options)) {
     if (typeof key !== 'string' || !allowed.includes(key)) {
-      throw invalid(`Unsupported option: ${String(key)}`);
+      throw invalid(`Unsupported option: ${name === undefined ? '' : `${name}.`}${String(key)}`);
     }
   }
 }
@@ -172,9 +224,78 @@ function compileOptions(options: CompileOptions): InternalCompileOptions {
   if (strict !== undefined && typeof strict !== 'boolean') {
     throw invalid('Expected strict to be a boolean');
   }
-  const strictOption = strict === undefined ? {} : { strict };
-  const units = own(options, 'units');
-  if (units === undefined) return strictOption;
+  const model = checkModel(own(options, 'model'));
+  const inputType = checkInputType(own(options, 'inputType'), model);
+  const lenient = checkLenient(own(options, 'lenient'));
+  return {
+    ...(strict === undefined ? {} : { strict }),
+    ...(model === undefined ? {} : { model }),
+    ...(inputType === undefined ? {} : { inputType }),
+    ...(lenient === undefined ? {} : { lenient }),
+    ...unitsOption(own(options, 'units')),
+  };
+}
+
+/**
+ * The `model` option, checked to implement the `ModelProvider` contract. The provider is not
+ * wrapped: it is synchronous and precomputed by contract, and it runs on the navigation hot path.
+ * A `System` namespace would make the model's types look like System types and shadow
+ * `System.String` and the others in type specifiers ([#60](https://github.com/losol/callis/issues/60)).
+ */
+function checkModel(model: ModelProvider | undefined): ModelProvider | undefined {
+  if (model === undefined) return undefined;
+  if (
+    typeof model !== 'object' ||
+    model === null ||
+    typeof model.version !== 'string' ||
+    MODEL_METHODS.some((method) => typeof model[method] !== 'function')
+  ) {
+    throw invalid('Expected model to implement the ModelProvider contract');
+  }
+  const namespace: unknown = model.namespace;
+  if (typeof namespace !== 'string' || namespace === '' || namespace === 'System') {
+    throw invalid(
+      `Expected the model namespace to be a name other than System, not ${JSON.stringify(namespace)}`,
+    );
+  }
+  return model;
+}
+
+/**
+ * The `inputType` option: a type name or an array of them. An array is copied, so analysis reads
+ * exactly the names that were checked, even from an array whose elements change when read.
+ */
+function checkInputType(
+  inputType: string | readonly string[] | undefined,
+  model: ModelProvider | undefined,
+): string | readonly string[] | undefined {
+  if (inputType === undefined) return undefined;
+  if (model === undefined) {
+    throw invalid('The inputType option needs a model');
+  }
+  if (typeof inputType === 'string') return inputType;
+  // Array.from() turns holes into undefined, which the check then rejects.
+  const names: unknown[] = Array.isArray(inputType) ? Array.from(inputType) : [undefined];
+  if (!names.every((name) => typeof name === 'string')) {
+    throw invalid('Expected inputType to be a type name or an array of type names');
+  }
+  return Object.freeze(names.filter((name) => typeof name === 'string'));
+}
+
+/** The `lenient` option, with only the relaxations that exist. */
+function checkLenient(lenient: LenientOptions | undefined): LenientOptions | undefined {
+  if (lenient === undefined) return undefined;
+  checkOptions(lenient, LENIENT_OPTION_KEYS, 'lenient');
+  const choiceSuffix = own(lenient, 'choiceSuffix');
+  if (choiceSuffix !== undefined && typeof choiceSuffix !== 'boolean') {
+    throw invalid('Expected lenient.choiceSuffix to be a boolean');
+  }
+  return choiceSuffix === undefined ? {} : { choiceSuffix };
+}
+
+/** The `units` option, guarded at the host boundary. */
+function unitsOption(units: UnitSystem | undefined): { readonly units?: UnitSystem } {
+  if (units === undefined) return {};
   if (
     typeof units !== 'object' ||
     units === null ||
@@ -198,7 +319,7 @@ function compileOptions(options: CompileOptions): InternalCompileOptions {
           compare: (a, from, b, to) => requireSync(units.compare?.(a, from, b, to)),
         }),
   };
-  return { ...strictOption, units: synchronousUnits };
+  return { units: synchronousUnits };
 }
 
 function evaluateOptions(options: EvaluateOptions): InternalEvaluateOptions {

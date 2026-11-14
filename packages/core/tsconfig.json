@@ -3,7 +3,11 @@
   "include": ["src", "test"],
   "compilerOptions": {
     "paths": {
-      "@callis/core": ["./src/index.ts"]
+      "@callis/core": ["./src/index.ts"],
+      "@callis/ucum": ["../ucum/src/index.ts"],
+      "@callis/fhir-r4": ["../fhir-r4/src/index.ts"],
+      "@callis/fhir-r5": ["../fhir-r5/src/index.ts"],
+      "@callis/fhir-r6": ["../fhir-r6/src/index.ts"]
     }
   }
 }
