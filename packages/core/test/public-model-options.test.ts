@@ -224,6 +224,7 @@ describe('public model-aware option validation', () => {
     ['an array with a non-name', { model: r4, inputType: ['Patient', 1] }],
     // biome-ignore lint/suspicious/noSparseArray: a hole is not a type name.
     ['an array with a hole', { model: r4, inputType: [, 'Patient'] }],
+    ['an empty array', { model: r4, inputType: [] }],
     ['a set', { model: r4, inputType: new Set(['Patient']) }],
   ])('rejects an inputType %s', (_, options) => {
     expect(codeOf(() => compile('1', options as never))).toBe('eval/invalid-argument');
@@ -242,7 +243,6 @@ describe('public model-aware option validation', () => {
     expect(codeOf(() => compile('status', { model: r4, inputType: changing }))).toBe(
       'semantic/unknown-element',
     );
-    expect(analyze('name', { model: r4, inputType: [] }).diagnostics).toEqual([]);
   });
 
   it.each([
@@ -254,6 +254,24 @@ describe('public model-aware option validation', () => {
     const options = { model: r4, lenient } as never;
     expect(codeOf(() => compile('1', options))).toBe('eval/invalid-argument');
     expect(codeOf(() => evaluate(null, '1', options))).toBe('eval/invalid-argument');
+  });
+
+  it('takes the model options when compiling, not per evaluation', () => {
+    for (const options of [{ model: r4 }, { inputType: 'Patient' }, { lenient: {} }]) {
+      expect(codeOf(() => compile('id').evaluate(patient, options as never))).toBe(
+        'eval/invalid-argument',
+      );
+    }
+  });
+
+  // inputType describes the input to analysis; evaluation types it from the data
+  // (https://github.com/losol/callis/issues/224).
+  it('does not type an input that does not name its type', () => {
+    const period = { start: '2020-01-01' };
+    const options = { model: r4, inputType: 'Period' };
+    expect(analyze('start > @2019', options).diagnostics).toEqual([]);
+    expect(codeOf(() => evaluate(period, 'start > @2019', options))).toBe('eval/type-mismatch');
+    expect(evaluate(period, 'start is FHIR.dateTime', options)).toEqual([false]);
   });
 
   it('treats an option that is undefined as not given', () => {

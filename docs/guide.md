@@ -149,11 +149,13 @@ These give `[false]` (`[]` without the model, since the JSON key is `deceasedBoo
 
 | Option | Where | Meaning |
 | --- | --- | --- |
-| `model?: ModelProvider` | compile / one-off evaluate | The data model. Any object that implements `ModelProvider` works; its `namespace` must not be empty or `System`, which would hide the System types. |
-| `inputType?: string \| readonly string[]` | compile / analyze / one-off evaluate | The type of the input by its name in the model, such as `'Patient'`, or the types it may have. Needs `model`. |
-| `lenient?: { choiceSuffix?: boolean }` | compile / analyze / one-off evaluate | Compatibility relaxations; none by default. |
+| `model?: ModelProvider` | compile / analyze / one-off evaluate | The data model. Any object that implements `ModelProvider` works; its `namespace` must not be empty or `System`, which would hide the System types. |
+| `inputType?: string \| readonly string[]` | compile / analyze / one-off evaluate | The type of the input by its name in the model, such as `'Patient'`, or the types it may have, for analysis. Needs `model` and at least one name. |
+| `lenient?: { choiceSuffix?: boolean }` | compile / analyze / one-off evaluate | Compatibility relaxations; none by default, and none has an effect without `model`. |
 
 With `inputType`, analysis reports when the expression is compiled: an element the type does not have (`name.given1`), a leading type name that does not match (`Encounter.status` on a Patient), and a choice element written with its type suffix, with the hint `value.ofType(Quantity)`. A name the model does not define, such as `'DeviceAlert'` in R4, is a `semantic/unknown-type` error. With several types, an element is reported only when none of them has it. In strict mode, the model also tells analysis which elements may repeat, so `Patient.name.given = 'Peter'` is `semantic/singleton-expected`. Without `inputType`, analysis checks what the expression itself makes known, such as the elements after a leading `Patient`.
+
+`inputType` describes the input to analysis only. Evaluation types the input from the data: a resource by its own `resourceType`, and a node by the element it was reached through. An input that does not say its type, such as a bare `Period` object, is evaluated as untyped JSON whatever `inputType` says, so analysis and evaluation can disagree on it; evaluate the resource that contains it instead ([#224](https://github.com/losol/callis/issues/224)).
 
 Choice elements follow the specification by default ([ADR-0012](adr/0012-evaluation-defaults.md)): `Observation.valueQuantity` is a semantic error where analysis knows the type and empty where it does not, and the specification's form is `Observation.value.ofType(Quantity)`. `lenient: { choiceSuffix: true }` accepts the suffixed name, as other engines do. Any other key in `lenient` raises `eval/invalid-argument`.
 

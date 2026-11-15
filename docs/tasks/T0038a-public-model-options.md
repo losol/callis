@@ -20,7 +20,7 @@ Model-aware evaluation and analysis through the public API: the `model`, `inputT
   - `lenient?: LenientOptions`, with `choiceSuffix?: boolean` ([ADR-0012](../adr/0012-evaluation-defaults.md)).
 - Option validation, each failure `eval/invalid-argument`:
   - `model`: an object with a `namespace` that is a non-empty string other than `System` ([#60](https://github.com/losol/callis/issues/60)), a string `version`, and the six methods of `ModelProvider`.
-  - `inputType`: a string or an array of strings, and only with `model`.
+  - `inputType`: a string or a non-empty array of strings, and only with `model`.
   - `lenient`: an object whose only option is a boolean `choiceSuffix`. Any other key is rejected, so a future relaxation is never a silent no-op.
 - `src/index.ts` exports the `LenientOptions` type.
 - Tests through the public entry point with the real `r4`, `r5` and `r6` providers: typed navigation of a choice element and of a primitive with extensions, analysis with `inputType` including a case where the versions differ, `lenient.choiceSuffix`, strict mode with a model, and every validation error. Type tests for the new options.
@@ -34,7 +34,8 @@ Not in scope: the evaluation options `hooks`, `signal`, `concurrency`, `now` and
 - The facade validates the options and passes them to the internal API (`api/compile.ts`), which implements them since T0018 and T0024. The internal API keeps working without the checks; the conformance runner uses it until [T0038e](T0038e-public-conformance-adapter.md).
 - The model is not wrapped, unlike the unit system: `ModelProvider` is synchronous, pure and precomputed by contract, and its methods run on the navigation hot path. The facade checks its shape once per compilation.
 - An `inputType` array is copied after it is checked, so analysis reads exactly the names that were checked. A type name that the model does not define is a `semantic/unknown-type` error from the analysis, not an invalid option.
-- Data that the model has no type for, such as an object without a known `resourceType`, is still navigated by its JSON keys, as without a model ([T0018](T0018-model-aware-evaluation.md)).
+- `inputType` describes the input to analysis only, as in the internal API. Evaluation types the input from the data, so an input that does not say its type, such as a bare `Period` object, is evaluated as untyped: navigated by its JSON keys, but without the model-less conveniences, so `start > @2019` on `{ start: '2020-01-01' }` raises `eval/type-mismatch` with a model and is true without one ([T0018](T0018-model-aware-evaluation.md)). Whether evaluation should type such an input from `inputType` is [#224](https://github.com/losol/callis/issues/224).
+- An empty `inputType` array is rejected rather than read as no type, so a later meaning for it stays open. `lenient` without `model` is accepted and has no effect, so one options object can serve evaluations with and without a model.
 
 ## Acceptance criteria
 

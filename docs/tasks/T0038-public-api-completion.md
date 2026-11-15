@@ -18,7 +18,7 @@ The task touches every public entry point, the conformance runner and the user d
 
 - [T0038a](T0038a-public-model-options.md): the `model`, `inputType` and `lenient` compile options, with the model validation of [#60](https://github.com/losol/callis/issues/60).
 - [T0038b](T0038b-public-async-hooks-limits.md): `evaluateAsync()` and the `hooks`, `signal`, `concurrency`, `now` and `limits` evaluation options, including `limits.maxCollectionSize`.
-- [T0038c](T0038c-public-parser-cache.md): `parse()`, AST input, the compiled `ast` and the compile cache.
+- [T0038c](T0038c-public-parser-cache.md): `parse()`, AST input, the compiled `ast`, the `knownVariables` compile option and the compile cache.
 - [T0038d](T0038d-public-typed-output.md): `output: 'typed'`, its overloads and the public typed values.
 - [T0038e](T0038e-public-conformance-adapter.md): the conformance runner's adapter on the public API.
 - [T0038f](T0038f-phase-1-documentation.md): the README quick start, the guide, the API reference decision, the examples and the per-phase support documentation.

@@ -10,13 +10,14 @@ Part of the [roadmap](../roadmap.md). Phase 1 · wave 7 · size M.
 
 ## Goal
 
-Expressions as data for tooling, and repeated string evaluation without repeated compilation: `parse()`, AST input, the compiled `ast` property and the bounded compile cache of the [T0038 sketch](T0038-public-api-completion.md#public-api-sketch). The parser counts chains towards its nesting limit since [#201](https://github.com/losol/callis/pull/201), which resolved the [#107](https://github.com/losol/callis/issues/107) prerequisite.
+Expressions as data for tooling, and repeated string evaluation without repeated compilation: `parse()`, AST input, the compiled `ast` property, compile-time variable names and the bounded compile cache of the [T0038 sketch](T0038-public-api-completion.md#public-api-sketch). The parser counts chains towards its nesting limit since [#201](https://github.com/losol/callis/pull/201), which resolved the [#107](https://github.com/losol/callis/issues/107) prerequisite.
 
 ## Scope
 
 - `parse(expression, options?)` with `ParseOptions`, returning the public, immutable AST: `ExpressionNode` and its node types, with spans.
 - `analyze()` and `compile()` accept an `ExpressionNode`. A hand-made tree is checked before analysis: known node kinds, own properties only, and the nesting limit (`syntax/nesting-limit`, never a `RangeError`).
 - `CompiledExpression.ast`, and `evaluate()` and `evaluateAsync()` with a `CompiledExpression` made by `compile()`.
+- The `knownVariables` compile option of the sketch: the names of the `%variables` the evaluations will supply, so analysis can report an unknown `%name` when the expression is compiled instead of `eval/undefined-variable` when it is evaluated. Decide how it combines with the FHIR environment variables (`%resource`, `%sct`, …), which are always known.
 - The compile cache: `evaluate()` with a string reuses compiled expressions from a bounded LRU cache, keyed by the expression and the identity of its compile options. Its size is configurable, and it can be turned off.
 - Tests, including bounded-tree regressions for `parse()` and for hand-made trees, type tests, packed consumers, a guide section on the parser and the cache, and a `minor` changeset.
 
@@ -37,3 +38,4 @@ And for this child:
 
 - [ ] `compile(parse(expression))` evaluates like `compile(expression)`, and the AST cannot be changed through the public API.
 - [ ] The cache never returns an expression compiled with other options, stays within its size, and can be turned off.
+- [ ] With `knownVariables`, a `%name` that is neither listed nor an environment variable is reported when the expression is compiled; without it, variables are checked at evaluation as before.

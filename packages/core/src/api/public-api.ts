@@ -31,16 +31,21 @@ export interface CompileOptions {
   readonly model?: ModelProvider;
   /**
    * The type of the input by its name in the model (`'Patient'`), or the types it may have
-   * (`['Period', 'Timing']`), for model-aware analysis: an element the type does not have, a
+   * (`['Patient', 'Group']`), for model-aware analysis: an element the type does not have, a
    * leading type name that does not match, and in strict mode an element that may repeat where
    * one item is expected, are reported when the expression is compiled. A name the model does not
-   * define is a `semantic/unknown-type` error. Needs `model`.
+   * define is a `semantic/unknown-type` error. Needs `model`, and at least one name.
+   *
+   * It describes the input to analysis only. Evaluation types the input from the data itself
+   * (for FHIR, a resource's own `resourceType`), so an input that does not say its type, such as
+   * a bare `Period` object, is evaluated as untyped JSON whatever `inputType` says.
    */
   readonly inputType?: string | readonly string[];
   /**
    * Compatibility relaxations of the spec's rules; none by default. `choiceSuffix: true` accepts
    * a choice element written with its type suffix (`Observation.valueQuantity`), as other engines
-   * do, where the spec's form is `Observation.value.ofType(Quantity)`.
+   * do, where the spec's form is `Observation.value.ofType(Quantity)`. Without `model` it has no
+   * effect, since plain JSON is navigated by its keys anyway.
    * @see https://github.com/losol/callis/blob/main/docs/adr/0012-evaluation-defaults.md
    */
   readonly lenient?: LenientOptions;
@@ -106,9 +111,11 @@ export interface CompiledExpression {
 /**
  * Analyzes FHIRPath without compiling it, for editors and other tooling: every problem that
  * {@link compile} throws, plus warnings, as diagnostics in source order. A syntax error is a
- * diagnostic too, with its `syntax/…` code. Errors are what `compile()` rejects; warnings
- * (`semantic/unknown-type` for a type that does not resolve, `semantic/fraction-ignored` when
- * date/time arithmetic ignores part of a quantity) leave the expression valid.
+ * diagnostic too, with its `syntax/…` code. Errors are what `compile()` rejects, including an
+ * `inputType` the model does not define (`semantic/unknown-type`); warnings
+ * (`semantic/unknown-type` for a type in `is`, `as` or `ofType()` that does not resolve,
+ * `semantic/fraction-ignored` when date/time arithmetic ignores part of a quantity) leave the
+ * expression valid.
  * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for unsupported options.
  * @example
  * analyze('@2020-01-01 + 1.5 days').diagnostics; // [{ severity: 'warning', code: 'semantic/fraction-ignored', … }]
@@ -262,8 +269,10 @@ function checkModel(model: ModelProvider | undefined): ModelProvider | undefined
 }
 
 /**
- * The `inputType` option: a type name or an array of them. An array is copied, so analysis reads
- * exactly the names that were checked, even from an array whose elements change when read.
+ * The `inputType` option: a type name or a non-empty array of them. An array is copied, so
+ * analysis reads exactly the names that were checked, even from an array whose elements change
+ * when read. An empty array is rejected rather than read as no type, so a later meaning for it
+ * stays open.
  */
 function checkInputType(
   inputType: string | readonly string[] | undefined,
@@ -276,8 +285,8 @@ function checkInputType(
   if (typeof inputType === 'string') return inputType;
   // Array.from() turns holes into undefined, which the check then rejects.
   const names: unknown[] = Array.isArray(inputType) ? Array.from(inputType) : [undefined];
-  if (!names.every((name) => typeof name === 'string')) {
-    throw invalid('Expected inputType to be a type name or an array of type names');
+  if (names.length === 0 || !names.every((name) => typeof name === 'string')) {
+    throw invalid('Expected inputType to be a type name or a non-empty array of type names');
   }
   return Object.freeze(names.filter((name) => typeof name === 'string'));
 }
