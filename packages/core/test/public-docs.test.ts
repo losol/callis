@@ -4,8 +4,12 @@ import { describe, expect, it } from 'vitest';
 import {
   adaTwice,
   addedDay,
+  alertLabel,
   allGiven,
+  birthTime,
   containerReference,
+  deceased,
+  elementDiagnostics,
   exactDecimal,
   expressionError,
   filteredGiven,
@@ -35,6 +39,7 @@ import {
   selectedGiven,
   someFalse,
   strictCode,
+  suffixedUnit,
   uniqueGiven,
   unknownFunction,
   variable,
@@ -43,6 +48,17 @@ import {
 } from '../../../examples/public-api.ts';
 
 describe('public guide examples', () => {
+  // docs/tasks/T0038a-public-model-options.md
+  it('runs the FHIR model examples', () => {
+    expect(deceased).toEqual([false]);
+    expect(birthTime).toEqual(['1974-12-25T14:35:45-05:00']);
+    expect(elementDiagnostics).toEqual([
+      expect.objectContaining({ severity: 'error', code: 'semantic/unknown-element' }),
+    ]);
+    expect(suffixedUnit).toEqual(['lbs']);
+    expect(alertLabel).toEqual(['SpO2 low']);
+  });
+
   it('runs the quick start, exact rendering and error examples', () => {
     expect(given).toEqual(['Ada', 'Mina']);
     expect(firstGiven).toEqual(['Ada']);
@@ -176,6 +192,40 @@ describe('checking the documented snippets', () => {
     ).toEqual([[1, 'not-in-example-import', 'parseJson']]);
   });
 
+  it('accepts imports from the provider packages that the example imports', () => {
+    const withModel = `${example}\nimport { r4 } from '@callis/fhir-r4';\nexport const model: unknown = r4;`;
+    expect(
+      checkPage(
+        [
+          "import { r4 } from '@callis/fhir-r4';\nexport const model: unknown = r4;",
+          "import { r5 } from '@callis/fhir-r5';\nexport const model: unknown = r5;",
+        ],
+        withModel,
+      ).map(({ block, kind, name }) => [block, kind, name]),
+    ).toEqual([
+      [2, 'not-in-example-import', 'r5'],
+      [2, 'not-in-example', undefined],
+    ]);
+  });
+
+  it('reports a name that the block imports from another package than the example', () => {
+    const withModel = `${example}\nimport { r4 } from '@callis/fhir-r4';\nexport const model: unknown = r4;`;
+    expect(
+      checkPage(
+        [
+          "import { r4 } from '@callis/fhir-r5';\nexport const model: unknown = r4;",
+          "import { evaluate } from '@callis/fhir-r4';\nexport const one: unknown[] = evaluate(null, '1');",
+        ],
+        withModel,
+      ).map(({ block, kind, name }) => [block, kind, name]),
+    ).toEqual([
+      [1, 'not-in-example-import', 'r4'],
+      [1, 'missing-import', 'r4'],
+      [2, 'not-in-example-import', 'evaluate'],
+      [2, 'missing-import', 'evaluate'],
+    ]);
+  });
+
   it('reports an import from another module', () => {
     expect(
       problemsOf(
@@ -211,10 +261,23 @@ describe('checking the documented snippets', () => {
 const DOCUMENTED_PAGES = ['README.md', 'packages/core/README.md', 'docs/guide.md'] as const;
 
 /**
- * A problem with a documented `ts` block. A block starts with an import line for the names from
- * `@callis/core` that it uses, so a reader can copy it; a later block on the same page may use what
- * an earlier one imports. The code after the imports must be part of the executable example. The
- * example itself has one import line with every name, because Biome merges imports from one module.
+ * The packages a documented snippet may import from: the engine, and the model and unit
+ * providers that its options take.
+ */
+const DOCUMENTED_MODULES: ReadonlySet<string> = new Set([
+  '@callis/core',
+  '@callis/ucum',
+  '@callis/fhir-r4',
+  '@callis/fhir-r5',
+  '@callis/fhir-r6',
+]);
+
+/**
+ * A problem with a documented `ts` block. A block starts with import lines for the names from the
+ * {@link DOCUMENTED_MODULES} that it uses, so a reader can copy it; a later block on the same page
+ * may use what an earlier one imports. The code after the imports must be part of the executable
+ * example. The example itself has one import line per module with every name, because Biome
+ * merges imports from one module.
  */
 interface SnippetProblem {
   /** The block, counted from 1 on its page. */
@@ -222,9 +285,9 @@ interface SnippetProblem {
   /**
    * - `not-in-example`: the code after the imports is not part of the example.
    * - `unsupported-import`: an import after other code, or one that is not `import { a, b } from`.
-   * - `other-module`: an import from a module other than `@callis/core`.
-   * - `not-in-example-import`: a name that the example does not import, so nothing checks that
-   *   `@callis/core` exports it.
+   * - `other-module`: an import from a module that is not one of the {@link DOCUMENTED_MODULES}.
+   * - `not-in-example-import`: a name that the example does not import from the same package, so
+   *   nothing checks that the package exports it.
    * - `unused-import`: a name that the block imports but does not use.
    * - `missing-import`: a name from the example's import that the block uses, but that neither it
    *   nor an earlier block on the page imports.
@@ -243,8 +306,8 @@ interface SnippetProblem {
 const PROBLEM_TEXT: Readonly<Record<SnippetProblem['kind'], string>> = {
   'not-in-example': 'its code is not part of examples/public-api.ts',
   'unsupported-import': 'put `import { a, b } from …` first in the block, without renaming',
-  'other-module': 'documented snippets import only from @callis/core',
-  'not-in-example-import': 'examples/public-api.ts does not import it',
+  'other-module': 'documented snippets import only from @callis/core and its provider packages',
+  'not-in-example-import': 'examples/public-api.ts does not import it from this package',
   'unused-import': 'the block imports it but does not use it',
   'missing-import': 'the block uses it, but neither it nor an earlier block on the page imports it',
 };
@@ -259,11 +322,21 @@ const LEADING_IMPORT = /^\s*import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*(['"])([^'
 
 /** Checks the `ts` blocks of one page, in order, against the executable example. */
 function checkPage(blocks: readonly string[], example: string): SnippetProblem[] {
-  const exampleNames = new Set(
-    [...example.matchAll(/^import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*'@callis\/core';?$/gm)]
-      .flatMap((match) => importedNames(match[1] ?? ''))
-      .filter((name) => name !== undefined),
-  );
+  // The names the example imports, by package, so a block that imports a name from another
+  // package than the example does is reported.
+  const exampleImports = new Map<string, Set<string>>();
+  for (const match of example.matchAll(
+    /^import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*'([^']*)';?$/gm,
+  )) {
+    const source = match[2] ?? '';
+    if (!DOCUMENTED_MODULES.has(source)) continue;
+    const names = exampleImports.get(source) ?? new Set<string>();
+    for (const name of importedNames(match[1] ?? '')) {
+      if (name !== undefined) names.add(name);
+    }
+    exampleImports.set(source, names);
+  }
+  const exampleNames = new Set([...exampleImports.values()].flatMap((names) => [...names]));
   const imported = new Set<string>();
   const problems: SnippetProblem[] = [];
   for (const [index, code] of blocks.entries()) {
@@ -273,14 +346,14 @@ function checkPage(blocks: readonly string[], example: string): SnippetProblem[]
     for (let match = LEADING_IMPORT.exec(body); match; match = LEADING_IMPORT.exec(body)) {
       body = body.slice(match[0].length);
       const source = match[3] ?? '';
-      if (source !== '@callis/core') {
+      if (!DOCUMENTED_MODULES.has(source)) {
         problems.push({ block, kind: 'other-module', name: source });
         continue;
       }
       for (const name of importedNames(match[1] ?? '')) {
         if (name === undefined) {
           problems.push({ block, kind: 'unsupported-import' });
-        } else if (!exampleNames.has(name)) {
+        } else if (!exampleImports.get(source)?.has(name)) {
           problems.push({ block, kind: 'not-in-example-import', name });
         } else {
           blockImports.add(name);

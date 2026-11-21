@@ -58,6 +58,12 @@
 | [T0036](tasks/T0036-playground.md) | Simple FHIRPath playground | 3 | T0025, T0035 | 6 | M |
 | [T0037](tasks/T0037-first-release-readiness.md) | First 0.1 release readiness | 1 | T0025, T0036 | 7 | M |
 | [T0038](tasks/T0038-public-api-completion.md) | Complete the phase-1 public API and documentation | 1 | T0007, T0010, T0011, T0012, T0013, T0014, T0015, T0016, T0017, T0021, T0023, T0024, T0024b, T0025, T0041, T0042 | 7 | L |
+| [T0038a](tasks/T0038a-public-model-options.md) | Public API: model-aware options | 1 | T0018, T0019, T0024b, T0025, T0039 | 7 | M |
+| [T0038b](tasks/T0038b-public-async-hooks-limits.md) | Public API: async evaluation, hooks and limits | 1 | T0017, T0021, T0025, T0042 | 7 | M |
+| [T0038c](tasks/T0038c-public-parser-cache.md) | Public API: parser, AST input and compile cache | 1 | T0024b, T0025 | 7 | M |
+| [T0038d](tasks/T0038d-public-typed-output.md) | Public API: typed output | 1 | T0018, T0025 | 7 | M |
+| [T0038e](tasks/T0038e-public-conformance-adapter.md) | Conformance runner on the public API | 1 | T0038a, T0038b, T0038c, T0038d | 8 | S |
+| [T0038f](tasks/T0038f-phase-1-documentation.md) | Phase-1 documentation and examples | 1 | T0038a, T0038b, T0038c, T0038d | 8 | M |
 | [T0039](tasks/T0039-fhir-r6-model.md) | Pinned FHIR R6 model provider | 1 | T0019 | 3 | M |
 | [T0040](tasks/T0040-fhir-r6-validation.md) | R6 package and compatibility validation | 1 | T0039, T0025 | 6 | M |
 | [T0041](tasks/T0041-fn-existence-completion.md) | Functions: remaining existence | 1 | T0011, T0013 | 6 | S |
@@ -104,6 +110,12 @@ flowchart TD
     T0025["T0025 Minimal sync API"]
     T0037["T0037 First 0.1 readiness"]
     T0038["T0038 Complete phase-1 API + docs"]
+    T0038a["T0038a Public model options"]
+    T0038b["T0038b Public async + hooks + limits"]
+    T0038c["T0038c Public parser + cache"]
+    T0038d["T0038d Public typed output"]
+    T0038e["T0038e Conformance on public API"]
+    T0038f["T0038f Phase-1 docs + examples"]
     T0039["T0039 Pinned R6 provider"]
     T0040["T0040 R6 package validation"]
     T0041["T0041 Remaining existence"]
@@ -153,6 +165,11 @@ flowchart TD
   T0036 & T0011 --> T0043
   T0025 & T0036 --> T0037
   T0007 & T0010 & T0011 & T0012 & T0013 & T0014 & T0015 & T0016 & T0017 & T0021 & T0023 & T0024 & T0024b & T0025 & T0041 & T0042 --> T0038
+  T0018 & T0019 & T0024b & T0025 & T0039 --> T0038a
+  T0017 & T0021 & T0025 & T0042 --> T0038b
+  T0024b & T0025 --> T0038c
+  T0018 & T0025 --> T0038d
+  T0038a & T0038b & T0038c & T0038d --> T0038e & T0038f
   T0038 --> T0026 & T0027 & T0028 & T0029 & T0030 & T0031 & T0032 & T0033 & T0034
 ```
 
@@ -169,8 +186,8 @@ Tasks in the same wave can be worked on in parallel. A task can start as soon as
 | 4 | T0010, T0012, T0014, T0015, T0016, T0017, T0018, T0044 | up to 8 | Function groups only add files in `src/functions/`, so they rarely conflict. |
 | 5 | T0011, T0013, T0020, T0024, T0024a, T0025, T0042 | 6 | Minimal public API can land while the rest of phase 1 continues. T0024 was split into T0024a and T0024b on 2026-11-12 ([Pull requests](../CONTRIBUTING.md#pull-requests)); T0024 is complete when both have merged. |
 | 6 | T0021, T0024b, T0036, T0040, T0041 | 5 | T0040 verifies the five-package first release; it is independent of hooks/async work. T0024b follows T0024a. |
-| 7 | T0037, T0038, T0043 | 3 | First-release readiness and full phase-1 API completion are independent milestones. |
-| 8 | T0026–T0034 | up to 9 | STU features, FHIR phase 2, performance and CLI, all independent. |
+| 7 | T0037, T0038, T0038a, T0038b, T0038c, T0038d, T0043 | 6 | First-release readiness and full phase-1 API completion are independent milestones. T0038 was split on 2026-11-12 into T0038a–T0038f ([Pull requests](../CONTRIBUTING.md#pull-requests)); T0038 is complete when all six have merged. |
+| 8 | T0026–T0034, T0038e, T0038f | up to 11 | STU features, FHIR phase 2, performance and CLI, all independent. They depend on all of T0038, so they start once T0038e and T0038f have merged too. |
 
 ## Incremental releases
 
@@ -223,7 +240,7 @@ The engine is provider-agnostic: version differences come from the provider's da
 | `comparable()` is no longer a FHIR addition; it is in FHIRPath 3.0.0. | Already planned with the 3.0.0 additions. | [T0030](tasks/T0030-stu-precision-datetime.md) |
 | The type table maps `FHIR.date` to `System.Date`. | None needed: Callis already does this ([spec notes](spec-notes.md#fhirdate-maps-to-systemdate)). | – |
 
-**Delivery.** [T0039](tasks/T0039-fhir-r6-model.md) added the R6 provider from the checksum-pinned `6.0.0-snapshot1` source, and [T0040](tasks/T0040-fhir-r6-validation.md) the installed-package and release checks; both shipped in the five-package `0.1.0`. The engine tests of [T0018](tasks/T0018-model-aware-evaluation.md) run model-aware evaluation against all three providers. The public `model` option is [T0038](tasks/T0038-public-api-completion.md). R6 metadata is not a FHIR validator, and none of this is R6 conformance. These tasks extend version coverage without reopening T0019 or changing the FHIRPath specification baseline.
+**Delivery.** [T0039](tasks/T0039-fhir-r6-model.md) added the R6 provider from the checksum-pinned `6.0.0-snapshot1` source, and [T0040](tasks/T0040-fhir-r6-validation.md) the installed-package and release checks; both shipped in the five-package `0.1.0`. The engine tests of [T0018](tasks/T0018-model-aware-evaluation.md) run model-aware evaluation against all three providers. The public `model` option is [T0038a](tasks/T0038a-public-model-options.md), part of [T0038](tasks/T0038-public-api-completion.md). R6 metadata is not a FHIR validator, and none of this is R6 conformance. These tasks extend version coverage without reopening T0019 or changing the FHIRPath specification baseline.
 
 ## Backlog (not scheduled)
 
