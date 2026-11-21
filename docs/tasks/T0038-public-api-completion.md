@@ -25,7 +25,7 @@ The task touches every public entry point, the conformance runner and the user d
 
 Each child adds its own exports, type tests, packed-consumer checks, guide sections and changeset; T0038f completes the documentation as a whole. This file keeps the scope, the design notes and the acceptance criteria they share; each child lists the criteria it delivers. The task is complete, and [#116](https://github.com/losol/callis/issues/116) closes, when all six have merged. The phase-2 tasks that depend on T0038 wait for all six.
 
-The sketch's `functions` option, a custom function registry, is in no child: it needs a public contract for function definitions, which is the owner's decision ([#222](https://github.com/losol/callis/issues/222)). Until then the public API rejects it as an unsupported option.
+The sketch's `functions` option, a custom function registry, is in no child: it needs a public contract for function definitions. The owner decided on 2026-11-21 ([#222](https://github.com/losol/callis/issues/222)) that it stays internal until [T0045](T0045-public-custom-functions.md) designs that contract. Until then the public API rejects it as an unsupported option.
 
 ## Scope
 
@@ -90,7 +90,7 @@ function evaluateAsync(input: unknown, expression: string | CompiledExpression, 
 interface CompileOptions {
   model?: ModelProvider;
   units?: UnitSystem;                    // default: minimal built-in unit system
-  functions?: FunctionRegistry;          // default: standard + FHIR
+  // functions: not public (custom function registry); see T0045. Rejected with eval/invalid-argument.
   inputType?: string;                    // enables model-aware analysis, e.g. 'Patient'
   knownVariables?: readonly string[];    // names of %variables, for compile-time checking (values come via EvaluateOptions.variables)
   strict?: boolean;                      // N1 §11 strict evaluation
