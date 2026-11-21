@@ -268,6 +268,67 @@ describe('with a model', () => {
       expect(plain?.type).toBeUndefined();
       expect(text?.type).toBeUndefined();
     });
+
+    // The inputType option (https://github.com/losol/callis/issues/224).
+    describe('with a declared type', () => {
+      const period = stubType('Period');
+
+      it('types an object that does not name its own type', () => {
+        const [root] = nodes(toInputCollection({ start: '2016-03-28' }, '', stubModel, period));
+        expect(root).toMatchObject({ name: '', type: period });
+        expect(nodes(member([root as Item], 'start'))[0]?.type).toEqual(stubType('dateTime'));
+      });
+
+      it('types each element of an array', () => {
+        const items = nodes(
+          toInputCollection([{ start: 'a' }, [{ end: 'b' }]], '', stubModel, period),
+        );
+        expect(items.map((item) => item.type)).toEqual([period, period]);
+      });
+
+      it('types a JSON primitive with a primitive type, with its System type', () => {
+        const date = stubType('date');
+        const [text, number] = nodes(
+          toInputCollection(['1974-12-25', new JsonNumber('1.50')], '', stubModel, date),
+        );
+        expect(text).toMatchObject({ value: '1974-12-25', type: date, systemType: 'Date' });
+        expect(number).toMatchObject({ type: date, systemType: 'Date' });
+        expect(text?.primitiveElement).toBeUndefined();
+      });
+
+      it('keeps the type an object names, and leaves the other shape untyped', () => {
+        const [patientNode, foo, object, text] = nodes(
+          toInputCollection(
+            [{ resourceType: 'Patient' }, { resourceType: 'Foo' }, { start: 'a' }, 'text'],
+            '',
+            stubModel,
+            period,
+          ),
+        );
+        expect(patientNode?.type).toEqual(stubType('Patient'));
+        expect(foo?.type).toBeUndefined();
+        expect(object?.type).toEqual(period);
+        expect(text?.type).toBeUndefined();
+        const [primitiveOnObject] = nodes(
+          toInputCollection({ start: 'a' }, '', stubModel, stubType('string')),
+        );
+        expect(primitiveOnObject?.type).toBeUndefined();
+      });
+
+      it('keeps nodes and value classes as they are', () => {
+        const [node] = toInputCollection({ a: 1 }, 'x');
+        const decimal = Decimal.parse('1.5');
+        const items = toInputCollection([node, decimal], '', stubModel, period);
+        expect(items[0]).toBe(node);
+        expect(items[1]).toBe(decimal);
+      });
+
+      it('has no effect without a model', () => {
+        const [root, text] = nodes(toInputCollection([{ start: 'a' }, 'b'], '', undefined, period));
+        expect(root?.type).toBeUndefined();
+        expect(text?.type).toBeUndefined();
+      });
+    });
   });
 
   describe('navigateMember', () => {

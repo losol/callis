@@ -150,12 +150,32 @@ These give `[false]` (`[]` without the model, since the JSON key is `deceasedBoo
 | Option | Where | Meaning |
 | --- | --- | --- |
 | `model?: ModelProvider` | compile / analyze / one-off evaluate | The data model. Any object that implements `ModelProvider` works; its `namespace` must not be empty or `System`, which would hide the System types. |
-| `inputType?: string \| readonly string[]` | compile / analyze / one-off evaluate | The type of the input by its name in the model, such as `'Patient'`, or the types it may have, for analysis. Needs `model` and at least one name. |
+| `inputType?: string \| readonly string[]` | compile / analyze / one-off evaluate | The type of the input by its name in the model, such as `'Patient'`, or the types it may have, for analysis, and with one name for the evaluation of an input that does not say its type. Needs `model` and at least one name. |
 | `lenient?: { choiceSuffix?: boolean }` | compile / analyze / one-off evaluate | Compatibility relaxations; none by default, and none has an effect without `model`. |
 
 With `inputType`, analysis reports when the expression is compiled: an element the type does not have (`name.given1`), a leading type name that does not match (`Encounter.status` on a Patient), and a choice element written with its type suffix, with the hint `value.ofType(Quantity)`. A name the model does not define, such as `'DeviceAlert'` in R4, is a `semantic/unknown-type` error. With several types, an element is reported only when none of them has it. In strict mode, the model also tells analysis which elements may repeat, so `Patient.name.given = 'Peter'` is `semantic/singleton-expected`. Without `inputType`, analysis checks what the expression itself makes known, such as the elements after a leading `Patient`.
 
-`inputType` describes the input to analysis only. Evaluation types the input from the data: a resource by its own `resourceType`, and a node by the element it was reached through. An input that does not say its type, such as a bare `Period` object, is evaluated as untyped JSON whatever `inputType` says, so analysis and evaluation can disagree on it; evaluate the resource that contains it instead ([#224](https://github.com/losol/callis/issues/224)).
+Evaluation uses `inputType` too, so it agrees with analysis. With one type name, an input that does not say its type is evaluated as a value of that type: an object without its own `resourceType`, such as a data type on its own, when the name is a resource, complex or backbone type, and a JSON string, number or boolean when it is a primitive type. Its FHIR primitives, choice elements and extensions are then found as in a resource, and `is`, `as` and `ofType()` see the type, as for an invariant on a data type:
+
+```ts
+import { evaluate } from '@callis/core';
+import { r4 } from '@callis/fhir-r4';
+
+export const validity: Readonly<Record<string, unknown>> = {
+  start: '2020-01-01',
+  _start: { extension: [{ url: 'https://example.org/precision', valueString: 'day' }] },
+};
+export const startsLater: unknown[] = evaluate(validity, 'start > @2019', {
+  model: r4,
+  inputType: 'Period',
+});
+export const startExtension: unknown[] = evaluate(validity, 'start.extension.url', {
+  model: r4,
+  inputType: 'Period',
+});
+```
+
+These give `[true]` and `['https://example.org/precision']`. Without `inputType` the object is untyped JSON: `start` is a String, so the comparison raises `eval/type-mismatch`, and its `_start` extensions are not found. Each item of an array input is typed the same way. An input that says its own type keeps it: a resource is typed by its `resourceType`, even when `inputType` names another type. Analysis never sees the input, so that conflict is not reported; with `inputType: 'Patient'`, an Observation is still evaluated as an Observation. With several type names the input stays untyped. Resources are still recognized by their own `resourceType` where FHIR needs a resource: for `%resource`, `%rootResource` and `resolve()`, and in what host hooks receive ([spec notes](spec-notes.md#the-input-type-at-evaluation)).
 
 Choice elements follow the specification by default ([ADR-0012](adr/0012-evaluation-defaults.md)): `Observation.valueQuantity` is a semantic error where analysis knows the type and empty where it does not, and the specification's form is `Observation.value.ofType(Quantity)`. `lenient: { choiceSuffix: true }` accepts the suffixed name, as other engines do. Any other key in `lenient` raises `eval/invalid-argument`.
 
