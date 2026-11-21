@@ -262,7 +262,7 @@ function checkModel(model: ModelProvider | undefined): ModelProvider | undefined
   const namespace: unknown = model.namespace;
   if (typeof namespace !== 'string' || namespace === '' || namespace === 'System') {
     throw invalid(
-      `Expected the model namespace to be a name other than System, not ${JSON.stringify(namespace)}`,
+      `Expected the model namespace to be a name other than System, not ${describe(namespace)}`,
     );
   }
   return model;
@@ -348,6 +348,17 @@ function evaluateOptions(options: EvaluateOptions): InternalEvaluateOptions {
     ...(timezoneOffset === undefined ? {} : { timezoneOffset }),
     ...(decimalOutput === undefined ? {} : { decimalOutput }),
   };
+}
+
+/**
+ * A rejected option value for an error message: a string quoted, any other value by its type.
+ * Serializing a value that is not a string can throw (a bigint, a cycle, a throwing `toJSON()`),
+ * which would replace the `eval/invalid-argument` error with another one.
+ */
+function describe(value: unknown): string {
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (value === null || value === undefined) return String(value);
+  return `a value of type ${typeof value}`;
 }
 
 function invalid(message: string): FhirPathEvaluationError {

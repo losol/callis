@@ -197,11 +197,26 @@ describe('public model-aware option validation', () => {
     expect(evaluate(patient, 'Patient.deceased', { model: provider('FHIR') })).toEqual([false]);
   });
 
+  /** A namespace that JSON cannot serialize, because it refers to itself. */
+  const circular: Record<string, unknown> = {};
+  circular.self = circular;
+
   // https://github.com/losol/callis/issues/60: a System namespace would shadow the System types.
   it.each([
     ['System', provider('System')],
     ['empty', provider('')],
     ['not a string', provider(1)],
+    // Values whose serialization throws: the error is still eval/invalid-argument.
+    ['a bigint', provider(1n)],
+    ['a circular object', provider(circular)],
+    [
+      'an object whose toJSON() throws',
+      provider({
+        toJSON() {
+          throw new Error('serialized');
+        },
+      }),
+    ],
     ['without a version', { ...provider('FHIR'), version: undefined }],
     ['missing a method', { ...provider('FHIR'), getSystemType: undefined }],
     ['null', null],
@@ -216,6 +231,13 @@ describe('public model-aware option validation', () => {
       expect(run).toThrow(FhirPathEvaluationError);
       expect(codeOf(run)).toBe('eval/invalid-argument');
     }
+  });
+
+  it('names a rejected namespace without serializing anything but a string', () => {
+    expect(() => compile('1', { model: provider('System') })).toThrow('not "System"');
+    expect(() => compile('1', { model: provider(1n) })).toThrow('not a value of type bigint');
+    expect(() => compile('1', { model: provider(circular) })).toThrow('not a value of type object');
+    expect(() => compile('1', { model: provider(undefined) })).toThrow('not undefined');
   });
 
   it.each([
