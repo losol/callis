@@ -104,6 +104,12 @@ function isItemValue(value: unknown): value is Item {
  *   `resourceType` when it has one. With a model, an object gets the type
  *   `ModelProvider.getRootType()` gives it, so a resource is typed by its `resourceType`; an
  *   object the model does not recognize stays untyped.
+ * - `declared`, the type the host declares for the input (the `inputType` option), types a JSON
+ *   value that does not name its own type, so evaluation agrees with the analysis that assumed it
+ *   ([#224](https://github.com/losol/callis/issues/224)): an object without an own `resourceType`
+ *   that `getRootType()` does not recognize, when `declared` is a resource, complex or backbone
+ *   type, and a JSON primitive, when it is a primitive type. A value that names its own type keeps
+ *   it, whatever `declared` says, and a value of the other shape stays untyped.
  *
  * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for a value that is not JSON
  *   data, such as a function or a symbol.
@@ -112,12 +118,13 @@ export function toInputCollection(
   value: unknown,
   name: string,
   model: ModelProvider | undefined = undefined,
+  declared: ModelTypeInfo | undefined = undefined,
 ): Collection {
   if (value === undefined || value === null) {
     return EMPTY;
   }
   const items: Item[] = [];
-  appendInput(items, value, name, model);
+  appendInput(items, value, name, model, model === undefined ? undefined : declared);
   return items;
 }
 
@@ -126,12 +133,13 @@ function appendInput(
   value: unknown,
   name: string,
   model: ModelProvider | undefined,
+  declared: ModelTypeInfo | undefined,
 ): void {
   if (value === undefined || value === null) {
     return;
   }
   if (Array.isArray(value)) {
-    forEachOwnElement(value, (element) => appendInput(items, element, name, model));
+    forEachOwnElement(value, (element) => appendInput(items, element, name, model, declared));
     return;
   }
   if (isItemValue(value)) {
@@ -139,11 +147,11 @@ function appendInput(
     return;
   }
   if (isJsonObject(value)) {
-    items.push(rootNode(value, resourceTypeOf(value) ?? name, model));
+    items.push(rootNode(value, resourceTypeOf(value) ?? name, model, declared));
     return;
   }
   if (isJsonPrimitive(value)) {
-    items.push(new ModelNode({ value, name }));
+    items.push(primitiveRootNode(value, name, model, declared));
     return;
   }
   throw new FhirPathEvaluationError(
@@ -161,15 +169,48 @@ function isJsonPrimitive(value: unknown): value is string | number | boolean | J
   );
 }
 
-/** A root node: an input object, typed by the model when it recognizes the object. */
-function rootNode(value: JsonObject, name: string, model: ModelProvider | undefined): ModelNode {
-  const type = model?.getRootType(value);
+/**
+ * A root node: an input object, typed by the model when it recognizes the object, and otherwise
+ * by the declared type when the object does not name a type of its own. An own `resourceType`
+ * names one even when the model does not know it, so `{ resourceType: 'Foo' }` stays untyped.
+ */
+function rootNode(
+  value: JsonObject,
+  name: string,
+  model: ModelProvider | undefined,
+  declared: ModelTypeInfo | undefined,
+): ModelNode {
+  let type = model?.getRootType(value);
+  if (
+    type === undefined &&
+    declared !== undefined &&
+    declared.kind !== 'primitive' &&
+    !Object.hasOwn(value, 'resourceType')
+  ) {
+    type = declared;
+  }
   return new ModelNode({
     value,
     name,
     type,
     systemType: type === undefined ? undefined : model?.getSystemType(type),
   });
+}
+
+/**
+ * A root node for a JSON primitive: typed by the declared type when that is a primitive type,
+ * as a FHIR primitive element without `_name` extensions; otherwise untyped.
+ */
+function primitiveRootNode(
+  value: string | number | boolean | JsonNumber,
+  name: string,
+  model: ModelProvider | undefined,
+  declared: ModelTypeInfo | undefined,
+): ModelNode {
+  if (model === undefined || declared?.kind !== 'primitive') {
+    return new ModelNode({ value, name });
+  }
+  return new ModelNode({ value, name, type: declared, systemType: model.getSystemType(declared) });
 }
 
 /**

@@ -16,7 +16,7 @@ import {
 import { fhirEquivalence } from '../fhir/equivalence.ts';
 import { createFhirEnvironment } from '../fhir/variables.ts';
 import { createRegistry, type FunctionRegistry } from '../functions/registry.ts';
-import type { ModelProvider } from '../model/model-provider.ts';
+import type { ModelProvider, ModelTypeInfo } from '../model/model-provider.ts';
 import type { ExpressionNode } from '../parser/ast.ts';
 import { parse } from '../parser/parser.ts';
 import { type CancellationSignal, throwIfAborted } from '../runtime/cancellation.ts';
@@ -74,6 +74,14 @@ export interface CompileOptions {
    * Needs `model`. Without it the input's type is unknown, and analysis checks what the
    * expression itself makes known, such as the elements of `Patient.name` after a leading
    * `Patient`.
+   *
+   * Evaluation uses it too, so the two agree ([#224](https://github.com/losol/callis/issues/224)):
+   * with one type name, an input that does not name its own type (an object without an own
+   * `resourceType` that `ModelProvider.getRootType()` does not recognize, or a JSON primitive) is
+   * evaluated as a value of that type, as `toInputCollection()` describes. An input that names
+   * its own type keeps it, even when that conflicts with `inputType`; analysis never sees the input,
+   * so nothing reports the conflict. With several types the input stays untyped. A node or value
+   * class passed as the input keeps its own type.
    */
   readonly inputType?: string | readonly string[];
   /**
@@ -288,6 +296,7 @@ function build(
   const environment: Environment = {
     root,
     model,
+    inputType: declaredInputType(options.inputType, model),
     units,
     lenientChoiceSuffix: options.lenient?.choiceSuffix === true,
   };
@@ -357,9 +366,31 @@ function checkInputType(options: CompileOptions): void {
   }
 }
 
+/**
+ * The type evaluation gives an input that does not name its own type: the one type that
+ * `inputType` names, so evaluation agrees with the analysis that assumed it
+ * ([#224](https://github.com/losol/callis/issues/224)). With several types, or a name the model
+ * does not define (which analysis reports), the input stays untyped; without a model there are no
+ * model types.
+ */
+function declaredInputType(
+  inputType: string | readonly string[] | undefined,
+  model: ModelProvider | undefined,
+): ModelTypeInfo | undefined {
+  if (inputType === undefined || model === undefined) {
+    return undefined;
+  }
+  // Analysis reads a repeated name as one type, and so does evaluation.
+  const names = typeof inputType === 'string' ? [inputType] : [...new Set(inputType)];
+  const name = names[0];
+  return names.length === 1 && name !== undefined ? model.getType(name) : undefined;
+}
+
 interface Environment {
   readonly root: Evaluator;
   readonly model: ModelProvider | undefined;
+  /** The type of an input that does not name its own type, from `inputType`. */
+  readonly inputType: ModelTypeInfo | undefined;
   readonly units: UnitSystem;
   readonly lenientChoiceSuffix: boolean;
 }
@@ -409,7 +440,8 @@ function createContext(
   );
   let snapshot: NowSnapshot | undefined;
   const model = environment.model;
-  const context = toInputCollection(input, '', model);
+  // inputType types the input only; variables and the resource options name their own types.
+  const context = toInputCollection(input, '', model, environment.inputType);
   return {
     isAsync,
     context,

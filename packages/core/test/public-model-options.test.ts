@@ -44,6 +44,11 @@ const observation = {
   valueQuantity: { value: 185, unit: 'lbs', system: 'http://unitsofmeasure.org', code: '[lb_av]' },
 };
 
+const precision = { url: 'https://example.org/precision', valueString: 'day' };
+
+/** A Period on its own, which does not name its type, with an extension on `start`. */
+const period = { start: '2020-01-01', _start: { extension: [precision] } };
+
 /** An R6 resource ([DeviceAlert](https://hl7.org/fhir/6.0.0-snapshot1/devicealert.html)). */
 const alert = { resourceType: 'DeviceAlert', status: 'in-progress', label: 'SpO2 low' };
 
@@ -178,6 +183,121 @@ describe.each(PROVIDERS)(
   },
 );
 
+// https://github.com/losol/callis/issues/224: evaluation types the input from inputType, so it
+// agrees with analysis (https://hl7.org/fhir/R5/fhirpath.html#types,
+// https://hl7.org/fhir/R4/json.html#primitive).
+describe.each(PROVIDERS)('inputType at evaluation with $label', ({ model, triggeredBy }) => {
+  it('types an input that does not name its type, as analysis does', () => {
+    const options = { model, inputType: 'Period' };
+    expect(analyze('start > @2019', options).diagnostics).toEqual([]);
+    expect(evaluate(period, 'start > @2019', options)).toEqual([true]);
+    expect(evaluate(period, 'start is FHIR.dateTime', options)).toEqual([true]);
+    expect(evaluate(period, 'start.extension.url', options)).toEqual([precision.url]);
+    expect(evaluate(period, 'Period.start', options)).toEqual(['2020-01-01']);
+    expect(evaluate(period, '$this is FHIR.Period', options)).toEqual([true]);
+    // Without inputType, the same input is untyped JSON, navigated by its keys.
+    expect(codeOf(() => evaluate(period, 'start > @2019', { model }))).toBe('eval/type-mismatch');
+    expect(evaluate(period, 'start is FHIR.dateTime', { model })).toEqual([false]);
+    expect(evaluate(period, 'start.extension.url', { model })).toEqual([]);
+  });
+
+  it('types a resource without resourceType, so a choice element is found by its name', () => {
+    const { resourceType: _, ...bare } = observation;
+    const options = { model, inputType: 'Observation' };
+    expect(analyze('valueQuantity.unit', options).diagnostics[0]).toMatchObject({
+      code: 'semantic/unknown-element',
+      hint: 'value.ofType(Quantity)',
+    });
+    expect(evaluate(bare, 'value.ofType(Quantity).unit', options)).toEqual(['lbs']);
+    expect(evaluate(bare, 'Observation.status', options)).toEqual(['final']);
+    expect(evaluate(bare, 'value.ofType(Quantity).unit', { model })).toEqual([]);
+    for (const expression of ['value.ofType(Quantity).unit', 'children().count()', 'status']) {
+      expect(evaluate(bare, expression, options)).toEqual(
+        internal.evaluate(bare, expression, options),
+      );
+    }
+  });
+
+  it('types a JSON primitive with a primitive type', () => {
+    const options = { model, inputType: 'date' };
+    expect(evaluate('1974-12-25', '$this is FHIR.date', options)).toEqual([true]);
+    expect(evaluate('1974-12-25', '$this = @1974-12-25', options)).toEqual([true]);
+    expect(evaluate(true, '$this is FHIR.boolean', { model, inputType: 'boolean' })).toEqual([
+      true,
+    ]);
+    expect(evaluate('1974-12-25', '$this is FHIR.date', { model })).toEqual([false]);
+  });
+
+  it('types each item of an array input', () => {
+    const names = [{ family: 'Chalmers' }, { family: 'Windsor' }];
+    const expression = 'ofType(HumanName).family';
+    expect(evaluate(names, expression, { model, inputType: 'HumanName' })).toEqual([
+      'Chalmers',
+      'Windsor',
+    ]);
+    expect(evaluate(names, expression, { model })).toEqual([]);
+  });
+
+  // Observation.triggeredBy is an element in R5 and R6 only.
+  it('follows the version of the model', () => {
+    const options = { model, inputType: 'Observation' };
+    const expression = 'triggeredBy.type is FHIR.code';
+    const triggered = { triggeredBy: [{ type: 'reflex' }] };
+    if (triggeredBy) {
+      expect(evaluate(triggered, expression, options)).toEqual([true]);
+    } else {
+      expect(codeOf(() => evaluate(triggered, expression, options))).toBe(
+        'semantic/unknown-element',
+      );
+    }
+  });
+
+  // Analysis never sees the input, so a conflict with its own type is not reported; the data's
+  // type wins (decision on #224, docs/spec-notes.md#the-input-type-at-evaluation).
+  it('keeps the type an input names, even when inputType names another', () => {
+    const options = { model, inputType: 'Patient' };
+    expect(analyze('$this is FHIR.Observation', options).diagnostics).toEqual([]);
+    expect(evaluate(observation, '$this is FHIR.Observation', options)).toEqual([true]);
+    expect(evaluate(observation, '$this is FHIR.Patient', options)).toEqual([false]);
+    expect(evaluate(observation, 'Patient.id', options)).toEqual([]);
+    const foo = { resourceType: 'Foo', start: '2020-01-01' };
+    expect(evaluate(foo, 'start is FHIR.dateTime', { model, inputType: 'Period' })).toEqual([
+      false,
+    ]);
+    // A type and its supertype do not conflict.
+    expect(evaluate(patient, 'Patient.deceased', { model, inputType: 'DomainResource' })).toEqual([
+      false,
+    ]);
+  });
+
+  it('leaves the input untyped with several types', () => {
+    for (const inputType of [
+      ['Period', 'Timing'],
+      ['Period', 'Patient'],
+    ]) {
+      expect(evaluate(period, 'start is FHIR.dateTime', { model, inputType })).toEqual([false]);
+    }
+    for (const inputType of [['Period'], ['Period', 'Period']]) {
+      expect(evaluate(period, 'start is FHIR.dateTime', { model, inputType })).toEqual([true]);
+    }
+  });
+
+  it('types the input only, not the variables', () => {
+    const options = { model, inputType: 'Period', variables: { other: period } };
+    expect(evaluate(period, '%other.start is FHIR.dateTime', options)).toEqual([false]);
+    // %resource is the input itself when it is not part of a resource.
+    expect(evaluate(period, '%resource.start is FHIR.dateTime', options)).toEqual([true]);
+  });
+
+  it('types each input of a compiled expression from the same option', () => {
+    const { resourceType: _, ...bare } = observation;
+    const compiled = compile('value.ofType(Quantity).unit', { model, inputType: 'Observation' });
+    expect(compiled.evaluate(bare)).toEqual(['lbs']);
+    expect(compiled.evaluate(observation)).toEqual(['lbs']);
+    expect(compiled.evaluate({ ...observation, resourceType: 'Patient' })).toEqual([]);
+  });
+});
+
 describe('public model-aware option validation', () => {
   /** A provider with r4's data and the given namespace. */
   function provider(namespace: unknown): ModelProvider {
@@ -286,14 +406,14 @@ describe('public model-aware option validation', () => {
     }
   });
 
-  // inputType describes the input to analysis; evaluation types it from the data
-  // (https://github.com/losol/callis/issues/224).
-  it('does not type an input that does not name its type', () => {
-    const period = { start: '2020-01-01' };
-    const options = { model: r4, inputType: 'Period' };
-    expect(analyze('start > @2019', options).diagnostics).toEqual([]);
-    expect(codeOf(() => evaluate(period, 'start > @2019', options))).toBe('eval/type-mismatch');
-    expect(evaluate(period, 'start is FHIR.dateTime', options)).toEqual([false]);
+  // https://github.com/losol/callis/issues/224: inputType needs a model, so without one the input
+  // is plain JSON, with the model-less date convenience.
+  it('evaluates an input without a model as plain JSON', () => {
+    expect(evaluate(period, 'start > @2019')).toEqual([true]);
+    expect(evaluate(period, 'start.extension.url')).toEqual([]);
+    expect(codeOf(() => evaluate(period, 'start > @2019', { inputType: 'Period' }))).toBe(
+      'eval/invalid-argument',
+    );
   });
 
   it('treats an option that is undefined as not given', () => {

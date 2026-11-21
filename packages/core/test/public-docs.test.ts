@@ -38,6 +38,8 @@ import {
   quantityJson,
   selectedGiven,
   someFalse,
+  startExtension,
+  startsLater,
   strictCode,
   suffixedUnit,
   uniqueGiven,
@@ -57,6 +59,8 @@ describe('public guide examples', () => {
     ]);
     expect(suffixedUnit).toEqual(['lbs']);
     expect(alertLabel).toEqual(['SpO2 low']);
+    expect(startsLater).toEqual([true]);
+    expect(startExtension).toEqual(['https://example.org/precision']);
   });
 
   it('runs the quick start, exact rendering and error examples', () => {
