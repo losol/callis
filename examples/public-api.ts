@@ -1,9 +1,11 @@
 /**
  * Executable quick start, shared by the README and guide; imported by public-docs.test.ts. Each
- * documented snippet imports only the names it uses; this file has one import line with all of
- * them, because Biome merges imports from one module.
+ * documented snippet imports only the names it uses; this file has one import line per package
+ * with all of them, because Biome merges imports from one module.
  */
 import { analyze, compile, evaluate, FhirPathError, parseJson } from '@callis/core';
+import { r4 } from '@callis/fhir-r4';
+import { r6 } from '@callis/fhir-r6';
 
 export const patient: Readonly<{
   resourceType: string;
@@ -104,6 +106,41 @@ export function strictCode(expression: string): string {
     throw error;
   }
 }
+
+export const fhirPatient: Readonly<Record<string, unknown>> = {
+  resourceType: 'Patient',
+  birthDate: '1974-12-25',
+  _birthDate: {
+    extension: [
+      {
+        url: 'http://hl7.org/fhir/StructureDefinition/patient-birthTime',
+        valueDateTime: '1974-12-25T14:35:45-05:00',
+      },
+    ],
+  },
+  deceasedBoolean: false,
+};
+export const deceased: unknown[] = evaluate(fhirPatient, 'Patient.deceased', { model: r4 });
+export const birthTime: unknown[] = evaluate(fhirPatient, 'Patient.birthDate.extension.value', {
+  model: r4,
+});
+export const elementDiagnostics: readonly unknown[] = analyze('name.given1', {
+  model: r4,
+  inputType: 'Patient',
+}).diagnostics;
+export const weight: Readonly<Record<string, unknown>> = {
+  resourceType: 'Observation',
+  valueQuantity: { value: 185, unit: 'lbs', system: 'http://unitsofmeasure.org', code: '[lb_av]' },
+};
+export const suffixedUnit: unknown[] = evaluate(weight, 'Observation.valueQuantity.unit', {
+  model: r4,
+  lenient: { choiceSuffix: true },
+});
+export const alertLabel: unknown[] = evaluate(
+  { resourceType: 'DeviceAlert', label: 'SpO2 low' },
+  'label',
+  { model: r6, inputType: 'DeviceAlert' },
+);
 
 /** Keep non-expression errors distinguishable from FHIRPath diagnostics. */
 export function expressionError(): string {

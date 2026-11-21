@@ -144,6 +144,17 @@ for (const [expression, ErrorClass] of [
     return true;
   });
 }
+// T0038a: data that a model has no type for is navigated by its keys; #60: a model's namespace
+// must not be empty or System.
+const model = (namespace) => ({ namespace, version: '1', getType() {}, getRootType() {}, getElement() {},
+  getElements() { return []; }, isSubtypeOf() { return false; }, getSystemType() {} });
+assert.deepEqual(core.evaluate({ id: 'a' }, 'id', { model: model('Test') }), ['a']);
+for (const namespace of ['System', '']) {
+  assert.throws(() => core.compile('1', { model: model(namespace) }), error => error.code === 'eval/invalid-argument');
+}
+assert.throws(() => core.compile('id', { inputType: 'Patient' }), error => error.code === 'eval/invalid-argument');
+assert.throws(() => core.compile('id', { lenient: { other: true } }), error => error.code === 'eval/invalid-argument');
+assert.throws(() => core.compile('1', { functions: {} }), error => error.code === 'eval/invalid-argument');
 assert.throws(() => core.compile(42), (error) => {
   assert.ok(error.stack.includes('src/api/public-api.ts'));
   return error.code === 'eval/invalid-argument';
@@ -197,7 +208,7 @@ import { compile, evaluate, Decimal, minimalUnitSystem, parseJson, JsonNumber,
   FhirPathError, FhirPathEvaluationError,
   type CompileOptions, type EvaluateOptions, type CompiledExpression, type JsonValue,
   type PlainQuantity, type UnitSystem, type ModelProvider, type SourceSpan,
-  type Diagnostic, type ErrorCode, type FhirPathErrorOptions,
+  type Diagnostic, type ErrorCode, type FhirPathErrorOptions, type LenientOptions,
 } from '@callis/core';
 const units: UnitSystem = minimalUnitSystem;
 const options: CompileOptions = { units };
@@ -216,8 +227,10 @@ const text: string | undefined = number?.text;
 run.ast;
 // @ts-expect-error async is deferred
 run.evaluateAsync(null);
-// @ts-expect-error model option is deferred
+// @ts-expect-error a model implements the ModelProvider contract
 compile('1', { model: {} });
+// @ts-expect-error inputType names model types
+compile('1', { inputType: 1 });
 // @ts-expect-error typed output is deferred
 evaluate(null, '1', { output: 'typed' });
 // @ts-expect-error registries are deferred
@@ -226,10 +239,12 @@ compile('1', { functions: {} });
 import { parse } from '@callis/core';
 // @ts-expect-error no public runtime wrappers
 import { ModelNode } from '@callis/core';
-type NoModel = 'model' extends keyof CompileOptions ? never : true;
+type HasModel = 'model' | 'inputType' | 'lenient' extends keyof CompileOptions ? true : never;
 type NoOutput = 'output' extends keyof EvaluateOptions ? never : true;
-const noModel: NoModel = true;
+const hasModel: HasModel = true;
 const noOutput: NoOutput = true;
+const lenient: LenientOptions = { choiceSuffix: true };
+const model: ModelProvider | undefined = options.model;
 `,
   );
   execFileSync(

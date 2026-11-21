@@ -127,7 +127,7 @@ try {
     consumer,
   );
   const contract = `
-import { compile, evaluate, Decimal, FhirPathError, FhirPathSemanticError } from '@callis/core';
+import { analyze, compile, evaluate, Decimal, FhirPathError, FhirPathSemanticError } from '@callis/core';
 import { ucum } from '@callis/ucum';
 import { r4 } from '@callis/fhir-r4';
 import { r5 } from '@callis/fhir-r5';
@@ -214,12 +214,29 @@ export function check() {
   equal(element(r6,'Questionnaire.item','item').typeNames, ['Questionnaire.item']);
   equal(r6.getSystemType(type(r6,'integer64')), 'Long');
   equal(r6.getSystemType(type(r6,'Age')), 'Quantity');
-  let rejectedModel = false;
-  try { compile('DeviceAlert', {model:r6}); } catch (error) {
-    if (!(error instanceof FhirPathError)) throw error;
-    equal(error.code, 'eval/invalid-argument'); rejectedModel = true;
+  // T0038a: public model-aware evaluation and analysis with each packed provider.
+  function codeOf(run) {
+    try { run(); } catch (error) {
+      if (!(error instanceof FhirPathError)) throw error;
+      return error.code;
+    }
+    throw new Error('expected an error');
   }
-  if (!rejectedModel) throw new Error('provider import silently enabled unsupported public model option');
+  const person = {resourceType:'Patient',deceasedBoolean:false,birthDate:'1974-12-25',
+    _birthDate:{extension:[{url:'https://example.org/precision',valueString:'day'}]}};
+  for (const model of [r4,r5,r6]) {
+    equal(evaluate(person, 'Patient.deceased', {model}), [false]);
+    equal(evaluate(person, 'Patient.birthDate.extension.url', {model}), ['https://example.org/precision']);
+    equal(compile('Patient.birthDate = @1974-12-25', {model}).evaluate(person), [true]);
+    equal(codeOf(() => compile('name.given1', {model, inputType:'Patient'})), 'semantic/unknown-element');
+  }
+  equal(evaluate(person, 'Patient.deceased'), []);
+  for (const [model, codes] of [[r4,['semantic/unknown-element']],[r5,[]],[r6,[]]]) {
+    equal(analyze('triggeredBy', {model, inputType:'Observation'}).diagnostics.map((d) => d.code), codes);
+  }
+  equal(evaluate({resourceType:'DeviceAlert',label:'SpO2 low'}, 'label', {model:r6, inputType:'DeviceAlert'}), ['SpO2 low']);
+  for (const model of [r4,r5]) equal(codeOf(() => compile('label', {model, inputType:'DeviceAlert'})), 'semantic/unknown-type');
+  equal(codeOf(() => compile('1', {model:{...r4, namespace:'System'}})), 'eval/invalid-argument');
   return '${success}';
 }
 `;
@@ -232,7 +249,7 @@ export function check() {
   writeFileSync(
     join(consumer, 'types.mts'),
     `
-import { compile, evaluate, type ModelProvider, type UnitSystem } from '@callis/core';
+import { compile, evaluate, type CompileOptions, type LenientOptions, type ModelProvider, type UnitSystem } from '@callis/core';
 import { ucum } from '@callis/ucum';
 import { r4 } from '@callis/fhir-r4';
 import { r5 } from '@callis/fhir-r5';
@@ -240,10 +257,16 @@ import { r6 } from '@callis/fhir-r6';
 const models: readonly ModelProvider[] = [r4, r5, r6];
 const units: UnitSystem = ucum;
 const result: unknown[] = evaluate(null, '1', {units, decimalOutput:'string'});
-// @ts-expect-error provider metadata does not imply public model-aware evaluation
-compile('Patient', {model:r4});
-// @ts-expect-error R6 metadata also does not enable public model-aware evaluation
-compile('DeviceAlert', {model:r6});
+const lenient: LenientOptions = {choiceSuffix: true};
+const options: CompileOptions = {model: r4, inputType: ['Patient', 'Observation'], lenient, units, strict: true};
+const typed: unknown[] = compile('id', options).evaluate({resourceType: 'Patient', id: 'p1'});
+const r6Result: unknown[] = evaluate({resourceType: 'DeviceAlert'}, 'label', {model: r6, inputType: 'DeviceAlert'});
+// @ts-expect-error inputType is a type name or an array of them
+compile('id', {model: r5, inputType: 1});
+// @ts-expect-error lenient has no other relaxations
+compile('id', {model: r5, lenient: {other: true}});
+// @ts-expect-error the custom function registry is not public (#222)
+compile('id', {functions: {}});
 `,
   );
   run(
