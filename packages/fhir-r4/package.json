@@ -1,6 +1,6 @@
 {
   "name": "@callis/fhir-r4",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Generated FHIR R4 ModelProvider for Callis",
   "keywords": [
     "fhirpath",
@@ -43,7 +43,7 @@
     "check:package": "publint --strict && attw --pack . --profile esm-only"
   },
   "peerDependencies": {
-    "@callis/core": "^0.2.0"
+    "@callis/core": "^0.3.0"
   },
   "devDependencies": {
     "@callis/core": "workspace:^"

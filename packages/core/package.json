@@ -1,6 +1,6 @@
 {
   "name": "@callis/core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A FHIRPath engine for TypeScript",
   "keywords": [
     "fhirpath",
