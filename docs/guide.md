@@ -227,7 +227,7 @@ This describes the 0.1.0 subset at engine revision [9b78e6e](https://github.com/
 | Output | Synchronous plain arrays; exact evaluator Decimal/Quantity strings with `decimalOutput: 'string'`; parsed input numbers retain JavaScript precision limits unless the input comes from `parseJson()`, added after 0.1. |
 | Errors | Public FhirPathError subclasses, codes, optional UTF-16 source spans, semantic diagnostics and formatting; caller handles invalid JSON separately. |
 | Companions | UCUM UnitSystem is usable through `units`; R4, R5 and R6 export immutable ModelProvider data, R6 from the pinned `6.0.0-snapshot1` draft. None provides a public engine `model` option. |
-| Deferred | Async, hooks, custom functions, parser/AST, analysis, typed output, model-aware evaluation and remaining function groups; tracked by implementation tasks and T0038. |
+| Deferred | Async, hooks, custom functions, parser/AST, analysis, typed output, model-aware evaluation and remaining function groups; tracked by implementation tasks and T0038, except custom functions, which wait for the public contract of [T0045](tasks/T0045-public-custom-functions.md). |
 
 The [playground](https://callis.losol.no/playground/) runs editable JSON and expressions locally in the browser, with exact evaluator Decimal string rendering and synthetic presets. It does not automatically transmit input JSON. Its results use the same public API; JSON.parse precision limits still apply.
 

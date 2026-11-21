@@ -75,7 +75,7 @@ function evaluateAsync(input: unknown, expression: string | CompiledExpression, 
 interface CompileOptions {
   model?: ModelProvider;
   units?: UnitSystem;                    // default: minimal built-in unit system
-  functions?: FunctionRegistry;          // default: standard + FHIR
+  // functions: not public (custom function registry); see T0045. Rejected with eval/invalid-argument.
   inputType?: string;                    // enables model-aware analysis, e.g. 'Patient'
   knownVariables?: readonly string[];    // names of %variables, for compile-time checking (values come via EvaluateOptions.variables)
   strict?: boolean;                      // N1 §11 strict evaluation
