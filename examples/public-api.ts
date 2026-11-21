@@ -141,6 +141,18 @@ export const alertLabel: unknown[] = evaluate(
   'label',
   { model: r6, inputType: 'DeviceAlert' },
 );
+export const validity: Readonly<Record<string, unknown>> = {
+  start: '2020-01-01',
+  _start: { extension: [{ url: 'https://example.org/precision', valueString: 'day' }] },
+};
+export const startsLater: unknown[] = evaluate(validity, 'start > @2019', {
+  model: r4,
+  inputType: 'Period',
+});
+export const startExtension: unknown[] = evaluate(validity, 'start.extension.url', {
+  model: r4,
+  inputType: 'Period',
+});
 
 /** Keep non-expression errors distinguishable from FHIRPath diagnostics. */
 export function expressionError(): string {

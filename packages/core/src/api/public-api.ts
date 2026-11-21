@@ -36,9 +36,17 @@ export interface CompileOptions {
    * one item is expected, are reported when the expression is compiled. A name the model does not
    * define is a `semantic/unknown-type` error. Needs `model`, and at least one name.
    *
-   * It describes the input to analysis only. Evaluation types the input from the data itself
-   * (for FHIR, a resource's own `resourceType`), so an input that does not say its type, such as
-   * a bare `Period` object, is evaluated as untyped JSON whatever `inputType` says.
+   * Evaluation uses it too, so the two agree. With one type name, an input that does not say its
+   * type is evaluated as a value of that type: an object without its own `resourceType`, such as
+   * a bare `Period`, when the name is a resource, complex or backbone type, and a JSON string,
+   * number or boolean when it is a primitive type. Its FHIR primitives, choice elements and
+   * extensions are then found as in a resource, and `is`, `as` and `ofType()` see the type. Each
+   * item of an array input is typed the same way. An input that says its own type (a resource's
+   * `resourceType`) keeps it, even when `inputType` names another: analysis never sees the input,
+   * so that conflict is not reported. With several names, the input stays untyped.
+   * @see https://hl7.org/fhir/R5/fhirpath.html#types
+   * @example
+   * evaluate({ start: '2020-01-01' }, 'start > @2019', { model: r4, inputType: 'Period' }); // [true]
    */
   readonly inputType?: string | readonly string[];
   /**
