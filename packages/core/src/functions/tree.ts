@@ -8,6 +8,7 @@
  * ([spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#children-without-a-model)).
  */
 import { type Collection, EMPTY, type Item } from '../runtime/collection.ts';
+import { checkCollectionSize } from '../runtime/limits.ts';
 import { navigateChildren } from '../runtime/navigation.ts';
 import { defineValueFunction, type FunctionDefinition, type TypeHint } from './define.ts';
 
@@ -38,6 +39,9 @@ export const childrenFunction: FunctionDefinition = defineValueFunction(
  *
  * The walk follows the data, not the model's types, so it ends on a recursive type such as
  * `Questionnaire.item.item`. It keeps its own stack, so deep input cannot overflow the call stack.
+ * It does not detect cycles: a JavaScript object graph with one, which only a host can pass, would
+ * never end, so the walk stops with `eval/limit-exceeded` once it has more than
+ * `limits.maxCollectionSize` items ([#186](https://github.com/losol/callis/issues/186)).
  *
  * @see https://hl7.org/fhirpath/N1/#descendants-collection
  */
@@ -45,6 +49,7 @@ export const descendantsFunction: FunctionDefinition = defineValueFunction(
   'descendants',
   0,
   (input, _args, call) => {
+    const limits = call.ctx.limits;
     const items: Item[] = [];
     // The child lists still being walked, innermost last, each with the position of its next item.
     const pending: { readonly children: Collection; next: number }[] = [
@@ -58,6 +63,7 @@ export const descendantsFunction: FunctionDefinition = defineValueFunction(
       }
       level.next++;
       items.push(item);
+      checkCollectionSize(items.length, limits);
       const children = navigateChildren([item], call.ctx);
       if (children.length > 0) {
         pending.push({ children, next: 0 });

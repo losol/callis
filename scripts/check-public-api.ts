@@ -35,7 +35,7 @@ import assert from 'node:assert/strict';
 import * as core from '@callis/core';
 import { ucum } from '@callis/ucum';
 assert.deepEqual(Object.keys(core).sort(), [
-  'Decimal', 'MAX_DECIMAL_DIGITS', 'minimalUnitSystem', 'analyze', 'compile', 'evaluate', 'parseJson', 'JsonNumber',
+  'Decimal', 'MAX_DECIMAL_DIGITS', 'minimalUnitSystem', 'analyze', 'compile', 'evaluate', 'evaluateAsync', 'parseJson', 'JsonNumber',
   'FhirPathError', 'FhirPathSyntaxError', 'FhirPathSemanticError', 'FhirPathEvaluationError'
 ].sort());
 const lossless = core.parseJson('{"rows": [{"value": 1.50}]}');
@@ -159,6 +159,38 @@ assert.throws(() => core.compile(42), (error) => {
   assert.ok(error.stack.includes('src/api/public-api.ts'));
   return error.code === 'eval/invalid-argument';
 });
+// T0038b: async evaluation, host hooks, the signal, the clock and the limits.
+const remote = { resourceType: 'Organization', id: 'o1', name: 'Acme' };
+const referring = { resourceType: 'Patient', managingOrganization: { reference: 'Organization/o1' } };
+const asyncHooks = { resolve: async (reference) => (reference === 'Organization/o1' ? remote : undefined) };
+assert.deepEqual(await core.evaluateAsync(referring, 'managingOrganization.resolve().name', { hooks: asyncHooks }), ['Acme']);
+assert.deepEqual(await core.compile('managingOrganization.resolve().name')
+  .evaluateAsync(referring, { hooks: asyncHooks, concurrency: 2 }), ['Acme']);
+assert.deepEqual(core.evaluate(referring, 'managingOrganization.resolve().name', { hooks: { resolve: () => remote } }), ['Acme']);
+assert.throws(() => core.evaluate(referring, 'managingOrganization.resolve()', { hooks: asyncHooks }),
+  error => error instanceof core.FhirPathEvaluationError && error.code === 'eval/async-in-sync');
+const traced = [];
+assert.deepEqual(core.evaluate(null, "1.50.trace('t')", { hooks: { trace: (event) => { traced.push(event); } }, decimalOutput: 'string' }), ['1.50']);
+assert.deepEqual(traced.map((event) => [event.name, event.values]), [['t', ['1.50']]]);
+const terminology = { memberOf: (coded) => coded.codings.some((coding) => coding.code === 'M') };
+assert.deepEqual(core.evaluate({ code: 'M' }, "code.memberOf('http://example.org/vs')", { hooks: { terminology } }), [true]);
+const regex = (pattern, flags) => {
+  const compiled = new RegExp(pattern, flags);
+  return { test: (text) => compiled.test(text), matchAll: (text) => text.matchAll(new RegExp(pattern, flags + 'g')) };
+};
+assert.deepEqual(core.evaluate(null, "'ab'.matches('^a')", { hooks: { regex } }), [true]);
+const controller = new AbortController();
+controller.abort('stop');
+await assert.rejects(core.evaluateAsync(null, '1', { signal: controller.signal }),
+  error => error.code === 'eval/aborted' && error.cause === 'stop');
+assert.deepEqual(core.evaluate(null, 'today()', { now: new Date('2026-01-02T00:00:00Z') }), ['2026-01-02']);
+const loop = {};
+loop.self = loop;
+assert.throws(() => core.evaluate(loop, 'descendants()', { limits: { maxCollectionSize: 100 } }), error => error.code === 'eval/limit-exceeded');
+await assert.rejects(core.evaluateAsync(loop, 'descendants()'), error => error.code === 'eval/limit-exceeded');
+await assert.rejects(core.evaluateAsync(null, 'Patient.'), error => error.code === 'syntax/unexpected-token');
+assert.throws(() => core.evaluate(null, '1', { hooks: { warning() {} } }), error => error.code === 'eval/invalid-argument');
+assert.throws(() => core.evaluate(null, '1', { limits: { maxDepth: 1 } }), error => error.code === 'eval/invalid-argument');
 ${
   process.argv.includes('--operators')
     ? `
@@ -204,11 +236,13 @@ assert.throws(() => core.evaluate(null, expr, { units: { ...core.minimalUnitSyst
   writeFileSync(
     join(temporary, 'types.mts'),
     `
-import { compile, evaluate, Decimal, minimalUnitSystem, parseJson, JsonNumber,
+import { compile, evaluate, evaluateAsync, Decimal, minimalUnitSystem, parseJson, JsonNumber,
   FhirPathError, FhirPathEvaluationError,
   type CompileOptions, type EvaluateOptions, type CompiledExpression, type JsonValue,
   type PlainQuantity, type UnitSystem, type ModelProvider, type SourceSpan,
   type Diagnostic, type ErrorCode, type FhirPathErrorOptions, type LenientOptions,
+  type CancellationSignal, type EvaluationHooks, type EvaluationLimits, type TerminologyProvider,
+  type TraceEvent, type HookContext, type HookResult, type RegexMatcher, type SubsumptionOutcome,
 } from '@callis/core';
 const units: UnitSystem = minimalUnitSystem;
 const options: CompileOptions = { units };
@@ -225,8 +259,23 @@ const number: JsonNumber | undefined = lossless instanceof JsonNumber ? lossless
 const text: string | undefined = number?.text;
 // @ts-expect-error AST is deferred
 run.ast;
-// @ts-expect-error async is deferred
-run.evaluateAsync(null);
+const signal: CancellationSignal = new AbortController().signal;
+const limits: EvaluationLimits = { maxRepeatItems: 10, maxCollectionSize: 1000 };
+const terminology: TerminologyProvider = {
+  memberOf: (_coded, _valueSet, context: HookContext): HookResult<boolean> => context.signal === undefined,
+  subsumes: (): SubsumptionOutcome => 'equivalent',
+};
+const matcher: RegexMatcher = { test: () => true, matchAll: (text) => text.matchAll(/x/g) };
+const hooks: EvaluationHooks = {
+  resolve: async (reference, context) => ({ reference, resource: context.resource }),
+  terminology, regex: () => matcher, trace: (event: TraceEvent) => { event.values.length; },
+};
+const pending: Promise<unknown[]> = run.evaluateAsync(null, { hooks, signal, concurrency: 2, now: new Date(0), limits });
+const oneOffAsync: Promise<unknown[]> = evaluateAsync(null, '1', { units, now: () => new Date(0) });
+// @ts-expect-error regex is synchronous
+const asyncRegex: EvaluationHooks = { regex: async () => matcher };
+// @ts-expect-error there is no such limit
+const unknownLimit: EvaluationLimits = { maxDepth: 1 };
 // @ts-expect-error a model implements the ModelProvider contract
 compile('1', { model: {} });
 // @ts-expect-error inputType names model types

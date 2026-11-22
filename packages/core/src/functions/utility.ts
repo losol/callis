@@ -2,7 +2,8 @@
  * The utility functions `trace()`, `now()`, `timeOfDay()` and `today()`
  * ([N1 §5.9](https://hl7.org/fhirpath/N1/#utility-functions)).
  */
-import { type Collection, EMPTY, type Item } from '../runtime/collection.ts';
+import type { Collection, Item } from '../runtime/collection.ts';
+import { flattenWithin, type Limits } from '../runtime/limits.ts';
 import { andThen, type MaybePromise, mapSequential } from '../runtime/maybe-promise.ts';
 import { toSystemValue } from '../runtime/node-value.ts';
 import { singleton } from '../runtime/singleton.ts';
@@ -37,7 +38,7 @@ export const traceFunction: FunctionDefinition = defineFunction({
   impl: (call, input, args) => {
     const name = singleton(valueArg(args, 0), 'String', asString) ?? '';
     const projection = lambdaArg(args, 1);
-    const traced = projection === undefined ? input : project(input, projection);
+    const traced = projection === undefined ? input : project(input, projection, call.ctx.limits);
     return andThen(traced, (items) => andThen(send(call, name, items), () => input));
   },
 });
@@ -93,14 +94,18 @@ function asString(item: Item): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-/** The projection evaluated for each item, with the item as `$this` and its `$index`. */
-function project(input: Collection, projection: LambdaArg): MaybePromise<Collection> {
+/**
+ * The projection evaluated for each item, with the item as `$this` and its `$index`, flattened as
+ * `select()` does, within `limits.maxCollectionSize`.
+ */
+function project(
+  input: Collection,
+  projection: LambdaArg,
+  limits: Limits,
+): MaybePromise<Collection> {
   return andThen(
     mapSequential(input, (item, index) => projection.forItem(item, index)),
-    (results) => {
-      const items = results.flat();
-      return items.length === 0 ? EMPTY : items;
-    },
+    (results) => flattenWithin(results, limits),
   );
 }
 

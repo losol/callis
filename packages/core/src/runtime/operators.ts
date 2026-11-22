@@ -4,13 +4,17 @@ import { type Collection, EMPTY, fromBoolean, type Item } from './collection.ts'
 import type { ComparisonContext } from './comparison.ts';
 import { compare } from './comparison.ts';
 import { equals, equivalent, itemEquals } from './equality.ts';
+import { checkCollectionSize, type LimitsContext } from './limits.ts';
 import { singleton } from './singleton.ts';
 
-/** An operator's evaluated operands and the context needed by the value kernels. */
+/**
+ * An operator's evaluated operands and the context needed by the value kernels. `EvalContext` has
+ * it, with the limits that bound the result of `|`.
+ */
 export type BinaryOperation = (
   left: Collection,
   right: Collection,
-  ctx: ComparisonContext,
+  ctx: ComparisonContext & LimitsContext,
 ) => Collection;
 
 /**
@@ -89,12 +93,23 @@ function membership(left: Collection, right: Collection, ctx: ComparisonContext)
   return fromBoolean(right.some((candidate) => itemEquals(item, candidate, ctx) === true));
 }
 
-function union(left: Collection, right: Collection, ctx: ComparisonContext): Collection {
+/**
+ * `|` and `union()`: the items of both operands without duplicates by `=`, within
+ * `limits.maxCollectionSize`.
+ */
+function union(
+  left: Collection,
+  right: Collection,
+  ctx: ComparisonContext & LimitsContext,
+): Collection {
   const result: Item[] = [];
   for (const input of [left, right]) {
     for (const item of input) {
       // Unknown equality does not establish a duplicate. Preserve the original input nodes.
-      if (!result.some((candidate) => itemEquals(candidate, item, ctx) === true)) result.push(item);
+      if (!result.some((candidate) => itemEquals(candidate, item, ctx) === true)) {
+        result.push(item);
+        checkCollectionSize(result.length, ctx.limits);
+      }
     }
   }
   return result;

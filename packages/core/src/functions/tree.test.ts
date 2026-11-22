@@ -160,3 +160,45 @@ describe('sync and async evaluation', () => {
     ).toEqual(['Ada', 'Mina', 'Lovelace', 'Ada', 'nickname']);
   });
 });
+
+// #186: a host can pass a JavaScript object graph that JSON cannot express. descendants() does not
+// detect cycles, and limits.maxCollectionSize ends the walk (docs/spec-notes.md#order-of-descendants).
+describe('descendants() on object graphs that are not trees', () => {
+  function cyclic(): Record<string, unknown> {
+    const node: Record<string, unknown> = { id: 'loop' };
+    node.self = node;
+    return node;
+  }
+  const limit = { code: 'eval/limit-exceeded' };
+
+  it('stops on a cycle with eval/limit-exceeded, in sync and async mode', async () => {
+    const options = { limits: { maxCollectionSize: 100 } };
+    expect(() => run(cyclic(), 'descendants()', options)).toThrow(expect.objectContaining(limit));
+    await expect(evaluateAsync(cyclic(), 'descendants()', options)).rejects.toMatchObject(limit);
+    const functions = testRegistry();
+    await expect(
+      evaluateAsync(cyclic(), 'testAsync().descendants()', { ...options, functions }),
+    ).rejects.toMatchObject(limit);
+  });
+
+  it('stops on a cycle at the default limit', async () => {
+    expect(() => run(cyclic(), 'descendants()')).toThrow(expect.objectContaining(limit));
+    await expect(evaluateAsync(cyclic(), 'descendants()')).rejects.toMatchObject(limit);
+  });
+
+  it('stops on a cycle through a typed element', () => {
+    const contained: Record<string, unknown> = { resourceType: 'Patient', id: 'p1' };
+    contained.contained = [contained];
+    const options = { model: stubModel, limits: { maxCollectionSize: 100 } };
+    expect(() => run(contained, 'descendants()', options)).toThrow(expect.objectContaining(limit));
+  });
+
+  it('lists shared objects once per path, up to the limit', () => {
+    const leaf = { value: 1 };
+    const graph = { a: leaf, b: [leaf, leaf] };
+    expect(run(graph, 'descendants().count()', { limits: { maxCollectionSize: 6 } })).toEqual([6]);
+    expect(() => run(graph, 'descendants()', { limits: { maxCollectionSize: 5 } })).toThrow(
+      expect.objectContaining(limit),
+    );
+  });
+});

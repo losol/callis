@@ -20,14 +20,9 @@ import type { ModelProvider, ModelTypeInfo } from '../model/model-provider.ts';
 import type { ExpressionNode } from '../parser/ast.ts';
 import { parse } from '../parser/parser.ts';
 import { type CancellationSignal, throwIfAborted } from '../runtime/cancellation.ts';
-import {
-  type EvalContext,
-  type Evaluator,
-  type Limits,
-  rootFrame,
-  type TraceSink,
-} from '../runtime/context.ts';
+import { type EvalContext, type Evaluator, rootFrame, type TraceSink } from '../runtime/context.ts';
 import { bindHooks, type EvaluationHooks } from '../runtime/hooks.ts';
+import type { Limits } from '../runtime/limits.ts';
 import { adoptResult, andThen, type MaybePromise, requireSync } from '../runtime/maybe-promise.ts';
 import { toInputCollection } from '../runtime/navigation.ts';
 import { createVariables } from '../runtime/variables.ts';
@@ -167,16 +162,27 @@ export interface EvaluateOptions extends OutputOptions {
 /**
  * Bounds on the work of one evaluation
  * ([architecture: security and robustness](https://github.com/losol/callis/blob/main/docs/architecture.md#security-and-robustness)).
- * Exceeding one raises `eval/limit-exceeded`. Each is a positive integer; a limit left out has
- * its default.
+ * Exceeding one raises `eval/limit-exceeded`, in `evaluate()` and `evaluateAsync()` alike. Each
+ * is a positive integer; a limit left out has its default.
  */
 export interface EvaluationLimits {
   /**
-   * The most items one `repeat()` call may produce; {@link DEFAULT_LIMITS} by default. `repeat()`
-   * ends on data, but a projection that makes new values, such as `'x'.repeat($this & 'x')`,
-   * would not end without it.
+   * The most items one `repeat()` call may produce; 5,000 by default. `repeat()` ends on data,
+   * but a projection that makes new values, such as `'x'.repeat($this & 'x')`, would not end
+   * without it.
    */
   readonly maxRepeatItems?: number;
+  /**
+   * The most items any collection that the evaluation builds may have; 1,000,000 by default. It
+   * bounds the memory of collections that multiply, as navigation and `select()` do over a
+   * JavaScript object graph that shares objects, and of data that never ends: `descendants()` on
+   * an object graph with a cycle ([#186](https://github.com/losol/callis/issues/186)). It is
+   * checked where a collection grows: a navigation step, `children()`, `descendants()`,
+   * `repeat()`, `select()`, `trace()` with a projection, `resolve()`, `|`, `union()` and
+   * `combine()`. The input and the variables are the host's data and are not counted, but what
+   * the evaluation builds from them is.
+   */
+  readonly maxCollectionSize?: number;
 }
 
 /** The default {@link EvaluationLimits}. */
@@ -184,6 +190,11 @@ export const DEFAULT_LIMITS: Limits = Object.freeze({
   // repeat() compares each new item with every earlier one, so a tree of this size already takes
   // seconds; a projection that makes new values stops within a fraction of a second.
   maxRepeatItems: 5_000,
+  // The HL7 R4 and R5 suites all pass with a limit of 100, and descendants() of a JSON document
+  // reaches a million items at about 50 MB. A runaway stops there after about 0.2 s and 220 MB;
+  // ten million would take about 2.4 GB, more than a browser tab can count on
+  // (docs/tasks/T0038b-public-async-hooks-limits.md#the-maxcollectionsize-default).
+  maxCollectionSize: 1_000_000,
 });
 
 /** A compiled expression. It holds no evaluation state, so it can be evaluated concurrently. */
@@ -477,15 +488,27 @@ function resolveLimits(limits: EvaluationLimits | undefined): Limits {
   if (typeof limits !== 'object' || limits === null) {
     throw new FhirPathEvaluationError('eval/invalid-argument', 'Expected limits to be an object');
   }
-  const maxRepeatItems =
-    limits.maxRepeatItems === undefined ? DEFAULT_LIMITS.maxRepeatItems : limits.maxRepeatItems;
-  if (!Number.isSafeInteger(maxRepeatItems) || maxRepeatItems < 1) {
+  return {
+    maxRepeatItems: checkLimit(limits.maxRepeatItems, 'maxRepeatItems'),
+    maxCollectionSize: checkLimit(limits.maxCollectionSize, 'maxCollectionSize'),
+  };
+}
+
+/**
+ * One limit: the given positive integer, or the default.
+ *
+ * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` for anything but a positive
+ *   safe integer.
+ */
+function checkLimit(value: number | undefined, name: keyof Limits): number {
+  const limit = value === undefined ? DEFAULT_LIMITS[name] : value;
+  if (!Number.isSafeInteger(limit) || limit < 1) {
     throw new FhirPathEvaluationError(
       'eval/invalid-argument',
-      'Expected limits.maxRepeatItems to be a positive integer',
+      `Expected limits.${name} to be a positive integer`,
     );
   }
-  return { maxRepeatItems };
+  return limit;
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   Decimal,
   type EvaluateOptions,
   evaluate,
+  evaluateAsync,
   FhirPathError,
   FhirPathEvaluationError,
   FhirPathSemanticError,
@@ -36,7 +37,7 @@ describe('public synchronous model-less API', () => {
 
   it('returns fresh arrays and isolates inputs, variables and output options between runs', () => {
     const compiled = compile('%value');
-    expect(Object.keys(compiled).sort()).toEqual(['evaluate', 'expression']);
+    expect(Object.keys(compiled).sort()).toEqual(['evaluate', 'evaluateAsync', 'expression']);
     expect(Object.isFrozen(compiled)).toBe(true);
     const variables = { value: Decimal.parse('1.2300') };
     expect(compiled.evaluate(null, { variables, decimalOutput: 'string' })).toEqual(['1.2300']);
@@ -120,10 +121,11 @@ describe('public synchronous model-less API', () => {
     }
   });
 
-  // The model options are in public-model-options.test.ts; functions waits for #222.
-  it.each(['functions', 'hooks', 'cache', 'output', 'now', 'limits'])(
+  // The model options are in public-model-options.test.ts, and hooks, now and limits in
+  // public-async-hooks.test.ts; functions waits for #222.
+  it.each(['functions', 'cache', 'output', 'knownVariables'])(
     'rejects deferred %s options rather than silently ignoring them',
-    (key) => {
+    async (key) => {
       const options = { [key]: undefined };
       expect(() => compile('1', options as never)).toThrow(
         expect.objectContaining({ code: 'eval/invalid-argument' }),
@@ -134,6 +136,12 @@ describe('public synchronous model-less API', () => {
       expect(() => compile('1').evaluate(null, options as never)).toThrow(
         expect.objectContaining({ code: 'eval/invalid-argument' }),
       );
+      await expect(evaluateAsync(null, '1', options as never)).rejects.toMatchObject({
+        code: 'eval/invalid-argument',
+      });
+      await expect(compile('1').evaluateAsync(null, options as never)).rejects.toMatchObject({
+        code: 'eval/invalid-argument',
+      });
     },
   );
 
@@ -249,9 +257,20 @@ describe('public synchronous model-less API', () => {
       'model' | 'inputType' | 'lenient' | 'units' | 'strict'
     >();
     expectTypeOf<keyof EvaluateOptions>().toEqualTypeOf<
-      'variables' | 'resource' | 'rootResource' | 'timezoneOffset' | 'decimalOutput'
+      | 'variables'
+      | 'resource'
+      | 'rootResource'
+      | 'timezoneOffset'
+      | 'decimalOutput'
+      | 'hooks'
+      | 'signal'
+      | 'concurrency'
+      | 'now'
+      | 'limits'
     >();
-    expectTypeOf<keyof CompiledExpression>().toEqualTypeOf<'expression' | 'evaluate'>();
+    expectTypeOf<keyof CompiledExpression>().toEqualTypeOf<
+      'expression' | 'evaluate' | 'evaluateAsync'
+    >();
     expectTypeOf<PlainQuantity['value']>().toEqualTypeOf<number | string>();
     expectTypeOf<SourceSpan['start']>().toEqualTypeOf<number>();
     expectTypeOf<CompileOptions['units']>().toEqualTypeOf<UnitSystem | undefined>();

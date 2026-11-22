@@ -1,9 +1,10 @@
 /**
  * Public API of `@callis/core`.
  *
- * Synchronous evaluation and analysis of plain JSON or with a data model, plain result values,
- * errors, lossless JSON input, and the contracts used by model and unit-provider packages.
- * Internal modules are imported directly, never through here.
+ * Evaluation and analysis of plain JSON or with a data model, synchronous or asynchronous with
+ * host hooks, bounded by limits; plain result values, errors, lossless JSON input, and the
+ * contracts used by model and unit-provider packages and by hosts. Internal modules are imported
+ * directly, never through here.
  *
  * @packageDocumentation
  */
@@ -14,9 +15,10 @@ export type {
   CompiledExpression,
   CompileOptions,
   EvaluateOptions,
+  EvaluationLimits,
   LenientOptions,
 } from './api/public-api.ts';
-export { analyze, compile, evaluate } from './api/public-api.ts';
+export { analyze, compile, evaluate, evaluateAsync } from './api/public-api.ts';
 export type { Diagnostic } from './errors/diagnostic.ts';
 export type {
   ErrorCode,
@@ -43,6 +45,21 @@ export type {
   ModelTypeInfo,
   ModelTypeKind,
 } from './model/model-provider.ts';
+// The host contracts of async evaluation and hooks (T0038b).
+export type { CancellationSignal } from './runtime/cancellation.ts';
+export type {
+  CodedValue,
+  Coding,
+  EvaluationHooks,
+  HookContext,
+  HookResult,
+  HtmlChecksContext,
+  RegexMatcher,
+  ResolveContext,
+  SubsumptionOutcome,
+  TerminologyProvider,
+  TraceEvent,
+} from './runtime/hooks.ts';
 export type { SystemTypeName } from './types/system-types.ts';
 export { Decimal, MAX_DECIMAL_DIGITS } from './values/decimal/decimal.ts';
 export type {

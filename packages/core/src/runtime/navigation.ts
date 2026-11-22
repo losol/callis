@@ -15,6 +15,11 @@
  *   primitives are merged with their `_name` extensions, and nodes get their model type and the
  *   System type it converts to. A node whose type the model does not know (an unknown
  *   `resourceType`) is navigated like plain JSON, but never gets a type from its data.
+ *
+ * Each navigation function checks the size of its result after each input item against
+ * `limits.maxCollectionSize`, so data that a host builds as a JavaScript object graph with shared
+ * or cyclic objects, where navigation can multiply the items at every step, stops with
+ * `eval/limit-exceeded` ([#186](https://github.com/losol/callis/issues/186)).
  */
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
 import { JsonNumber } from '../model/lossless-json.ts';
@@ -31,9 +36,13 @@ import { TimeValue } from '../values/datetime/time.ts';
 import { Decimal } from '../values/decimal/decimal.ts';
 import { Quantity } from '../values/quantity/quantity.ts';
 import { type Collection, EMPTY, type Item } from './collection.ts';
+import { checkCollectionSize, type LimitsContext } from './limits.ts';
 
-/** What listing the children of a node needs. `EvalContext` and `ComparisonContext` have it. */
-export interface ModelContext {
+/**
+ * What listing the children of a node needs. `EvalContext` and `ComparisonContext` have it; only
+ * `EvalContext` has the `limits` that bound the result.
+ */
+export interface ModelContext extends LimitsContext {
   /** The model, or undefined for model-less navigation of plain JSON. */
   readonly model: ModelProvider | undefined;
 }
@@ -241,6 +250,7 @@ export function navigateMember(
   const items: Item[] = [];
   for (const item of input) {
     appendMember(items, item, name, ctx);
+    checkCollectionSize(items.length, ctx.limits);
   }
   return items.length === 0 ? EMPTY : items;
 }
@@ -285,6 +295,7 @@ export function navigateRoot(focus: Collection, name: string, ctx: NavigationCon
       items.push(item);
     } else {
       appendMember(items, item, name, ctx);
+      checkCollectionSize(items.length, ctx.limits);
     }
   }
   return items.length === 0 ? EMPTY : items;
@@ -315,6 +326,7 @@ export function navigateChildren(input: Collection, ctx: ModelContext): Collecti
         for (const element of model.getElements(item.type)) {
           appendTypedElement(items, source, element, element.name, item, model);
         }
+        checkCollectionSize(items.length, ctx.limits);
       }
       continue;
     }
@@ -327,6 +339,7 @@ export function navigateChildren(input: Collection, ctx: ModelContext): Collecti
         appendChild(items, json[key], key, item);
       }
     }
+    checkCollectionSize(items.length, ctx.limits);
   }
   return items.length === 0 ? EMPTY : items;
 }
