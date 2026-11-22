@@ -86,6 +86,33 @@ describe('mapSequential', () => {
   it('gives an empty array for no items', () => {
     expect(mapSequential([], () => 1)).toEqual([]);
   });
+
+  // The results of select() are counted against limits.maxCollectionSize as they arrive.
+  it('shows each result to accept before the next call, and stops when it throws', async () => {
+    for (const isAsync of [false, true]) {
+      const calls: number[] = [];
+      const seen: number[] = [];
+      const run = () =>
+        mapSequential(
+          [1, 2, 3, 4],
+          (item) => {
+            calls.push(item);
+            return isAsync ? Promise.resolve(item) : item;
+          },
+          (result) => {
+            seen.push(result);
+            if (result === 2) throw new Error('enough');
+          },
+        );
+      if (isAsync) {
+        await expect(run()).rejects.toThrow('enough');
+      } else {
+        expect(run).toThrow('enough');
+      }
+      expect(calls).toEqual([1, 2]);
+      expect(seen).toEqual([1, 2]);
+    }
+  });
 });
 
 /** Lets the pending continuations of a concurrent map run. */
@@ -187,6 +214,59 @@ describe('mapConcurrent', () => {
 
   it('gives an empty array for no items', () => {
     expect(mapConcurrent([], () => 1, 1)).toEqual([]);
+  });
+
+  // The results of resolve() are counted against limits.maxCollectionSize as they arrive.
+  it('stops before the next call when accept throws for a synchronous result', async () => {
+    const calls: number[] = [];
+    const refuse = (result: number): void => {
+      if (result === 2) throw new Error('enough');
+    };
+    const call = (item: number): number => {
+      calls.push(item);
+      return item;
+    };
+    expect(() => mapConcurrent([1, 2, 3], call, 2, refuse)).toThrow('enough');
+    expect(calls).toEqual([1, 2]);
+    calls.length = 0;
+    // A synchronous result after the map has turned asynchronous.
+    const pending = mapConcurrent(
+      [1, 2, 3],
+      (item) => (item === 1 ? Promise.resolve(call(item)) : call(item)),
+      2,
+      refuse,
+    );
+    await expect(pending).rejects.toThrow('enough');
+    expect(calls).toEqual([1, 2]);
+  });
+
+  it('starts no more calls once accept throws, and observes the calls already running', async () => {
+    const release: ((fail: boolean) => void)[] = [];
+    const started: number[] = [];
+    const seen: number[] = [];
+    const pending = mapConcurrent(
+      [1, 2, 3, 4, 5],
+      (item) => {
+        started.push(item);
+        return new Promise<number>((resolve, reject) =>
+          release.push((fail) => (fail ? reject(new Error('late')) : resolve(item))),
+        );
+      },
+      2,
+      (result) => {
+        seen.push(result);
+        throw new Error('enough');
+      },
+    );
+    expect(started).toEqual([1, 2]);
+    release[0]?.(false);
+    await expect(pending).rejects.toThrow('enough');
+    expect(started).toEqual([1, 2]);
+    expect(seen).toEqual([1]);
+    // The call still running fails later; that rejection is observed, so it is not unhandled.
+    release[1]?.(true);
+    await settle();
+    expect(seen).toEqual([1]);
   });
 });
 

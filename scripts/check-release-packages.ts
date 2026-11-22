@@ -127,7 +127,7 @@ try {
     consumer,
   );
   const contract = `
-import { analyze, compile, evaluate, Decimal, FhirPathError, FhirPathSemanticError } from '@callis/core';
+import { analyze, compile, evaluate, evaluateAsync, Decimal, FhirPathError, FhirPathSemanticError } from '@callis/core';
 import { ucum } from '@callis/ucum';
 import { r4 } from '@callis/fhir-r4';
 import { r5 } from '@callis/fhir-r5';
@@ -135,7 +135,7 @@ import { r6 } from '@callis/fhir-r6';
 function equal(actual, expected) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(JSON.stringify({actual, expected}));
 }
-export function check() {
+export async function check() {
   equal(evaluate({resourceType:'Patient',name:[{given:['Ada','Mina']}]}, 'Patient.name.given'), ['Ada','Mina']);
   equal(compile('name[0]').evaluate({name:['Ada']}), ['Ada']);
   equal(evaluate(null, '{}'), []);
@@ -237,19 +237,46 @@ export function check() {
   equal(evaluate({resourceType:'DeviceAlert',label:'SpO2 low'}, 'label', {model:r6, inputType:'DeviceAlert'}), ['SpO2 low']);
   for (const model of [r4,r5]) equal(codeOf(() => compile('label', {model, inputType:'DeviceAlert'})), 'semantic/unknown-type');
   equal(codeOf(() => compile('1', {model:{...r4, namespace:'System'}})), 'eval/invalid-argument');
+  // T0038b: async evaluation and hooks with each packed provider. A resource that a resolve hook
+  // returns is typed like the input; DeviceAlert is a resource of R6 only.
+  const alert = {resourceType:'DeviceAlert',id:'a1',label:'SpO2 low'};
+  const observed = {resourceType:'Observation',status:'final',subject:{reference:'DeviceAlert/a1'}};
+  const typedAlert = 'subject.resolve().is(FHIR.Resource) | subject.resolve().label';
+  for (const [model, typed] of [[r4,false],[r5,false],[r6,true]]) {
+    equal(await evaluateAsync(observed, typedAlert, {model, hooks:{resolve: async () => alert}}), [typed,'SpO2 low']);
+    equal(evaluate(observed, typedAlert, {model, hooks:{resolve: () => alert}}), [typed,'SpO2 low']);
+    equal(await compile(typedAlert, {model}).evaluateAsync(observed,
+      {hooks:{resolve: () => Promise.resolve(alert)}, concurrency: 1}), [typed,'SpO2 low']);
+  }
+  equal(codeOf(() => evaluate(observed, 'subject.resolve()', {model:r4, hooks:{resolve: async () => alert}})), 'eval/async-in-sync');
+  async function rejection(pending) {
+    try { await pending; } catch (error) {
+      if (!(error instanceof FhirPathError)) throw error;
+      return error.code;
+    }
+    throw new Error('expected a rejection');
+  }
+  const loop = {};
+  loop.self = loop;
+  equal(await rejection(evaluateAsync(loop, 'descendants()', {limits:{maxCollectionSize:100}})), 'eval/limit-exceeded');
+  equal(codeOf(() => evaluate(loop, 'descendants()', {limits:{maxCollectionSize:100}})), 'eval/limit-exceeded');
+  const controller = new AbortController();
+  controller.abort();
+  equal(await rejection(evaluateAsync(null, '1', {signal: controller.signal})), 'eval/aborted');
+  equal(evaluate(null, 'today()', {now: new Date('2026-01-02T00:00:00Z')}), ['2026-01-02']);
   return '${success}';
 }
 `;
   writeFileSync(join(consumer, 'contract.mjs'), contract);
   writeFileSync(
     join(consumer, 'node.mjs'),
-    "import { check } from './contract.mjs'; console.log(check());",
+    "import { check } from './contract.mjs'; console.log(await check());",
   );
   run(process.execPath, ['--enable-source-maps', 'node.mjs'], consumer);
   writeFileSync(
     join(consumer, 'types.mts'),
     `
-import { compile, evaluate, type CompileOptions, type LenientOptions, type ModelProvider, type UnitSystem } from '@callis/core';
+import { compile, evaluate, evaluateAsync, type CompileOptions, type EvaluationHooks, type LenientOptions, type ModelProvider, type UnitSystem } from '@callis/core';
 import { ucum } from '@callis/ucum';
 import { r4 } from '@callis/fhir-r4';
 import { r5 } from '@callis/fhir-r5';
@@ -261,6 +288,12 @@ const lenient: LenientOptions = {choiceSuffix: true};
 const options: CompileOptions = {model: r4, inputType: ['Patient', 'Observation'], lenient, units, strict: true};
 const typed: unknown[] = compile('id', options).evaluate({resourceType: 'Patient', id: 'p1'});
 const r6Result: unknown[] = evaluate({resourceType: 'DeviceAlert'}, 'label', {model: r6, inputType: 'DeviceAlert'});
+const hooks: EvaluationHooks = {resolve: async (reference) => ({resourceType: 'Patient', id: reference})};
+const asyncResults: Promise<unknown[]>[] = models.map((model) =>
+  evaluateAsync(null, "'Patient/1'.resolve().id", {model, hooks, concurrency: 4, limits: {maxCollectionSize: 100}}));
+const compiledAsync: Promise<unknown[]> = compile('id', {model: r6}).evaluateAsync({resourceType: 'DeviceAlert'}, {now: new Date(0)});
+// @ts-expect-error the regex hook is synchronous
+evaluate(null, '1', {hooks: {regex: async () => /x/}});
 // @ts-expect-error inputType is a type name or an array of them
 compile('id', {model: r5, inputType: 1});
 // @ts-expect-error lenient has no other relaxations
@@ -289,7 +322,7 @@ compile('id', {functions: {}});
   );
   writeFileSync(
     join(consumer, 'browser.mjs'),
-    "import {check} from './contract.mjs'; document.querySelector('#result').textContent = check();",
+    "import {check} from './contract.mjs'; check().then((text) => { document.querySelector('#result').textContent = text; }, (error) => { console.error(error); });",
   );
   await build({ root: consumer, configFile: false, logLevel: 'warn' });
   const server = await preview({

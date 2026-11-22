@@ -15,6 +15,7 @@ import type { CancellationSignal } from './cancellation.ts';
 import type { Collection, Item } from './collection.ts';
 import type { ModelEquivalence } from './equality.ts';
 import type { BoundHooks } from './hooks.ts';
+import type { Limits } from './limits.ts';
 import type { MaybePromise } from './maybe-promise.ts';
 
 /**
@@ -36,7 +37,7 @@ export type TraceSink = (name: string, items: Collection, span: SourceSpan) => M
  *
  * Its `model`, `units` and `timezoneOffset` fields match the context the equality and ordering
  * kernels take (T0009), and `model` and `lenientChoiceSuffix` the context navigation takes, so an
- * `EvalContext` can be passed to them as it is. T0042 adds the limits.
+ * `EvalContext` can be passed to them as it is, and its `limits` bound navigation.
  */
 export interface EvalContext {
   /** Whether this is an `evaluateAsync()` evaluation, where hooks and functions may be async. */
@@ -98,18 +99,11 @@ export interface EvalContext {
    * collection, in async mode; the `concurrency` option.
    */
   readonly concurrency: number;
-  /** The bounds on the work of this evaluation, with every default filled in. */
+  /**
+   * The bounds on the work of this evaluation, with every default filled in
+   * ([architecture: security and robustness](https://github.com/losol/callis/blob/main/docs/architecture.md#security-and-robustness)).
+   */
   readonly limits: Limits;
-}
-
-/**
- * The bounds on the work of one evaluation, from the `limits` evaluation option and its defaults
- * ([architecture: security and robustness](https://github.com/losol/callis/blob/main/docs/architecture.md#security-and-robustness)).
- * Exceeding one raises `eval/limit-exceeded`.
- */
-export interface Limits {
-  /** The most items one `repeat()` call may produce. */
-  readonly maxRepeatItems: number;
 }
 
 /**

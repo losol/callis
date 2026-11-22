@@ -1,6 +1,6 @@
 # Using the minimal public API
 
-Callis provides synchronous evaluation of JSON, without a model or with a FHIR model. The initial API is intentionally small; it is not full phase-1 FHIRPath conformance. See the [conformance reports](https://callis.losol.no/conformance/r5) for measured support and the [roadmap](roadmap.md) for remaining work. No release is implied by the examples below.
+Callis evaluates JSON, without a model or with a FHIR model, synchronously or [asynchronously with host hooks](#async-evaluation-and-hooks). The initial API is intentionally small; it is not full phase-1 FHIRPath conformance. See the [conformance reports](https://callis.losol.no/conformance/r5) for measured support and the [roadmap](roadmap.md) for remaining work. No release is implied by the examples below.
 
 ## Evaluate or compile
 
@@ -16,7 +16,7 @@ export const firstGiven: unknown[] = compile('name.given[0]').evaluate(patient);
 
 These return `['Ada', 'Mina']` and `['Ada']`. Every evaluation returns a fresh array. Missing paths, null inputs and empty expressions such as `{}` produce `[]`. Array-valued paths flatten into a collection. JSON property access uses own properties only. A root name such as `Patient` matches the input's own `resourceType`; this is not model-aware validation.
 
-`compile(expression: string, options?: CompileOptions)` returns a frozen object with `expression` and `evaluate(input: unknown, options?: EvaluateOptions): unknown[]`. It retains no per-evaluation variables or results. `evaluate(input: unknown, expression: string, options?: CompileOptions & EvaluateOptions): unknown[]` compiles each call; there is no compile cache.
+`compile(expression: string, options?: CompileOptions)` returns a frozen object with `expression`, `evaluate(input: unknown, options?: EvaluateOptions): unknown[]` and `evaluateAsync(input: unknown, options?: EvaluateOptions): Promise<unknown[]>`. It retains no per-evaluation variables or results. `evaluate(input: unknown, expression: string, options?: CompileOptions & EvaluateOptions): unknown[]` compiles each call, and so does `evaluateAsync()` with the same parameters; there is no compile cache.
 
 ## Options and results
 
@@ -28,6 +28,11 @@ These return `['Ada', 'Mina']` and `['Ada']`. Every evaluation returns a fresh a
 | `rootResource?: unknown` | each evaluation | The value of `%rootResource`, converted like a variable. By default it is `%resource`. `resolve()` looks up contained references (`#id`) in it. |
 | `timezoneOffset?: number \| 'local'` | each evaluation | Whole minutes east of UTC within ±840; defaults to UTC. `'local'` reads the host's current offset and is host/time dependent. |
 | `decimalOutput?: 'number' \| 'string'` | each evaluation | Decimal and Quantity magnitude rendering; defaults to potentially lossy JavaScript numbers. |
+| `hooks?: EvaluationHooks` | each evaluation | Host functions for `resolve()`, terminology, `conformsTo()`, `htmlChecks()`, `matches()` and `replaceMatches()`, and `trace()` ([async evaluation and hooks](#async-evaluation-and-hooks)). |
+| `signal?: CancellationSignal` | each evaluation | Any `AbortSignal`; an aborted one raises `eval/aborted`. |
+| `concurrency?: number` | each evaluation | In `evaluateAsync()`, the most hook calls at once for the items of one collection; 8 by default, `Infinity` for no limit. |
+| `now?: Date \| (() => Date)` | each evaluation | The time of `now()`, `today()` and `timeOfDay()`; the host's clock by default. |
+| `limits?: EvaluationLimits` | each evaluation | `maxRepeatItems` (5,000) and `maxCollectionSize` (1,000,000); beyond either, `eval/limit-exceeded`. |
 
 ```ts
 export const variable: unknown[] = compile('%value').evaluate(null, { variables: { value: 'hello' } });
@@ -203,6 +208,76 @@ These give `['lbs']` and `['SpO2 low']`. Results stay plain: a FHIR primitive co
 
 **Versions.** The engine has no version-specific code; R4, R5 and R6 differ only in the providers' data. R4 (4.0.1) and R5 (5.0.0) are measured with the HL7 test suites ([R4 report](https://callis.losol.no/conformance/r4), [R5 report](https://callis.losol.no/conformance/r5)). R6 is best effort: `r6` is built from the draft [`6.0.0-snapshot1`](https://hl7.org/fhir/6.0.0-snapshot1/fhirpath.html), not final R6, and the engine's own tests evaluate with it. There is no official R6 FHIRPath suite, so there is no R6 conformance result. Known gaps of R6 in Callis: the Type Factory (`%factory`), General Service API (`%server`) and Terminology Service API (`%terminologies`), which the draft moved to an HL7 incubator guide and which wait for that guide to be published ([T0032](tasks/T0032-fhir-phase2.md) adds the R4 and R5 ones), and the new `weight()` function, which waits for final R6; `%profile` can be passed as a variable. The [roadmap](roadmap.md#fhir-versions) lists every difference between the draft and R5 and how each is handled.
 
+## Async evaluation and hooks
+
+Some functions need the host. `resolve()` asks it for a reference that is not in the data, `memberOf()`, `subsumes()` and `subsumedBy()` ask a terminology provider, `conformsTo()` a profile validator, `htmlChecks()` a narrative checker, and `trace()` sends its output to it. The host supplies these as hooks with the `hooks` evaluation option; without its hook, a function gives empty, and `trace()` only returns its input. A `regex` hook replaces JavaScript's backtracking `RegExp` in `matches()` and `replaceMatches()` with an engine of the host's choice, such as one without catastrophic backtracking.
+
+`evaluateAsync()` and `CompiledExpression.evaluateAsync()` take the options of `evaluate()` and return a promise, so a hook may answer with one, for example from `fetch()`:
+
+```ts
+import { evaluateAsync } from '@callis/core';
+
+export const directory: Readonly<Record<string, unknown>> = {
+  'Organization/o1': { resourceType: 'Organization', id: 'o1', name: 'Acme' },
+};
+export const referring: Readonly<{ resourceType: string; managingOrganization: { reference: string } }> = {
+  resourceType: 'Patient', managingOrganization: { reference: 'Organization/o1' },
+};
+export const remoteName: unknown[] = await evaluateAsync(referring, 'managingOrganization.resolve().name', {
+  hooks: { resolve: async (reference) => directory[reference] },
+});
+```
+
+This gives `['Acme']`. `resolve()` looks in the data first, for contained resources and Bundle entries, and asks the hook only for the rest; the resource the hook returns is typed by the `model` like the input, so a hook needs no version-specific code for R4, R5 or R6. Every hook gets the evaluation's `signal` in its context, to pass on to `fetch()`. The hook calls for the items of one collection run at the same time, at most `concurrency` of them (8 by default), and the results keep the order of the items. Every error rejects the promise, a syntax error or an invalid option too; `evaluateAsync()` never throws.
+
+`evaluate()` takes the same hooks when they answer synchronously; a promise, or any other thenable, from a hook raises `eval/async-in-sync` there:
+
+```ts
+export const traced: string[] = [];
+export const married: unknown[] = evaluate({ code: 'M' }, "code.trace('code').memberOf('http://example.org/vs')", {
+  hooks: {
+    terminology: { memberOf: (coded) => coded.codings.some((coding) => coding.code === 'M') },
+    trace: (event) => {
+      traced.push(event.name);
+    },
+  },
+});
+```
+
+This gives `[true]`, and `traced` is `['code']`. A hook answers `undefined` when it cannot tell, which makes the function empty; an error it throws ends the evaluation with that error, so a host that follows the R4 text, where an unknown value set or profile is an error, throws. An answer of the wrong type raises `eval/invalid-argument`, and so does a name in `hooks` that is not a hook, so a misspelled hook is never ignored. The [spec notes](spec-notes.md#hook-backed-functions-errors-and-empty-results) give the details.
+
+**Cancellation, the clock and limits.** An aborted `signal`, any `AbortSignal`, stops an evaluation with `eval/aborted` and the signal's `reason` as the error's `cause`: before it starts, before each hook call and after each hook result it waited for. `now` fixes the time of `now()`, `today()` and `timeOfDay()`, for repeatable results. `limits` bounds the work of one evaluation: `maxRepeatItems` is the most items one `repeat()` call may produce (5,000 by default), and `maxCollectionSize` the most items of any collection the evaluation builds (1,000,000 by default), checked as the items are made by a navigation step, `children()`, `descendants()`, `repeat()`, `select()`, `trace()`, `resolve()`, `|`, `union()`, `combine()` and `toChars()`, so the rest is never made. Beyond either, `evaluate()` and `evaluateAsync()` raise `eval/limit-exceeded`. That also stops `descendants()` on a JavaScript object graph with a cycle, which JSON cannot express; the input and the variables themselves are not counted.
+
+```ts
+export const fixedDay: unknown[] = evaluate(null, 'today()', { now: new Date('2026-01-02T12:00:00Z') });
+export async function cancelledCode(): Promise<string> {
+  const controller = new AbortController();
+  const pending = evaluateAsync(referring, 'managingOrganization.resolve()', {
+    hooks: { resolve: async (reference) => directory[reference] },
+    signal: controller.signal,
+  });
+  controller.abort();
+  try {
+    await pending;
+    return '';
+  } catch (error) {
+    if (error instanceof FhirPathError) return error.code;
+    throw error;
+  }
+}
+export function limitCode(): string {
+  try {
+    evaluate(null, '(1 | 2 | 3).combine(4 | 5)', { limits: { maxCollectionSize: 4 } });
+    return '';
+  } catch (error) {
+    if (error instanceof FhirPathError) return error.code;
+    throw error;
+  }
+}
+```
+
+These give `['2026-01-02']`, `'eval/aborted'` and `'eval/limit-exceeded'`: the hook call has started when the signal is aborted, and the evaluation stops when its answer arrives.
+
 ## Current support and deferred API
 
 Paths, on plain JSON or with a [FHIR model](#fhir-models), literals, indexing, Boolean logic, unary polarity and type operations are available. The built-in functions are `not`, `is`, `as`, `where`, `select`, `repeat`, `ofType`, `exists`, `count`, `empty`, `all`, `allTrue`, `anyTrue`, `allFalse`, `anyFalse`, `subsetOf`, `supersetOf`, `distinct`, `isDistinct`, `first`, `single`, `last`, `tail`, `skip`, `take`, `intersect`, `exclude`, `union`, `combine`, `children`, `descendants`, `trace`, `now`, `today`, `timeOfDay`, `iif`, `toX()` and `convertsToX()` for Boolean, Integer, Decimal, Date, DateTime, Time, String and Quantity, the string functions and the FHIR functions below. Arithmetic, comparisons, equality/equivalence, membership, union and string concatenation operators from T0010 are implemented. Other standard functions are still incremental work; an unavailable function such as `aggregate()` raises `semantic/unknown-function`, rather than pretending to evaluate it.
@@ -272,7 +347,7 @@ export const adaTwice: unknown[] = evaluate(patient, "name.given.take(1).combine
 
 These functions use the existing synchronous model-less API.
 
-`children()` returns the properties of each input object in document order, with arrays flattened, but not `resourceType` or keys that start with `_`; `descendants()` returns everything below the input, depth first in document order. `now()`, `today()` and `timeOfDay()` give the same value every time within one evaluation, in UTC unless `timezoneOffset` says otherwise. `trace(name[, projection])` returns its input unchanged; the public API has no hooks yet, so nothing receives its output.
+`children()` returns the properties of each input object in document order, with arrays flattened, but not `resourceType` or keys that start with `_`; `descendants()` returns everything below the input, depth first in document order. `now()`, `today()` and `timeOfDay()` give the same value every time within one evaluation, in UTC unless `timezoneOffset` says otherwise. `trace(name[, projection])` returns its input unchanged and sends it, or its projection, to the `trace` hook ([async evaluation and hooks](#async-evaluation-and-hooks)).
 
 The conversion functions are available too: `iif()`, and `toX()` with `convertsToX()` for Boolean, Integer, Decimal, Date, DateTime, Time, String and Quantity.
 
@@ -297,9 +372,9 @@ export const containerReference: unknown[] = evaluate(
 );
 ```
 
-These give `['Acme']` and `['#o1']`. `%resource` and `%rootResource` are the input unless the `resource` and `rootResource` options say otherwise, as in the second example, which evaluates a contained resource on its own. `hasValue()` is true for a single item with a primitive value and false otherwise. Without a model, `extension()` finds the extensions of resources and complex values, but not those of a primitive, which sit in its `_name` object; with the `model` option it finds those too ([FHIR models](#fhir-models)). `memberOf()`, `subsumes()`, `subsumedBy()`, `conformsTo()` and `htmlChecks()` compile, but return empty in the public API, which has no hooks yet; the engine's host hooks ([T0021](tasks/T0021-hooks-async.md)) reach it with the expanded API (T0038). The interpretations behind these are in the [spec notes](spec-notes.md#fhir-functions).
+These give `['Acme']` and `['#o1']`. `%resource` and `%rootResource` are the input unless the `resource` and `rootResource` options say otherwise, as in the second example, which evaluates a contained resource on its own. `hasValue()` is true for a single item with a primitive value and false otherwise. Without a model, `extension()` finds the extensions of resources and complex values, but not those of a primitive, which sit in its `_name` object; with the `model` option it finds those too ([FHIR models](#fhir-models)). `memberOf()`, `subsumes()`, `subsumedBy()`, `conformsTo()` and `htmlChecks()` answer through the host's hooks, and give empty without them; `resolve()` asks its hook for a reference that is not in the data ([async evaluation and hooks](#async-evaluation-and-hooks)). The interpretations behind these are in the [spec notes](spec-notes.md#fhir-functions).
 
-The public surface has no parser, AST input/property, typed output mode, async evaluation, hooks, custom function registry ([T0045](tasks/T0045-public-custom-functions.md)) or cache; the analyzer, the strict option and the model options are described above. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages. The remaining options arrive with the [T0038](tasks/T0038-public-api-completion.md#split) tasks, except the custom function registry, which waits for T0045.
+The public surface has no parser, AST input/property, typed output mode, custom function registry ([T0045](tasks/T0045-public-custom-functions.md)) or cache; the analyzer, the strict option, the model options, async evaluation and the hooks are described above. Unsupported option keys raise `eval/invalid-argument`. The existing `Decimal`, `UnitSystem`, `minimalUnitSystem` and `ModelProvider` exports remain available to provider packages. The remaining options arrive with the [T0038](tasks/T0038-public-api-completion.md#split) tasks, except the custom function registry, which waits for T0045.
 
 The examples are executed by the public documentation tests. Handwritten TSDoc and this small guide describe the initial API; a generated API reference is deferred with the expanded API.
 

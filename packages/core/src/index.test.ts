@@ -21,6 +21,7 @@ describe('@callis/core public API', () => {
         'analyze',
         'compile',
         'evaluate',
+        'evaluateAsync',
         'parseJson',
         'JsonNumber',
         'FhirPathError',

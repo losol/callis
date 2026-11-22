@@ -160,3 +160,87 @@ describe('sync and async evaluation', () => {
     ).toEqual(['Ada', 'Mina', 'Lovelace', 'Ada', 'nickname']);
   });
 });
+
+/**
+ * A node whose `next` lists the node itself `fanOut` times, behind a proxy that counts the
+ * elements navigation reads from that list: one for each child node it builds.
+ */
+function branchingCycle(fanOut: number): { readonly node: object; readonly reads: () => number } {
+  const node: Record<string, unknown> = {};
+  let reads = 0;
+  node.next = new Proxy(
+    Array.from({ length: fanOut }, () => node),
+    {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && /^[0-9]+$/.test(key)) reads++;
+        return Reflect.get(target, key, receiver);
+      },
+    },
+  );
+  return { node, reads: () => reads };
+}
+
+// #186: a host can pass a JavaScript object graph that JSON cannot express. descendants() does not
+// detect cycles, and limits.maxCollectionSize ends the walk (docs/spec-notes.md#order-of-descendants).
+describe('descendants() on object graphs that are not trees', () => {
+  function cyclic(): Record<string, unknown> {
+    const node: Record<string, unknown> = { id: 'loop' };
+    node.self = node;
+    return node;
+  }
+  const limit = { code: 'eval/limit-exceeded' };
+
+  it('stops on a cycle with eval/limit-exceeded, in sync and async mode', async () => {
+    const options = { limits: { maxCollectionSize: 100 } };
+    expect(() => run(cyclic(), 'descendants()', options)).toThrow(expect.objectContaining(limit));
+    await expect(evaluateAsync(cyclic(), 'descendants()', options)).rejects.toMatchObject(limit);
+    const functions = testRegistry();
+    await expect(
+      evaluateAsync(cyclic(), 'testAsync().descendants()', { ...options, functions }),
+    ).rejects.toMatchObject(limit);
+  });
+
+  it('stops on a cycle at the default limit', async () => {
+    expect(() => run(cyclic(), 'descendants()')).toThrow(expect.objectContaining(limit));
+    await expect(evaluateAsync(cyclic(), 'descendants()')).rejects.toMatchObject(limit);
+  });
+
+  it('stops on a cycle through a typed element', () => {
+    const contained: Record<string, unknown> = { resourceType: 'Patient', id: 'p1' };
+    contained.contained = [contained];
+    const options = { model: stubModel, limits: { maxCollectionSize: 100 } };
+    expect(() => run(contained, 'descendants()', options)).toThrow(expect.objectContaining(limit));
+  });
+
+  // A cycle that branches: the walk goes one level deeper for each item, and every level lists
+  // fanOut children, so counting only the items would keep fanOut times the limit.
+  it('builds at most one child list beyond the limit on a cycle that branches', async () => {
+    for (const isAsync of [false, true]) {
+      const { node, reads } = branchingCycle(100);
+      const options = { limits: { maxCollectionSize: 1_000 } };
+      if (isAsync) {
+        await expect(evaluateAsync(node, 'descendants()', options)).rejects.toMatchObject(limit);
+      } else {
+        expect(() => run(node, 'descendants()', options)).toThrow(expect.objectContaining(limit));
+      }
+      expect(reads()).toBeGreaterThan(1_000);
+      expect(reads()).toBeLessThanOrEqual(1_000 + 100);
+    }
+  });
+
+  it('stops a cycle that branches at the default limit, in sync and async mode', async () => {
+    const { node, reads } = branchingCycle(1_000);
+    expect(() => run(node, 'descendants()')).toThrow(expect.objectContaining(limit));
+    await expect(evaluateAsync(node, 'descendants()')).rejects.toMatchObject(limit);
+    expect(reads()).toBeLessThanOrEqual(2 * (1_000_000 + 1_000));
+  });
+
+  it('lists shared objects once per path, up to the limit', () => {
+    const leaf = { value: 1 };
+    const graph = { a: leaf, b: [leaf, leaf] };
+    expect(run(graph, 'descendants().count()', { limits: { maxCollectionSize: 6 } })).toEqual([6]);
+    expect(() => run(graph, 'descendants()', { limits: { maxCollectionSize: 5 } })).toThrow(
+      expect.objectContaining(limit),
+    );
+  });
+});

@@ -30,16 +30,38 @@ Host-backed, cancellable and bounded evaluation through the public API: `evaluat
 - Choose the `maxCollectionSize` default so the HL7 suites and the documented examples stay far below it, and record the reason in this file. Check the limit where collections grow (navigation, `descendants()`, `repeat()`, `|`, `combine()`), not on every item.
 - Typed output from `evaluateAsync()` comes with [T0038d](T0038d-public-typed-output.md); whichever of the two lands second adds the overloads for the other's functions.
 
+### Where the limit is checked
+
+`limits.maxCollectionSize` is checked where a collection grows beyond the size of what it is built from, never in a pass over the items: after each input item of a navigation step (`navigateMember()`, `navigateRoot()`, `navigateChildren()`, so also `children()`), in `descendants()` as it lists the children of each node, counting those it keeps for later as well as those it has walked, after each new item of `repeat()`, for the results of `select()`, of the projection of `trace()` and of `resolve()` as each item's result arrives, before the next item is projected or its hook called, after each item `|` and `union()` add, before `combine()` builds its result, and in `toChars()`, from the character count of a string longer than the limit, before the characters are built. Every other operation gives at most as many items as its input: an audit of the 83 registered functions and the operators found no other growth point, and the public growth-point table in `packages/core/test/public-async-hooks.test.ts` covers each of these. A collection can so pass the limit by at most what one input item adds, such as the elements of one JSON array; in `evaluateAsync()`, the `resolve()` hook calls already running when the limit is passed still finish, at most `concurrency` of them, and their results are ignored. Strings are one item however long; no limit bounds their length yet ([#238](https://github.com/losol/callis/issues/238)). The input and the variables are the host's data and are not counted. The checks in navigation and `descendants()` are the ones that bound host object graphs that share or repeat objects: `descendants()` on a cycle ([#186](https://github.com/losol/callis/issues/186)), also one that branches, where each node lists itself many times and counting only the walked items would keep that many times the limit in child lists, and paths such as `next.next.next…` on such an object, which multiply the items at every step. Detecting cycles by object identity would miss the second. The error gets the span of the step that raised it; navigation steps attach theirs like operators and functions do.
+
+### The `maxCollectionSize` default
+
+**1,000,000 items**, chosen on 2026-11-22 from these measurements (Node 24 on a laptop):
+
+- **The HL7 suites stay far below it.** Every R4 and R5 suite test still passes with a limit of 100, and some fail at 30, so the largest collection any suite test builds has at most 100 items: four orders of magnitude below the default. The largest vendored fixture, the IPS document `bundle-document-ips.json`, has 300 descendants. The README and guide examples build at most four items, and all fail to load at a limit of 3.
+- **Real data fits.** The vendored HL7 examples average about 21,000 nodes per MB of JSON, so `descendants()` of one document reaches a million items at about 50 MB, beyond what one evaluation of a single resource or Bundle usually holds in memory. A host with larger data raises the limit.
+- **A runaway stops quickly and fits in memory.** `descendants()` on a cyclic object graph stops at the default after about 0.2 s and 220 MB of heap. Ten million would take about 1.6 s and 2.4 GB, more than a browser tab or a default Node.js heap can count on, so the limit would no longer prevent the out-of-memory crash it exists for.
+
+The limit bounds memory, not time: `|`, `union()`, `intersect()`, `exclude()` and `distinct()` compare every pair of items, so they take seconds already for tens of thousands of items ([#190](https://github.com/losol/callis/issues/190)).
+
+### Public API decisions
+
+- `hooks` is an options object: an own property that is not a hook is rejected with `eval/invalid-argument`, as for `lenient`, so a misspelled hook, or a future one such as a warning hook for [#232](https://github.com/losol/callis/issues/232), is never silently ignored. The object is passed on as it is, so the hooks are called with it as `this` and may be methods of a class whose state is in private (`#`) fields. `terminology` is a provider object like `units` and `model`, so a client object with other properties of its own can be passed; only its two members are checked.
+- One `EvaluateOptions` serves `evaluate()` and `evaluateAsync()`. `concurrency` is validated in both; `evaluate()` calls one hook at a time, which every value allows. `signal` works in both: in `evaluate()` only a hook can abort it while the evaluation runs.
+- `now` takes a `Date` from any realm, checked with `Date.prototype.getTime()` rather than `instanceof`, and copied when the evaluation starts, so a later change to the object cannot reach an evaluation that is waiting for a hook. An invalid `Date` is rejected before evaluation; the result of a function is checked when the evaluation first needs the time.
+- `evaluateAsync()` and `CompiledExpression.evaluateAsync()` read their options when they are called and reject for every error, a syntax error or an invalid option too; they never throw.
+- The hook contracts are exported as types only (`EvaluationHooks`, `TerminologyProvider`, `HookContext`, `ResolveContext`, `HtmlChecksContext`, `HookResult`, `Coding`, `CodedValue`, `SubsumptionOutcome`, `RegexMatcher`, `TraceEvent`, `CancellationSignal`, `EvaluationLimits`). Every member is optional, so a later hook or limit is an addition.
+
 ## Acceptance criteria
 
 From the [parent](T0038-public-api-completion.md#acceptance-criteria):
 
-- [ ] No future option is accepted as a silent no-op.
-- [ ] publint, attw, the zero-dependency check and the size budget all pass.
-- [ ] The guide examples for async evaluation and hooks are executed in CI.
+- [x] No future option is accepted as a silent no-op.
+- [x] publint, attw, the zero-dependency check and the size budget all pass.
+- [x] The guide examples for async evaluation and hooks are executed in CI.
 
 And for this child:
 
-- [ ] Every hook-backed function (`resolve()`, `memberOf()`, `subsumes()`, `subsumedBy()`, `conformsTo()`, `htmlChecks()`, `matches()` through `regex`, `trace()`) works through the public API in both modes, and a promise in `evaluate()` raises `eval/async-in-sync`.
-- [ ] An aborted signal raises `eval/aborted` before evaluation and before each hook call.
-- [ ] A collection beyond `limits.maxCollectionSize`, and a `repeat()` beyond `limits.maxRepeatItems`, raise `eval/limit-exceeded` in both modes, with the defaults and with custom limits.
+- [x] Every hook-backed function (`resolve()`, `memberOf()`, `subsumes()`, `subsumedBy()`, `conformsTo()`, `htmlChecks()`, `matches()` through `regex`, `trace()`) works through the public API in both modes, and a promise in `evaluate()` raises `eval/async-in-sync` (`packages/core/test/public-async-hooks.test.ts`).
+- [x] An aborted signal raises `eval/aborted` before evaluation and before each hook call.
+- [x] A collection beyond `limits.maxCollectionSize`, and a `repeat()` beyond `limits.maxRepeatItems`, raise `eval/limit-exceeded` in both modes, with the defaults and with custom limits; this ends `descendants()` on a cyclic object graph ([#186](https://github.com/losol/callis/issues/186)).

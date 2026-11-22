@@ -16,8 +16,9 @@ import { defineFunction, type FunctionDefinition } from '../functions/define.ts'
 import { JsonNumber } from '../model/lossless-json.ts';
 import { ModelNode } from '../model/model-node.ts';
 import type { ModelProvider } from '../model/model-provider.ts';
-import { appendAll, type Collection, EMPTY, type Item } from '../runtime/collection.ts';
+import { type Collection, EMPTY, flatten, type Item } from '../runtime/collection.ts';
 import type { EvalContext } from '../runtime/context.ts';
+import { sizeCounter } from '../runtime/limits.ts';
 import { andThen, type MaybePromise, mapConcurrent } from '../runtime/maybe-promise.ts';
 import { navigateMember, resourceTypeOf, toInputCollection } from '../runtime/navigation.ts';
 import { toSystemValue } from '../runtime/node-value.ts';
@@ -58,7 +59,9 @@ type JsonObject = Readonly<Record<string, unknown>>;
  *
  * @see https://hl7.org/fhir/R5/fhirpath.html#functions
  * @throws {@link FhirPathEvaluationError} `eval/invalid-argument` when the hook returns something
- *   that is not JSON data, and whatever the hook throws.
+ *   that is not JSON data, `eval/limit-exceeded` when the result would have more than
+ *   `limits.maxCollectionSize` items, raised as soon as the resolved resources reach it and before
+ *   more hook calls start, and whatever the hook throws.
  */
 export const resolveFunction: FunctionDefinition = defineFunction({
   name: 'resolve',
@@ -68,14 +71,13 @@ export const resolveFunction: FunctionDefinition = defineFunction({
   impl: (call, input) => {
     const ctx = call.ctx;
     return andThen(
-      mapConcurrent(input, (item) => resolveItem(item, ctx), ctx.concurrency),
-      (resolved) => {
-        const items: Item[] = [];
-        for (const found of resolved) {
-          appendAll(items, found);
-        }
-        return items.length === 0 ? EMPTY : items;
-      },
+      mapConcurrent(
+        input,
+        (item) => resolveItem(item, ctx),
+        ctx.concurrency,
+        sizeCounter(ctx.limits),
+      ),
+      flatten,
     );
   },
 });

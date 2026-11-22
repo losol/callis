@@ -4,6 +4,7 @@
  * `subsetting.ts`.
  */
 import { concat, EMPTY } from '../runtime/collection.ts';
+import { checkCollectionSize } from '../runtime/limits.ts';
 import { BINARY_OPERATIONS } from '../runtime/operators.ts';
 import { defineValueFunction, type FunctionDefinition, type ParamSpec } from './define.ts';
 
@@ -24,13 +25,19 @@ export const unionFunction: FunctionDefinition = defineValueFunction(
 
 /**
  * `combine(other)`: the items of the input followed by those of `other`, keeping duplicates. The
- * spec leaves the order open; this keeps it, so the result is the same on every evaluation.
+ * spec leaves the order open; this keeps it, so the result is the same on every evaluation. A
+ * result of more than `limits.maxCollectionSize` items raises `eval/limit-exceeded` before it is
+ * built.
  * @see https://hl7.org/fhirpath/N1/#combineother-collection-collection
  */
 export const combineFunction: FunctionDefinition = defineValueFunction(
   'combine',
   OTHER,
-  (input, args) => concat(input, args[0] ?? EMPTY),
+  (input, args, call) => {
+    const other = args[0] ?? EMPTY;
+    checkCollectionSize(input.length + other.length, call.ctx.limits);
+    return concat(input, other);
+  },
 );
 
 /** The implemented combining functions of the standard library. */

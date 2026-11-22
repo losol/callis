@@ -84,13 +84,17 @@ function compileNode(node: ExpressionNode, cc: CompilerState): Evaluator {
       return compileConstant(literalConstant(node), cc);
     case 'Identifier': {
       const name = node.name;
-      return (ctx, focus) => navigateRoot(focus, name, ctx);
+      return locatedStep(spanOf(node, cc), cc.expression, (ctx, focus) =>
+        navigateRoot(focus, name, ctx),
+      );
     }
     case 'Member': {
       const target = compileNode(node.target, cc);
       const name = node.name;
-      return (ctx, focus, frame) =>
-        andThen(target(ctx, focus, frame), (input) => navigateMember(input, name, ctx));
+      const step = locatedStep(spanOf(node, cc), cc.expression, (ctx, input) =>
+        navigateMember(input, name, ctx),
+      );
+      return (ctx, focus, frame) => andThen(target(ctx, focus, frame), (input) => step(ctx, input));
     }
     case 'FunctionCall':
       return compileFunctionCall(node, cc);
@@ -415,6 +419,26 @@ function located(span: SourceSpan, expression: string, evaluator: Evaluator): Ev
       return locate(error);
     }
     return isThenable(result) ? Promise.resolve(result).then(undefined, locate) : result;
+  };
+}
+
+/**
+ * A synchronous navigation step that attaches its span to the evaluation errors raised inside
+ * it, as {@link located} does for operators and functions: a collection beyond
+ * `limits.maxCollectionSize`. Only the step is covered, not the evaluation of its target, which
+ * keeps the innermost span. Navigation never returns a promise, so there is nothing to adopt.
+ */
+function locatedStep(
+  span: SourceSpan,
+  expression: string,
+  step: (ctx: EvalContext, input: Collection) => Collection,
+): (ctx: EvalContext, input: Collection) => Collection {
+  return (ctx, input) => {
+    try {
+      return step(ctx, input);
+    } catch (error) {
+      throw withSpan(error, span, expression);
+    }
   };
 }
 

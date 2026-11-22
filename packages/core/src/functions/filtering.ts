@@ -4,9 +4,10 @@
  */
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
 import { throwIfAborted } from '../runtime/cancellation.ts';
-import { appendAll, type Collection, EMPTY, type Item } from '../runtime/collection.ts';
+import { type Collection, EMPTY, flatten, type Item } from '../runtime/collection.ts';
 import type { EvalContext } from '../runtime/context.ts';
 import { itemEquals } from '../runtime/equality.ts';
+import { checkCollectionSize, sizeCounter } from '../runtime/limits.ts';
 import { andThen, isThenable, type MaybePromise, mapSequential } from '../runtime/maybe-promise.ts';
 import { isSameNode } from '../runtime/node-value.ts';
 import { assertResolved, matchesTypeTarget } from '../runtime/type-target.ts';
@@ -41,18 +42,23 @@ export const whereFunction: FunctionDefinition = defineFunction({
 /**
  * `select(projection)`: the results of the projection for every input item, flattened, in input
  * order. Each item is the focus and `$this`, and its position is `$index`. Empty input does not
- * evaluate the projection.
+ * evaluate the projection. A result of more than `limits.maxCollectionSize` items raises
+ * `eval/limit-exceeded` as soon as the projections reach it, without projecting the rest.
  * @see https://hl7.org/fhirpath/N1/#selectprojection-expression-collection
  * @see https://hl7.org/fhirpath/STU3/en/index.html#selectprojection-this-index--any--collection
  */
 export const selectFunction: FunctionDefinition = defineFunction({
   name: 'select',
   params: [{ kind: 'lambda', name: 'projection' }],
-  impl: (_call, input, args) => {
+  impl: (call, input, args) => {
     const projection = lambdaArg(args, 0);
     if (projection === undefined) return EMPTY;
     return andThen(
-      mapSequential(input, (item, index) => projection.forItem(item, index)),
+      mapSequential(
+        input,
+        (item, index) => projection.forItem(item, index),
+        sizeCounter(call.ctx.limits),
+      ),
       flatten,
     );
   },
@@ -67,8 +73,9 @@ export const selectFunction: FunctionDefinition = defineFunction({
  * does not set `$index` there, so it stays that of the call.
  *
  * Deduplication ends the walk on data, but a projection that makes new values, such as
- * `'x'.repeat($this & 'x')`, never runs out. More than `limits.maxRepeatItems` items raise
- * `eval/limit-exceeded` ([spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#repeat)).
+ * `'x'.repeat($this & 'x')`, never runs out. More than `limits.maxRepeatItems` items, or more
+ * than `limits.maxCollectionSize` when that is lower, raise `eval/limit-exceeded`
+ * ([spec notes](https://github.com/losol/callis/blob/main/docs/spec-notes.md#repeat)).
  * @see https://hl7.org/fhirpath/N1/#repeatprojection-expression-collection
  * @see https://hl7.org/fhirpath/STU3/en/index.html#repeatprojection-this--collection--collection
  */
@@ -108,14 +115,6 @@ export const FILTERING_FUNCTIONS: readonly FunctionDefinition[] = Object.freeze(
   repeatFunction,
   ofTypeFunction,
 ]);
-
-function flatten(results: readonly Collection[]): Collection {
-  const items: Item[] = [];
-  for (const result of results) {
-    appendAll(items, result);
-  }
-  return items.length === 0 ? EMPTY : items;
-}
 
 /**
  * `repeat()` as 3.0.0 describes it: a queue that starts with the input items; each item taken
@@ -172,7 +171,7 @@ async function finishRepeat(
  * holds only extensions would never be found and a walk back to it would never end.
  *
  * @throws {@link FhirPathEvaluationError} `eval/limit-exceeded` when the result would have more
- *   than `limits.maxRepeatItems` items.
+ *   than `limits.maxRepeatItems` or `limits.maxCollectionSize` items.
  */
 function addNewItems(ctx: EvalContext, queue: Item[], result: Item[], projected: Collection): void {
   const limit = ctx.limits.maxRepeatItems;
@@ -185,6 +184,7 @@ function addNewItems(ctx: EvalContext, queue: Item[], result: Item[], projected:
       );
     }
     result.push(item);
+    checkCollectionSize(result.length, ctx.limits);
     queue.push(item);
   }
 }

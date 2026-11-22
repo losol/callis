@@ -7,6 +7,7 @@ import {
   alertLabel,
   allGiven,
   birthTime,
+  cancelledCode,
   containerReference,
   deceased,
   elementDiagnostics,
@@ -17,6 +18,7 @@ import {
   firstGiven,
   firstGivenPerName,
   firstTwoGiven,
+  fixedDay,
   fractionDiagnostics,
   given,
   givenDistinct,
@@ -25,9 +27,11 @@ import {
   knownGiven,
   lastGiven,
   laterGiven,
+  limitCode,
   linkIds,
   lossless,
   managedBy,
+  married,
   named,
   noNames,
   numberOfNames,
@@ -36,12 +40,14 @@ import {
   parsedDecimal,
   patient,
   quantityJson,
+  remoteName,
   selectedGiven,
   someFalse,
   startExtension,
   startsLater,
   strictCode,
   suffixedUnit,
+  traced,
   uniqueGiven,
   unknownFunction,
   variable,
@@ -50,6 +56,16 @@ import {
 } from '../../../examples/public-api.ts';
 
 describe('public guide examples', () => {
+  // docs/tasks/T0038b-public-async-hooks-limits.md
+  it('runs the async evaluation and hook examples', async () => {
+    expect(remoteName).toEqual(['Acme']);
+    expect(married).toEqual([true]);
+    expect(traced).toEqual(['code']);
+    expect(fixedDay).toEqual(['2026-01-02']);
+    expect(await cancelledCode()).toBe('eval/aborted');
+    expect(limitCode()).toBe('eval/limit-exceeded');
+  });
+
   // docs/tasks/T0038a-public-model-options.md
   it('runs the FHIR model examples', () => {
     expect(deceased).toEqual([false]);

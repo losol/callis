@@ -3,7 +3,7 @@
  * documented snippet imports only the names it uses; this file has one import line per package
  * with all of them, because Biome merges imports from one module.
  */
-import { analyze, compile, evaluate, FhirPathError, parseJson } from '@callis/core';
+import { analyze, compile, evaluate, evaluateAsync, FhirPathError, parseJson } from '@callis/core';
 import { r4 } from '@callis/fhir-r4';
 import { r6 } from '@callis/fhir-r6';
 
@@ -153,6 +153,61 @@ export const startExtension: unknown[] = evaluate(validity, 'start.extension.url
   model: r4,
   inputType: 'Period',
 });
+export const directory: Readonly<Record<string, unknown>> = {
+  'Organization/o1': { resourceType: 'Organization', id: 'o1', name: 'Acme' },
+};
+export const referring: Readonly<{
+  resourceType: string;
+  managingOrganization: { reference: string };
+}> = {
+  resourceType: 'Patient',
+  managingOrganization: { reference: 'Organization/o1' },
+};
+export const remoteName: unknown[] = await evaluateAsync(
+  referring,
+  'managingOrganization.resolve().name',
+  { hooks: { resolve: async (reference) => directory[reference] } },
+);
+export const traced: string[] = [];
+export const married: unknown[] = evaluate(
+  { code: 'M' },
+  "code.trace('code').memberOf('http://example.org/vs')",
+  {
+    hooks: {
+      terminology: { memberOf: (coded) => coded.codings.some((coding) => coding.code === 'M') },
+      trace: (event) => {
+        traced.push(event.name);
+      },
+    },
+  },
+);
+export const fixedDay: unknown[] = evaluate(null, 'today()', {
+  now: new Date('2026-01-02T12:00:00Z'),
+});
+export async function cancelledCode(): Promise<string> {
+  const controller = new AbortController();
+  const pending = evaluateAsync(referring, 'managingOrganization.resolve()', {
+    hooks: { resolve: async (reference) => directory[reference] },
+    signal: controller.signal,
+  });
+  controller.abort();
+  try {
+    await pending;
+    return '';
+  } catch (error) {
+    if (error instanceof FhirPathError) return error.code;
+    throw error;
+  }
+}
+export function limitCode(): string {
+  try {
+    evaluate(null, '(1 | 2 | 3).combine(4 | 5)', { limits: { maxCollectionSize: 4 } });
+    return '';
+  } catch (error) {
+    if (error instanceof FhirPathError) return error.code;
+    throw error;
+  }
+}
 
 /** Keep non-expression errors distinguishable from FHIRPath diagnostics. */
 export function expressionError(): string {
