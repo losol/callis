@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LIMITS, evaluate } from '../api/compile.ts';
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
-import { EMPTY } from './collection.ts';
-import { checkCollectionSize, flattenWithin, type Limits } from './limits.ts';
+import { EMPTY, flatten } from './collection.ts';
+import { checkCollectionSize, type Limits, sizeCounter } from './limits.ts';
 
 const limits: Limits = { maxRepeatItems: 5_000, maxCollectionSize: 3 };
 
@@ -20,12 +20,19 @@ describe('the collection size limit', () => {
     expect(() => checkCollectionSize(Number.MAX_SAFE_INTEGER, undefined)).not.toThrow();
   });
 
-  it('flattens collections in order, within the limit', () => {
-    expect(flattenWithin([[1], [], [2, 3]], limits)).toEqual([1, 2, 3]);
-    expect(flattenWithin([[], []], limits)).toBe(EMPTY);
-    expect(() => flattenWithin([[1, 2], [3, 4], [5]], limits)).toThrow(
-      expect.objectContaining({ code: 'eval/limit-exceeded' }),
-    );
+  it('counts the results for each item as they arrive, and raises once they pass the limit', () => {
+    const count = sizeCounter(limits);
+    expect(() => count([1, 2])).not.toThrow();
+    expect(() => count([])).not.toThrow();
+    expect(() => count([3])).not.toThrow();
+    expect(() => count([4])).toThrow(expect.objectContaining({ code: 'eval/limit-exceeded' }));
+    // Each counter starts at zero.
+    expect(() => sizeCounter(limits)([1, 2, 3])).not.toThrow();
+  });
+
+  it('flattens collections in order', () => {
+    expect(flatten([[1], [], [2, 3]])).toEqual([1, 2, 3]);
+    expect(flatten([[], []])).toBe(EMPTY);
   });
 
   // docs/tasks/T0038b-public-async-hooks-limits.md#the-maxcollectionsize-default

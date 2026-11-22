@@ -4,10 +4,10 @@
  */
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
 import { throwIfAborted } from '../runtime/cancellation.ts';
-import { type Collection, EMPTY, type Item } from '../runtime/collection.ts';
+import { type Collection, EMPTY, flatten, type Item } from '../runtime/collection.ts';
 import type { EvalContext } from '../runtime/context.ts';
 import { itemEquals } from '../runtime/equality.ts';
-import { checkCollectionSize, flattenWithin } from '../runtime/limits.ts';
+import { checkCollectionSize, sizeCounter } from '../runtime/limits.ts';
 import { andThen, isThenable, type MaybePromise, mapSequential } from '../runtime/maybe-promise.ts';
 import { isSameNode } from '../runtime/node-value.ts';
 import { assertResolved, matchesTypeTarget } from '../runtime/type-target.ts';
@@ -43,7 +43,7 @@ export const whereFunction: FunctionDefinition = defineFunction({
  * `select(projection)`: the results of the projection for every input item, flattened, in input
  * order. Each item is the focus and `$this`, and its position is `$index`. Empty input does not
  * evaluate the projection. A result of more than `limits.maxCollectionSize` items raises
- * `eval/limit-exceeded`.
+ * `eval/limit-exceeded` as soon as the projections reach it, without projecting the rest.
  * @see https://hl7.org/fhirpath/N1/#selectprojection-expression-collection
  * @see https://hl7.org/fhirpath/STU3/en/index.html#selectprojection-this-index--any--collection
  */
@@ -53,10 +53,13 @@ export const selectFunction: FunctionDefinition = defineFunction({
   impl: (call, input, args) => {
     const projection = lambdaArg(args, 0);
     if (projection === undefined) return EMPTY;
-    const limits = call.ctx.limits;
     return andThen(
-      mapSequential(input, (item, index) => projection.forItem(item, index)),
-      (results) => flattenWithin(results, limits),
+      mapSequential(
+        input,
+        (item, index) => projection.forItem(item, index),
+        sizeCounter(call.ctx.limits),
+      ),
+      flatten,
     );
   },
 });

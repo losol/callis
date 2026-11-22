@@ -12,6 +12,7 @@
  */
 import { type Collection, EMPTY, fromBoolean, type Item } from '../runtime/collection.ts';
 import { asInteger } from '../runtime/item-conversion.ts';
+import { checkCollectionSize } from '../runtime/limits.ts';
 import { toSystemValue } from '../runtime/node-value.ts';
 import { singleton } from '../runtime/singleton.ts';
 import {
@@ -271,14 +272,22 @@ export const lengthFunction: FunctionDefinition = defineStringFunction(
 
 /**
  * `toChars()`: the characters of the input as single-character strings, never splitting a
- * surrogate pair.
+ * surrogate pair. It turns one item into one per character, so more characters than
+ * `limits.maxCollectionSize` raise `eval/limit-exceeded`, before the collection is built. A
+ * character is one or two UTF-16 code units, so only a string longer than the limit is counted.
  * @see https://hl7.org/fhirpath/N1/#tochars-collection
  */
-export const toCharsFunction: FunctionDefinition = defineStringFunction(
+export const toCharsFunction: FunctionDefinition = defineStringCall(
   'toChars',
   [],
   { type: 'String', collection: true },
-  (text) => characters(text),
+  (call, text) => {
+    const limits = call.ctx.limits;
+    if (text.length > limits.maxCollectionSize) {
+      checkCollectionSize(characterCount(text), limits);
+    }
+    return characters(text);
+  },
 );
 
 /** The string manipulation functions of the standard library. */

@@ -653,13 +653,16 @@ describe('limits.maxCollectionSize', () => {
   const shared = { leaf: 1 };
   /**
    * Each growth point with an input where it builds three items and every collection before it at
-   * most two, so a limit of 3 lets it through and a limit of 2 stops it there.
+   * most two, so a limit of 3 lets it through and a limit of 2 stops it there. The test counts
+   * the result with `count()`, a single item, so only a check at the growth point itself raises.
    */
   const growthPoints: readonly {
     readonly label: string;
     readonly input: unknown;
     readonly expression: string;
     readonly options?: Options;
+    /** The items of the result, 3 unless it is not the collection that grows. */
+    readonly count?: number;
   }[] = [
     { label: 'a navigation step', input: { list: [1, 2, 3] }, expression: 'list' },
     {
@@ -684,6 +687,8 @@ describe('limits.maxCollectionSize', () => {
       label: 'trace() with a projection',
       input: null,
       expression: "(1 | 2).trace('t', iif($this = 1, 1, 2 | 3))",
+      // trace() returns its input; the projection it traces has the three items.
+      count: 2,
     },
     {
       label: 'resolve()',
@@ -694,20 +699,55 @@ describe('limits.maxCollectionSize', () => {
     { label: '|', input: null, expression: '1 | 2 | 3' },
     { label: 'union()', input: null, expression: '1.union(2).union(3)' },
     { label: 'combine()', input: null, expression: '1.combine(1).combine(1)' },
+    { label: 'toChars()', input: null, expression: "'abc'.toChars()" },
+    {
+      label: 'toChars() on a string from the input',
+      input: { text: 'abc' },
+      expression: 'text.toChars()',
+    },
   ];
 
-  describe.each(MODES)('with %s', (_label, run) => {
-    it.each(growthPoints)('bounds $label', async ({ input, expression, options = {} }) => {
-      await expect(
-        run(input, expression, { ...options, limits: { maxCollectionSize: 3 } }),
-      ).resolves.not.toHaveLength(0);
-      const error = await errorOf(() =>
-        run(input, expression, { ...options, limits: { maxCollectionSize: 2 } }),
+  describe.each(MODES)('with %s', (_label, run, isAsync) => {
+    it.each(growthPoints)(
+      'bounds $label',
+      async ({ input, expression, options = {}, count = 3 }) => {
+        const counted = `(${expression}).count()`;
+        await expect(
+          run(input, counted, { ...options, limits: { maxCollectionSize: 3 } }),
+        ).resolves.toEqual([count]);
+        const error = await errorOf(() =>
+          run(input, counted, { ...options, limits: { maxCollectionSize: 2 } }),
+        );
+        expect(error).toMatchObject({ code: 'eval/limit-exceeded', expression: counted });
+        // The growth point raised it, with the span of its parenthesized expression: an earlier
+        // step has a shorter span, and count() a longer one.
+        const span = (error as FhirPathError).span;
+        expect(counted.slice(span?.start, span?.end)).toBe(`(${expression})`);
+      },
+    );
+
+    // A string can be far longer than the limit, from the input or built by the evaluation;
+    // toChars() counts its characters before it builds one item for each.
+    it('stops toChars() before it builds more items than the limit', async () => {
+      // replace('', 'xx') inserts 'xx' around every character: 12 steps give 1,062,881 of them,
+      // 13 steps 3,188,645, so both pass the default limit, once by counting and once by length.
+      for (const steps of [12, 13]) {
+        const expression = `'x'${".replace('', 'xx')".repeat(steps)}.toChars().count()`;
+        expect(await codeOf(() => run(null, expression))).toBe('eval/limit-exceeded');
+        await expect(
+          run(null, expression, { limits: { maxCollectionSize: 4_000_000 } }),
+        ).resolves.toEqual([steps === 12 ? 1_062_881 : 3_188_645]);
+      }
+      const text = 'x'.repeat(1_000_001);
+      expect(await codeOf(() => run({ text }, 'text.toChars().count()'))).toBe(
+        'eval/limit-exceeded',
       );
-      expect(error).toMatchObject({ code: 'eval/limit-exceeded', expression });
-      // The outermost step, the growth point, raised it: an earlier one has a shorter span.
-      const span = (error as FhirPathError).span;
-      expect(expression.slice(span?.start, span?.end)).toBe(expression);
+      // A character is a Unicode scalar value, so a surrogate pair counts once.
+      const options = { limits: { maxCollectionSize: 4 } };
+      await expect(run(null, "'🔥🔥🔥🔥'.toChars().count()", options)).resolves.toEqual([4]);
+      expect(await codeOf(() => run(null, "'🔥🔥🔥🔥🔥'.toChars().count()", options))).toBe(
+        'eval/limit-exceeded',
+      );
     });
 
     // #186: descendants() did not end on a cyclic object graph.
@@ -717,6 +757,58 @@ describe('limits.maxCollectionSize', () => {
         expect(
           await codeOf(() => run(cyclic(), expression, { limits: { maxCollectionSize: 10 } })),
         ).toBe('eval/limit-exceeded');
+      }
+    });
+
+    // A projection for each item is counted as it arrives, so the rest are never made: 200
+    // objects that share a 200-item array would otherwise build 40,000 nodes before the check.
+    it('stops projecting items once select() or trace() passes the limit', async () => {
+      const values = Array.from({ length: 200 }, (_, index) => index);
+      const input = { items: Array.from({ length: 200 }, () => ({ values })) };
+      const answers: readonly ((event: TraceEvent) => void | PromiseLike<void>)[] = isAsync
+        ? [() => undefined, () => Promise.resolve(), () => customThenable(undefined)]
+        : [() => undefined];
+      for (const answer of answers) {
+        for (const expression of [
+          "items.select(trace('item').values)",
+          "items.trace('all', trace('item').values)",
+        ]) {
+          const names: string[] = [];
+          const hooks: EvaluationHooks = {
+            trace: (event) => {
+              names.push(event.name);
+              return answer(event);
+            },
+          };
+          const options = { hooks, limits: { maxCollectionSize: 200 } };
+          expect(await codeOf(() => run(input, expression, options))).toBe('eval/limit-exceeded');
+          expect(names).toEqual(['item', 'item']);
+        }
+      }
+    });
+
+    it('stops calling the resolve hook once its resources pass the limit', async () => {
+      const references = Array.from({ length: 20 }, (_, index) => `Group/${index}`);
+      for (const concurrency of [1, 8]) {
+        for (const later of isAsync ? [false, true] : [false]) {
+          const calls: string[] = [];
+          const hooks: EvaluationHooks = {
+            resolve: (reference) => {
+              calls.push(reference);
+              const members = Array.from({ length: 15 }, (_, index) => ({ id: `m${index}` }));
+              return later ? Promise.resolve(members) : members;
+            },
+          };
+          // The 20 references fit; the second answer of 15 resources passes the limit.
+          const options = { hooks, concurrency, limits: { maxCollectionSize: 20 } };
+          expect(await codeOf(() => run({ references }, 'references.resolve()', options))).toBe(
+            'eval/limit-exceeded',
+          );
+          // No call starts after the result that passes the limit, but calls already running
+          // in evaluateAsync() finish: at most concurrency of them.
+          expect(calls.length).toBeGreaterThanOrEqual(2);
+          expect(calls.length).toBeLessThanOrEqual(later ? concurrency + 1 : 2);
+        }
       }
     });
 

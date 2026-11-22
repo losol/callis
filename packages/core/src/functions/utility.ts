@@ -2,8 +2,8 @@
  * The utility functions `trace()`, `now()`, `timeOfDay()` and `today()`
  * ([N1 §5.9](https://hl7.org/fhirpath/N1/#utility-functions)).
  */
-import type { Collection, Item } from '../runtime/collection.ts';
-import { flattenWithin, type Limits } from '../runtime/limits.ts';
+import { type Collection, flatten, type Item } from '../runtime/collection.ts';
+import { type Limits, sizeCounter } from '../runtime/limits.ts';
 import { andThen, type MaybePromise, mapSequential } from '../runtime/maybe-promise.ts';
 import { toSystemValue } from '../runtime/node-value.ts';
 import { singleton } from '../runtime/singleton.ts';
@@ -104,8 +104,8 @@ function project(
   limits: Limits,
 ): MaybePromise<Collection> {
   return andThen(
-    mapSequential(input, (item, index) => projection.forItem(item, index)),
-    (results) => flattenWithin(results, limits),
+    mapSequential(input, (item, index) => projection.forItem(item, index), sizeCounter(limits)),
+    flatten,
   );
 }
 

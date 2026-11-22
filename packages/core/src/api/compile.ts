@@ -178,9 +178,10 @@ export interface EvaluationLimits {
    * JavaScript object graph that shares objects, and of data that never ends: `descendants()` on
    * an object graph with a cycle ([#186](https://github.com/losol/callis/issues/186)). It is
    * checked where a collection grows: a navigation step, `children()`, `descendants()`,
-   * `repeat()`, `select()`, `trace()` with a projection, `resolve()`, `|`, `union()` and
-   * `combine()`. The input and the variables are the host's data and are not counted, but what
-   * the evaluation builds from them is.
+   * `repeat()`, `select()`, `trace()` with a projection, `resolve()`, `|`, `union()`,
+   * `combine()` and `toChars()`, as the items arrive, so the rest is never made. The input and
+   * the variables are the host's data and are not counted, but what the evaluation builds from
+   * them is.
    */
   readonly maxCollectionSize?: number;
 }

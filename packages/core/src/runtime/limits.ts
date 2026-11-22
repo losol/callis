@@ -5,12 +5,14 @@
  * `limits.maxCollectionSize` bounds every collection the evaluation builds. It is checked where a
  * collection grows beyond the size of what it is built from: a navigation step, `children()` and
  * `descendants()`, `repeat()`, the results of `select()`, `trace()` and `resolve()` for each item,
- * `|` and `union()`, and `combine()`. Every other operation gives at most as many items as its
+ * `|` and `union()`, `combine()`, and `toChars()`, which makes one item for each character of a
+ * String, before it builds them. Every other operation gives at most as many items as its
  * input, so these checks bound them too. A check costs one comparison where an item or a list of
- * items is added, never a pass over the items.
+ * items is added, never a pass over the items. Results for each item are counted as they arrive
+ * ({@link sizeCounter}), so the evaluation stops before it makes the rest of them.
  */
 import { FhirPathEvaluationError } from '../errors/fhirpath-error.ts';
-import { appendAll, type Collection, EMPTY, type Item } from './collection.ts';
+import type { Collection } from './collection.ts';
 
 /**
  * The bounds on the work of one evaluation, from the `limits` evaluation option and its defaults.
@@ -48,18 +50,19 @@ export function checkCollectionSize(size: number, limits: Limits | undefined): v
 }
 
 /**
- * The items of the collections in order, as one collection: the results of a projection for each
- * input item, as `select()` gives them. The size is checked after each collection is added, so it
- * never grows by more than one of them beyond the limit.
+ * A counter for the results that `select()`, `trace()` and `resolve()` make for each input item,
+ * which are flattened into one collection. Pass it as the `accept` callback of `mapSequential()`
+ * or `mapConcurrent()`: it adds each result's size as the result arrives, and raises before the
+ * next item is projected or its hook called, so the evaluation never makes more than one result
+ * beyond the limit (or, in `evaluateAsync()`, the hook calls already running).
  *
- * @throws {@link FhirPathEvaluationError} `eval/limit-exceeded` when the result would have more
- *   than `limits.maxCollectionSize` items.
+ * @throws {@link FhirPathEvaluationError} `eval/limit-exceeded`, from the counter, when the results
+ *   together have more than `limits.maxCollectionSize` items.
  */
-export function flattenWithin(collections: readonly Collection[], limits: Limits): Collection {
-  const items: Item[] = [];
-  for (const collection of collections) {
-    appendAll(items, collection);
-    checkCollectionSize(items.length, limits);
-  }
-  return items.length === 0 ? EMPTY : items;
+export function sizeCounter(limits: Limits): (result: Collection) => void {
+  let size = 0;
+  return (result) => {
+    size += result.length;
+    checkCollectionSize(size, limits);
+  };
 }

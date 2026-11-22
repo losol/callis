@@ -53,9 +53,17 @@ export function andThen<T, R>(
 }
 
 /**
+ * Called with each result of a map as it arrives, before the map starts another call. An error it
+ * throws fails the map like an error of the call itself, so no further call starts: the results of
+ * `select()` can so be counted against `limits.maxCollectionSize` while they are made, instead of
+ * after every item is projected.
+ */
+export type AcceptResult<R> = (result: R) => void;
+
+/**
  * Calls `fn` for each item in order and collects the results. It stays synchronous until a call
  * returns a promise; from then on it waits for each result before starting the next call, so the
- * calls never overlap and run in input order.
+ * calls never overlap and run in input order. `accept` sees each result before the next call.
  *
  * Lambda functions (`where()`, `select()`, …) use this to evaluate their criteria per item, and the
  * compiler uses it for function arguments.
@@ -63,14 +71,16 @@ export function andThen<T, R>(
 export function mapSequential<T, R>(
   items: readonly T[],
   fn: (item: T, index: number) => MaybePromise<R>,
+  accept?: AcceptResult<R>,
 ): MaybePromise<R[]> {
   const results: R[] = [];
   let index = 0;
   for (const item of items) {
     const result = fn(item, index);
     if (isThenable(result)) {
-      return finishSequential(result, results, items.slice(index + 1), index + 1, fn);
+      return finishSequential(result, results, items.slice(index + 1), index + 1, fn, accept);
     }
+    accept?.(result);
     results.push(result);
     index++;
   }
@@ -82,9 +92,10 @@ export function mapSequential<T, R>(
  * a promise at the same time, at most `concurrency` of them at once. It stays synchronous until a
  * call returns a promise, as {@link mapSequential} does. From then on, a new call starts whenever
  * fewer than `concurrency` results are pending, in input order; a call that returns a value counts
- * as finished at once. The first error, thrown or rejected, fails the result as soon as it is
- * seen, without starting more calls; the calls already running are left to finish on their own,
- * and their outcomes are ignored.
+ * as finished at once. `accept` sees each result as it arrives, in the order they finish. The
+ * first error, thrown or rejected by a call or thrown by `accept`, fails the result as soon as it
+ * is seen, without starting more calls; the calls already running are left to finish on their
+ * own, and their outcomes are observed and ignored, so a later rejection is never unhandled.
  *
  * Host-backed functions use this for the items of one collection, such as the references of
  * `entry.resource.subject.resolve()`, whose hook calls are independent of each other
@@ -97,14 +108,16 @@ export function mapConcurrent<T, R>(
   items: readonly T[],
   fn: (item: T, index: number) => MaybePromise<R>,
   concurrency: number,
+  accept?: AcceptResult<R>,
 ): MaybePromise<R[]> {
   const results: R[] = [];
   let index = 0;
   for (const item of items) {
     const result = fn(item, index);
     if (isThenable(result)) {
-      return finishConcurrent(items, fn, results, index, result, concurrency);
+      return finishConcurrent(items, fn, results, index, result, concurrency, accept);
     }
+    accept?.(result);
     results.push(result);
     index++;
   }
@@ -118,13 +131,22 @@ async function finishConcurrent<T, R>(
   start: number,
   first: PromiseLike<R>,
   concurrency: number,
+  accept: AcceptResult<R> | undefined,
 ): Promise<R[]> {
   const pending = new Set<Promise<void>>();
   let failure: { readonly error: unknown } | undefined;
+  const settle = (index: number, value: R): void => {
+    try {
+      accept?.(value);
+      results[index] = value;
+    } catch (error) {
+      failure ??= { error };
+    }
+  };
   const track = (index: number, result: PromiseLike<R>): void => {
     const settled: Promise<void> = Promise.resolve(result).then(
       (value) => {
-        results[index] = value;
+        settle(index, value);
         pending.delete(settled);
       },
       (error: unknown) => {
@@ -147,7 +169,10 @@ async function finishConcurrent<T, R>(
     if (isThenable(result)) {
       track(index, result);
     } else {
-      results[index] = result;
+      settle(index, result);
+      if (failure !== undefined) {
+        break;
+      }
     }
     index++;
   }
@@ -166,11 +191,16 @@ async function finishSequential<T, R>(
   rest: readonly T[],
   start: number,
   fn: (item: T, index: number) => MaybePromise<R>,
+  accept: AcceptResult<R> | undefined,
 ): Promise<R[]> {
-  results.push(await pending);
+  const first = await pending;
+  accept?.(first);
+  results.push(first);
   let index = start;
   for (const item of rest) {
-    results.push(await fn(item, index));
+    const result = await fn(item, index);
+    accept?.(result);
+    results.push(result);
     index++;
   }
   return results;

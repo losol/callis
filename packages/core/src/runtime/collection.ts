@@ -85,6 +85,18 @@ export function concat(left: Collection, right: Collection): Collection {
 }
 
 /**
+ * The items of the collections in order, as one collection, such as the results of a projection
+ * for each input item; {@link EMPTY} when there are none.
+ */
+export function flatten(collections: readonly Collection[]): Collection {
+  const items: Item[] = [];
+  for (const collection of collections) {
+    appendAll(items, collection);
+  }
+  return items.length === 0 ? EMPTY : items;
+}
+
+/**
  * Appends every item of `source` to `target`, a collection being built. Unlike
  * `target.push(...source)` it works for collections of any size.
  *
