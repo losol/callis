@@ -641,6 +641,25 @@ describe('the now option', () => {
   });
 });
 
+/**
+ * A node whose `next` lists the node itself `fanOut` times, behind a proxy that counts the
+ * elements navigation reads from that list: one for each child node it builds.
+ */
+function branchingCycle(fanOut: number): { readonly node: object; readonly reads: () => number } {
+  const node: Record<string, unknown> = {};
+  let reads = 0;
+  node.next = new Proxy(
+    Array.from({ length: fanOut }, () => node),
+    {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && /^[0-9]+$/.test(key)) reads++;
+        return Reflect.get(target, key, receiver);
+      },
+    },
+  );
+  return { node, reads: () => reads };
+}
+
 /** A JavaScript object graph with a cycle, which JSON cannot express ([#186]). */
 function cyclic(): Record<string, unknown> {
   const node: Record<string, unknown> = { id: 'loop' };
@@ -810,6 +829,19 @@ describe('limits.maxCollectionSize', () => {
           expect(calls.length).toBeLessThanOrEqual(later ? concurrency + 1 : 2);
         }
       }
+    });
+
+    // #186 with a cycle that branches: every child descendants() lists is counted, not only the
+    // ones it has walked, so it keeps at most one child list beyond the limit.
+    it('bounds the children descendants() builds on a cycle that branches', async () => {
+      const { node, reads } = branchingCycle(100);
+      expect(
+        await codeOf(() =>
+          run(node, 'descendants().count()', { limits: { maxCollectionSize: 1_000 } }),
+        ),
+      ).toBe('eval/limit-exceeded');
+      expect(reads()).toBeGreaterThan(1_000);
+      expect(reads()).toBeLessThanOrEqual(1_000 + 100);
     });
 
     it('stops navigation that multiplies through shared objects', async () => {

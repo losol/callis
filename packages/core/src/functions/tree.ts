@@ -40,8 +40,11 @@ export const childrenFunction: FunctionDefinition = defineValueFunction(
  * The walk follows the data, not the model's types, so it ends on a recursive type such as
  * `Questionnaire.item.item`. It keeps its own stack, so deep input cannot overflow the call stack.
  * It does not detect cycles: a JavaScript object graph with one, which only a host can pass, would
- * never end, so the walk stops with `eval/limit-exceeded` once it has more than
- * `limits.maxCollectionSize` items ([#186](https://github.com/losol/callis/issues/186)).
+ * never end, so the walk stops with `eval/limit-exceeded` once it has listed more than
+ * `limits.maxCollectionSize` children ([#186](https://github.com/losol/callis/issues/186)). Every
+ * child it lists becomes an item of the result, so it counts them as it lists them, not as it
+ * walks them: the child lists it keeps for later then stay within the limit too, plus the
+ * children of one node, also on a graph where each node lists itself many times.
  *
  * @see https://hl7.org/fhirpath/N1/#descendants-collection
  */
@@ -51,9 +54,12 @@ export const descendantsFunction: FunctionDefinition = defineValueFunction(
   (input, _args, call) => {
     const limits = call.ctx.limits;
     const items: Item[] = [];
+    const first = navigateChildren(input, call.ctx);
+    // The children listed so far, walked or kept for later: the size the result will have.
+    let listed = first.length;
     // The child lists still being walked, innermost last, each with the position of its next item.
     const pending: { readonly children: Collection; next: number }[] = [
-      { children: navigateChildren(input, call.ctx), next: 0 },
+      { children: first, next: 0 },
     ];
     for (let level = pending.at(-1); level !== undefined; level = pending.at(-1)) {
       const item = level.children[level.next];
@@ -63,9 +69,10 @@ export const descendantsFunction: FunctionDefinition = defineValueFunction(
       }
       level.next++;
       items.push(item);
-      checkCollectionSize(items.length, limits);
       const children = navigateChildren([item], call.ctx);
       if (children.length > 0) {
+        listed += children.length;
+        checkCollectionSize(listed, limits);
         pending.push({ children, next: 0 });
       }
     }
